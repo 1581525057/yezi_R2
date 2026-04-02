@@ -1861,6 +1861,11 @@
               <FileType>8</FileType>
               <FilePath>.\Device\laser_distance\laser_distance.cpp</FilePath>
             </File>
+            <File>
+              <FileName>VescMotor.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Device\Motor\VescMotor.cpp</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

@@ -10,6 +10,7 @@
 #include "dji_motor.h"
 #include "dm_motor.h"
 #include "yun_j60.h"
+#include "VescMotor.hpp"  // 引入 VescMotors[] 数组和 canRxHandler 接口
 
 /* 接收帧对象 ---------------------------------------------------------------*/
 FDCAN_RxFrame_TypeDef BSP_CAN::FDCAN_RxFIFO0Frame;
@@ -85,7 +86,7 @@ void BSP_CAN::Init(void)
     HAL_FDCAN_Start(&hfdcan1);
 
     /* FDCAN2 --------------------------------------------------------------*/
-    FilterConfig.IdType       = FDCAN_EXTENDED_ID;
+    FilterConfig.IdType       = FDCAN_STANDARD_ID;
     FilterConfig.FilterIndex  = 0;
     FilterConfig.FilterType   = FDCAN_FILTER_MASK;
     FilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;
@@ -120,13 +121,21 @@ void BSP_CAN::AddMessageToTxFifoQ(FDCAN_TxFrame_TypeDef *FDCAN_TxFrame)
 
 void BSP_CAN::FDCAN1_RxFifo0RxHandler(uint32_t *Identifier, uint8_t Data[8])
 {
-
+    // Yun_J60 接收分发（原有逻辑保留）
     Yun_J60_Class::RxHandler(&FDCAN_RxFIFO0Frame, Data);
+
+    // VESC 电机接收分发：
+    //   canRxHandler 内部按 nodeId_ 过滤，节点ID不匹配的帧直接忽略。
+    //   传入整个帧结构体指针，避免重复读全局变量，保持接口统一。
+    for (auto& motor : VescMotors)
+    {
+        motor.canRxHandler(&FDCAN_RxFIFO0Frame);
+    }
 }
 
 void BSP_CAN::FDCAN2_RxFifo1RxHandler(uint32_t *Identifier, uint8_t Data[8])
 {
-    DJI_Motor_Class::RxHandler(Identifier, Data);
+ 
 }
 
 void BSP_CAN::FDCAN3_RxFifo0RxHandler(uint32_t *Identifier, uint8_t Data[8])
