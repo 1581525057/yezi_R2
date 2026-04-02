@@ -133,6 +133,7 @@ virtualFolder:
         - path: ../MDK-ARM/Device/Motor/dji_motor.cpp
         - path: ../MDK-ARM/Device/Motor/dm_motor.cpp
         - path: ../MDK-ARM/Device/laser_distance/laser_distance.cpp
+        - path: ../MDK-ARM/Device/Motor/VescMotor.cpp
       folders: []
     - name: ::CMSIS
       files: []

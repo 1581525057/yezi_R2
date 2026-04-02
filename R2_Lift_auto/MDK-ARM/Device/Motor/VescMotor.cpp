@@ -48,7 +48,7 @@
  * ============================================================
  */
 
-#include "VescMotor.hpp"
+#include "VescMotor.h"
 #include "fdcan.h"   // CubeMX 生成的 FDCAN 初始化声明
 #include "gpio.h"    // GPIO 初始化（可选，部分板子需要）
 #include <cstring>   // memset
