@@ -1,0 +1,38 @@
+##########################################################################################
+#                        Append Compiler Options For Source Files
+##########################################################################################
+
+# syntax:
+#   <your pattern>: <compiler options>
+# For get pattern syntax, please refer to: https://www.npmjs.com/package/micromatch
+#
+# examples:
+#   'main.cpp':           --cpp11 -Og ...
+#   'src/*.c':            -gnu -O2 ...
+#   'src/lib/**/*.cpp':   --cpp11 -Os ...
+#   '!Application/*.c':   -O0
+#   '**/*.c':             -O2 -gnu ...
+
+version: "2.1"
+options:
+    My_Princess_cpp:
+        files: {}
+        virtualPathFiles:
+            <virtual_root>/Application/User/Core/freertos.c: ""
+            <virtual_root>/Application/User/Core/dma.c: ""
+            <virtual_root>/Application/User/Core/fdcan.c: ""
+            <virtual_root>/Application/User/Core/usart.c: ""
+            <virtual_root>/Application/User/Core/stm32h7xx_hal_timebase_tim.c: ""
+            <virtual_root>/Drivers/STM32H7xx_HAL_Driver/stm32h7xx_hal_fdcan.c: ""
+            <virtual_root>/Drivers/STM32H7xx_HAL_Driver/stm32h7xx_hal_uart.c: ""
+            <virtual_root>/Drivers/STM32H7xx_HAL_Driver/stm32h7xx_hal_uart_ex.c: ""
+            <virtual_root>/Middlewares/FreeRTOS/croutine.c: ""
+            <virtual_root>/Middlewares/FreeRTOS/event_groups.c: ""
+            <virtual_root>/Middlewares/FreeRTOS/list.c: ""
+            <virtual_root>/Middlewares/FreeRTOS/queue.c: ""
+            <virtual_root>/Middlewares/FreeRTOS/stream_buffer.c: ""
+            <virtual_root>/Middlewares/FreeRTOS/tasks.c: ""
+            <virtual_root>/Middlewares/FreeRTOS/timers.c: ""
+            <virtual_root>/Middlewares/FreeRTOS/cmsis_os2.c: ""
+            <virtual_root>/Middlewares/FreeRTOS/heap_4.c: ""
+            <virtual_root>/Middlewares/FreeRTOS/port.c: ""
