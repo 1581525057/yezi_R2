@@ -11,6 +11,8 @@
 #include "dm_imu.h"
 #include "lift_auto.h"
 
+// 代码回退标志位
+
 static void chassis_pid_init(void);
 
 PID pid_chassis_0, pid_chassis_1, pid_chassis_2, pid_chassis_3;
@@ -64,8 +66,8 @@ extern "C" void chassis_task(void *argument)
         motor_input[2] = pid_chassis_2.pid.Output + omni_chassis.Current_rpm[2];
         motor_input[3] = pid_chassis_3.pid.Output + omni_chassis.Current_rpm[3];
 
-         chassis_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame, 0x200, motor_input[0], motor_input[1], motor_input[2], motor_input[3]);
-		chassis_motor.Send_CurrentCommand(&BSP_CAN::FDCAN2_TxFrame, 0x200,3000,0,0,0);
+        chassis_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame, 0x200, motor_input[0], motor_input[1], motor_input[2], motor_input[3]);
+        chassis_motor.Send_CurrentCommand(&BSP_CAN::FDCAN2_TxFrame, 0x200, 3000, 0, 0, 0);
         osDelay(1);
     }
 }
