@@ -5,6 +5,7 @@
 "my_princess_cpp\freertos.o"
 "my_princess_cpp\dma.o"
 "my_princess_cpp\fdcan.o"
+"my_princess_cpp\spi.o"
 "my_princess_cpp\usart.o"
 "my_princess_cpp\stm32h7xx_it.o"
 "my_princess_cpp\stm32h7xx_hal_msp.o"
@@ -35,6 +36,8 @@
 "my_princess_cpp\stm32h7xx_hal_i2c_ex.o"
 "my_princess_cpp\stm32h7xx_hal_exti.o"
 "my_princess_cpp\stm32h7xx_hal_fdcan.o"
+"my_princess_cpp\stm32h7xx_hal_spi.o"
+"my_princess_cpp\stm32h7xx_hal_spi_ex.o"
 "my_princess_cpp\stm32h7xx_hal_uart.o"
 "my_princess_cpp\stm32h7xx_hal_uart_ex.o"
 "my_princess_cpp\system_stm32h7xx.o"
@@ -71,6 +74,8 @@
 "my_princess_cpp\dji_motor.o"
 "my_princess_cpp\dm_motor.o"
 "my_princess_cpp\laser_distance.o"
+"my_princess_cpp\vescmotor.o"
+"my_princess_cpp\dt35.o"
 --strict --scatter "My_Princess_cpp\My_Princess_cpp.sct"
 --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers
