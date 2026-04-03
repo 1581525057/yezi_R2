@@ -21,6 +21,7 @@
 #include "cmsis_os.h"
 #include "dma.h"
 #include "fdcan.h"
+#include "spi.h"
 #include "usart.h"
 #include "usb_device.h"
 #include "gpio.h"
@@ -107,6 +108,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
   MX_USART10_UART_Init();
+  MX_SPI3_Init();
   /* USER CODE BEGIN 2 */
 
   MX_USB_DEVICE_Init(); // 初始化usb

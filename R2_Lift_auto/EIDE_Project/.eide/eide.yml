@@ -134,6 +134,7 @@ virtualFolder:
         - path: ../MDK-ARM/Device/Motor/dm_motor.cpp
         - path: ../MDK-ARM/Device/laser_distance/laser_distance.cpp
         - path: ../MDK-ARM/Device/Motor/VescMotor.cpp
+        - path: ../MDK-ARM/Device/DT35/DT35.cpp
       folders: []
     - name: ::CMSIS
       files: []
@@ -174,6 +175,7 @@ targets:
         - ../MDK-ARM/Device/StepMotor/MyStepMotor
         - ../MDK-ARM/Bsp
         - ../MDK-ARM/Device/laser_distance
+        - ../MDK-ARM/Device/DT35
         - .cmsis/include
         - ../MDK-ARM/RTE/_My_Princess_cpp
       libList: []
