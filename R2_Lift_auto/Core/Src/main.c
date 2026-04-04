@@ -109,6 +109,7 @@ int main(void)
   MX_USART3_UART_Init();
   MX_USART10_UART_Init();
   MX_SPI3_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
 
   MX_USB_DEVICE_Init(); // 初始化usb
