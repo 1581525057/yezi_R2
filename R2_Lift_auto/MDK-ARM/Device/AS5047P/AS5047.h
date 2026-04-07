@@ -112,4 +112,6 @@ private:
     void AS5047P_UpdateDiaagcCache(uint16_t diaagcData);
 };
 
+extern AS5047P as5047;
+
 #endif

@@ -229,4 +229,4 @@ my_princess_cpp/chassis_task.o: TASK\chassis_task.cpp TASK\chassis_task.h \
   Device\Remote_control\bsp_remove.h \
   D:\Keil5\ARM\ARMCLANG\include\libcxx\cstring Bsp\bsp_dwt.h \
   Bsp\bsp_usart.h Control\PID.h Device\Motor\yun_j60.h Bsp\dm_imu.h \
-  TASK\lift_auto.h
+  TASK\lift_auto.h Device\Motor\VescMotor.h

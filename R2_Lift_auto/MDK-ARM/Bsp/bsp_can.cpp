@@ -86,7 +86,7 @@ void BSP_CAN::Init(void)
     HAL_FDCAN_Start(&hfdcan1);
 
     /* FDCAN2 --------------------------------------------------------------*/
-    FilterConfig.IdType       = FDCAN_STANDARD_ID;
+    FilterConfig.IdType       = FDCAN_EXTENDED_ID;
     FilterConfig.FilterIndex  = 0;
     FilterConfig.FilterType   = FDCAN_FILTER_MASK;
     FilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;
@@ -132,7 +132,7 @@ void BSP_CAN::FDCAN2_RxFifo1RxHandler(uint32_t *Identifier, uint8_t Data[8])
     //   canRxHandler 内部按 nodeId_ 过滤，节点ID不匹配的帧直接忽略。
     //   传入整个帧结构体指针，避免重复读全局变量，保持接口统一。
     for (auto &motor : VescMotors) {
-        motor.canRxHandler(&FDCAN_RxFIFO0Frame);
+        motor.canRxHandler(&FDCAN_RxFIFO1Frame);
     }
 }
 

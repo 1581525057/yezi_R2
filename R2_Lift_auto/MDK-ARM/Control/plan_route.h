@@ -1,19 +1,44 @@
-#ifndef __PLANE_ROUTE_H__
-#define __PLANE_ROUTE_H__
+#pragma once
 
-#define ABS(x) ((x) > 0 ? (x) : -(x))
+#include <cstdint>
 
-#include <stdint.h>
+constexpr float BR_configFOLLOWING_SAFE_DISTANCE = 500.0f;
 
-#define BR_configFOLLOWING_SAFE_DISTANCE 500.0f /* 安全距离[mm] */
-
-typedef struct
+template<typename T>
+inline T BR_Abs(T x)
 {
-    float (*pPath)[5];    // 二维数组指针
-    float NormalP;        // 法向校正P
-    float NormalD;        // 法向校正D
-    float ThetaP;         // 自转校正P
-    float ThetaD;         // 自转校正D
-} BR_Path_t;
+    return x > T(0) ? x : -x;
+}
 
-#endif
+struct BR_Path_t {
+    float (*pPath)[5];
+    float NormalP;
+    float NormalD;
+    float ThetaP;
+    float ThetaD;
+};
+
+class BR_PathFollower
+{
+public:
+    BR_PathFollower();
+
+    void reset();
+    void followPath(const BR_Path_t &path, float *vx, float *vy, float *omega);
+
+private:
+    bool safeCheck(const float *current_target_point, float current_x, float current_y) const;
+    void calculateVelocity(const BR_Path_t &path, float *vx, float *vy, float *omega,
+                           float current_x, float current_y, float current_theta);
+
+private:
+    int current_path_index_;
+    bool vel_calc_entered_;
+    float last_err_theta_;
+    float last_vector4_[2];
+};
+
+BR_PathFollower &BR_GetPathFollower();
+
+void BR_vResetPathFollowing();
+void BR_vFollowPath(BR_Path_t path, float *vx, float *vy, float *omega);

@@ -1,5 +1,6 @@
-my_princess_cpp/usart_task.o: TASK\usart_task.cpp TASK\usart_task.h \
-  ..\Core\Inc\main.h ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal.h \
+my_princess_cpp/as5047p.o: Device\AS5047P\AS5047P.cpp \
+  Device\AS5047P\AS5047.h ..\Core\Inc\main.h \
+  ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal.h \
   ..\Core\Inc\stm32h7xx_hal_conf.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_rcc.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_def.h \
@@ -203,22 +204,4 @@ my_princess_cpp/usart_task.o: TASK\usart_task.cpp TASK\usart_task.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_uart_ex.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_ll_usb.h \
-  ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd_ex.h \
-  ..\Core\Inc\usart.h ..\Core\Inc\spi.h \
-  ..\Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2\cmsis_os.h \
-  ..\Middlewares\Third_Party\FreeRTOS\Source\include\FreeRTOS.h \
-  ..\Core\Inc\FreeRTOSConfig.h \
-  ..\Middlewares\Third_Party\FreeRTOS\Source\include\projdefs.h \
-  ..\Middlewares\Third_Party\FreeRTOS\Source\include\portable.h \
-  ..\Middlewares\Third_Party\FreeRTOS\Source\include\deprecated_definitions.h \
-  ..\Middlewares\Third_Party\FreeRTOS\Source\portable\RVDS\ARM_CM4F\portmacro.h \
-  ..\Middlewares\Third_Party\FreeRTOS\Source\include\mpu_wrappers.h \
-  ..\Middlewares\Third_Party\FreeRTOS\Source\include\task.h \
-  ..\Middlewares\Third_Party\FreeRTOS\Source\include\list.h \
-  ..\Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2\cmsis_os2.h \
-  Device\USB\MiniPC.h D:\Keil5\ARM\ARMCLANG\include\libcxx\stdbool.h \
-  D:\Keil5\ARM\ARMCLANG\include\stdbool.h Control\PID.h \
-  Device\Motor\dji_motor.h Bsp\bsp_can.h ..\Core\Inc\fdcan.h \
-  D:\Keil5\ARM\ARMCLANG\include\libcxx\string.h \
-  D:\Keil5\ARM\ARMCLANG\include\string.h Bsp\dm_imu.h \
-  Device\laser_distance\laser_distance.h Device\AS5047P\AS5047.h
+  ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd_ex.h

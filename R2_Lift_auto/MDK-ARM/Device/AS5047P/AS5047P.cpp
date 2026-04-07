@@ -4,6 +4,8 @@
 #define AS5047P_CS_LOW()  HAL_GPIO_WritePin(AS5047P_CS_PORT, AS5047P_CS_PIN, GPIO_PIN_RESET) // 片选拉低：开始一次新的 16 位 SPI 事务。
 #define AS5047P_CS_HIGH() HAL_GPIO_WritePin(AS5047P_CS_PORT, AS5047P_CS_PIN, GPIO_PIN_SET)   // 片选拉高：结束本次 SPI 事务，让芯片锁存命令或移出数据。
 
+AS5047P as5047;
+
 /*
  * 模块内部工作流程：
  * 1. 主机发送 16 位命令帧给 AS5047P。

@@ -1,129 +1,139 @@
-#include <plan_route.h>
-#include <math.h>
-#include "arm_math.h" // CMSIS-DSP
+#include "plan_route.h"
 
-/* 静态变量 */
-static int prvCurrentPathIndex = 0; // 标志当前目标点
+#include <cmath>
 
-/* 用于处理第一次进入逻辑时 D项 LastErr=0 */
-static uint8_t prvVelCalculateEnterFlag; // 标志第一次进入正常轨迹速度计算逻辑
+#include "arm_math.h"
 
-void BR_vResetPathFollowing(void);
-static uint8_t prvSafeCheck(float *pCurTarPoint, float CurrentX, float CurrentY);
-static void prvVelCalculate(BR_Path_t pPathStru, float *Vx, float *Vy, float *Omega, float CurrentX, float CurrentY, float CurrentTheta);
+namespace {
 
+BR_PathFollower g_path_follower;
 
-/* -------------------------------------------------- Public ----------------------------------------------- */
-void BR_vFollowPath(BR_Path_t pPathStru, float *Vx, float *Vy, float *Omega)
+}
+
+BR_PathFollower::BR_PathFollower()
+    : current_path_index_(0),
+      vel_calc_entered_(false),
+      last_err_theta_(0.0f),
+      last_vector4_{0.0f, 0.0f}
 {
-    float (*pPath)[5] = pPathStru.pPath;
-    float CurrentX = 0;
-    float CurrentY = 0;
-    float CurrentTheta = 0;
+}
 
-    /* 安全检查 */
-    if (prvSafeCheck(pPath[prvCurrentPathIndex], CurrentX, CurrentY)) // 若偏离目标
-    {
-        BR_vResetPathFollowing();
+void BR_PathFollower::reset()
+{
+    current_path_index_ = 0;
+    vel_calc_entered_ = false;
+    last_err_theta_ = 0.0f;
+    last_vector4_[0] = 0.0f;
+    last_vector4_[1] = 0.0f;
+}
+
+bool BR_PathFollower::safeCheck(const float *current_target_point, float current_x, float current_y) const
+{
+    const float safe_distance =
+        (current_target_point[0] == 0.0f && current_target_point[1] == 0.0f)
+            ? BR_configFOLLOWING_SAFE_DISTANCE * 4.0f
+            : BR_configFOLLOWING_SAFE_DISTANCE;
+
+    const float error_dist = BR_Abs(current_target_point[2] - current_x)
+                           + BR_Abs(current_target_point[3] - current_y);
+
+    return error_dist > safe_distance;
+}
+
+void BR_PathFollower::calculateVelocity(const BR_Path_t &path, float *vx, float *vy, float *omega,
+                                        float current_x, float current_y, float current_theta)
+{
+    float (*pPath)[5] = path.pPath;
+
+    const float main_vel_x = pPath[current_path_index_][0];
+    const float main_vel_y = pPath[current_path_index_][1];
+
+    const float v1x = pPath[current_path_index_][2] - current_x;
+    const float v1y = pPath[current_path_index_][3] - current_y;
+
+    const float v2x = pPath[current_path_index_ - 1][2] - pPath[current_path_index_][2];
+    const float v2y = pPath[current_path_index_ - 1][3] - pPath[current_path_index_][3];
+
+    const float seg_length = std::sqrt(v2x * v2x + v2y * v2y);
+    const float projection = BR_Abs((v1x * v2x + v1y * v2y) / seg_length);
+
+    const float v3x = v2x / seg_length * projection;
+    const float v3y = v2y / seg_length * projection;
+
+    const float v4x = v1x + v3x;
+    const float v4y = v1y + v3y;
+
+    const float main_vel_mag = std::sqrt(main_vel_x * main_vel_x + main_vel_y * main_vel_y);
+    const float normal_p = path.NormalP * main_vel_mag;
+    const float normal_d = path.NormalD * main_vel_mag;
+
+    float normal_vel_x = 0.0f;
+    float normal_vel_y = 0.0f;
+    if (vel_calc_entered_) {
+        normal_vel_x = normal_p * v4x + normal_d * (v4x - last_vector4_[0]);
+        normal_vel_y = normal_p * v4y + normal_d * (v4y - last_vector4_[1]);
+    } else {
+        normal_vel_x = normal_p * v4x;
+        normal_vel_y = normal_p * v4y;
+    }
+    last_vector4_[0] = v4x;
+    last_vector4_[1] = v4y;
+
+    const float err_theta = pPath[current_path_index_][4] - current_theta;
+    if (vel_calc_entered_) {
+        *omega = path.ThetaP * err_theta + path.ThetaD * (err_theta - last_err_theta_);
+    } else {
+        *omega = path.ThetaP * err_theta;
+        vel_calc_entered_ = true;
+    }
+    last_err_theta_ = err_theta;
+
+    *vx = main_vel_x + normal_vel_x;
+    *vy = main_vel_y + normal_vel_y;
+}
+
+void BR_PathFollower::followPath(const BR_Path_t &path, float *vx, float *vy, float *omega)
+{
+    float (*pPath)[5] = path.pPath;
+
+    const float current_x = 0.0f;
+    const float current_y = 0.0f;
+    const float current_theta = 0.0f;
+
+    if (safeCheck(pPath[current_path_index_], current_x, current_y)) {
+        reset();
         return;
     }
-    /* 判断当前位置, 根据情况设置控制模式和速度 */
-    if (prvCurrentPathIndex == 0) // 起始0速点
-        prvCurrentPathIndex++;
-    else if (pPath[prvCurrentPathIndex][0] != 0 || pPath[prvCurrentPathIndex][1] != 0) // 大多数情况
-    {
-        /* 判断是否改变目标点 */
-        float TargetX = pPath[prvCurrentPathIndex][2];
-        float TargetY = pPath[prvCurrentPathIndex][3];
-        float NextTargetX = pPath[prvCurrentPathIndex + 1][2];
-        float NextTargetY = pPath[prvCurrentPathIndex + 1][3];
-        float DotProduct = (TargetX - CurrentX) * (NextTargetX - TargetX) +
-                           (TargetY - CurrentY) * (NextTargetY - TargetY);
-        if (DotProduct < 0)
-            prvCurrentPathIndex += 1;
-        /* 正常情况下的速度计算和设置逻辑 */
-        prvVelCalculate(pPathStru, Vx, Vy, Omega, CurrentX, CurrentY, CurrentTheta);
-    }
 
+    if (current_path_index_ == 0) {
+        ++current_path_index_;
+    } else if (pPath[current_path_index_][0] != 0.0f || pPath[current_path_index_][1] != 0.0f) {
+        const float target_x = pPath[current_path_index_][2];
+        const float target_y = pPath[current_path_index_][3];
+        const float next_target_x = pPath[current_path_index_ + 1][2];
+        const float next_target_y = pPath[current_path_index_ + 1][3];
+
+        const float dot_product = (target_x - current_x) * (next_target_x - target_x)
+                                + (target_y - current_y) * (next_target_y - target_y);
+        if (dot_product < 0.0f) {
+            ++current_path_index_;
+        }
+
+        calculateVelocity(path, vx, vy, omega, current_x, current_y, current_theta);
+    }
 }
 
-/** @brief  重置路径跟随至可以开始执行一次跟随的起始状态 */
-void BR_vResetPathFollowing(void)
+BR_PathFollower &BR_GetPathFollower()
 {
-    prvCurrentPathIndex = 0;
-    prvVelCalculateEnterFlag = 0;
+    return g_path_follower;
 }
 
-/* -------------------------------------------------- Private ----------------------------------------------- */
-/** @brief  检查是否偏离当前路径
- *  @retval 0正常, 1偏离
- **/
-static uint8_t prvSafeCheck(float *pCurTarPoint, float CurrentX, float CurrentY)
+void BR_vResetPathFollowing()
 {
-    float SafeDistance;
-    if (pCurTarPoint[0] == 0 && pCurTarPoint[1] == 0) // 最终0速点增加一定安全距离
-        SafeDistance = BR_configFOLLOWING_SAFE_DISTANCE * 4;
-    else
-        SafeDistance = BR_configFOLLOWING_SAFE_DISTANCE;
-    if (ABS(pCurTarPoint[2] - CurrentX) + ABS(pCurTarPoint[3] - CurrentY) > SafeDistance) // 若离目标点太远
-        return 1;
-    return 0;
+    BR_GetPathFollower().reset();
 }
 
-/** @brief  一般情况的路径跟随逻辑 */
-static void prvVelCalculate(BR_Path_t pPathStru, float *Vx, float *Vy, float *Omega, float CurrentX, float CurrentY, float CurrentTheta)
+void BR_vFollowPath(BR_Path_t path, float *vx, float *vy, float *omega)
 {
-   
-    float (*pPath)[5] = pPathStru.pPath;
-    // 法向修正速度
-    float NormalVelX;
-    float NormalVelY;
-
-    static float LastErrTheta;
-    static float LastVector4[2];
-    /* 主方向分速度计算 */
-    float MainVelX = pPath[prvCurrentPathIndex][0];
-    float MainVelY = pPath[prvCurrentPathIndex][1];
-    /* 法向修正分速度计算 */
-    float Vector1[2] = {pPath[prvCurrentPathIndex][2] - CurrentX, // 当前到目标
-                        pPath[prvCurrentPathIndex][3] - CurrentY};
-    float Vector2[2] = {pPath[prvCurrentPathIndex - 1][2] - pPath[prvCurrentPathIndex][2], // 目标点到前一目标点
-                        pPath[prvCurrentPathIndex - 1][3] - pPath[prvCurrentPathIndex][3]};
-    float Distance = sqrt(pow(Vector2[0], 2) + pow(Vector2[1], 2));                      // 两目标点间距离
-    float Shadow = ABS((Vector1[0] * Vector2[0] + Vector1[1] * Vector2[1]) / Distance);  // 投影长度
-    float Vector3[2] = {Vector2[0] / Distance * Shadow, Vector2[1] / Distance * Shadow}; // 目标点到前一目标向量的一部分
-    float MainVel = sqrt(pow(MainVelX, 2) + pow(MainVelY, 2));
-    float NormalP = pPathStru.NormalP * MainVel;                           // 法向修正的P和当前主速度相关
-    float NormalD = pPathStru.NormalD * MainVel;                           // 法向修正的D和当前主速度相关
-    float Vector4[2] = {Vector1[0] + Vector3[0], Vector1[1] + Vector3[1]}; // 法向修正向量
-
-    if (prvVelCalculateEnterFlag)                                          // PD调节
-    {
-        NormalVelX = NormalP * Vector4[0] + NormalD * (Vector4[0] - LastVector4[0]);
-        NormalVelY = NormalP * Vector4[1] + NormalD * (Vector4[1] - LastVector4[1]);
-    }
-    else // 第一次进入逻辑时 P调节
-    {
-        NormalVelX = NormalP * Vector4[0];
-        NormalVelY = NormalP * Vector4[1];
-    }
-    LastVector4[0] = Vector4[0];
-    LastVector4[1] = Vector4[1];
-    /* 自转角速度计算 */
-    float ErrTheta = pPath[prvCurrentPathIndex][4] - CurrentTheta; //这里看角度为0-360°，千万不能负数
-    if (prvVelCalculateEnterFlag) // PD调节
-    {
-        *Omega = pPathStru.ThetaP * ErrTheta + pPathStru.ThetaD * (ErrTheta - LastErrTheta);
-    }
-    else // 第一次进入逻辑时 P调节
-    {
-        *Omega = pPathStru.ThetaP * ErrTheta;
-        prvVelCalculateEnterFlag = 1;
-    }
-    LastErrTheta = ErrTheta;
-    /* 速度合成 */
-    float VelX = MainVelX + NormalVelX;
-    float VelY = MainVelY + NormalVelY;
-    *Vx = VelX;
-    *Vy = VelY;
+    BR_GetPathFollower().followPath(path, vx, vy, omega);
 }

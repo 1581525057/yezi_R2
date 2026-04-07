@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "d:\\GithubProject\\R2_YEZI\\yezi_R2\\R2_Lift_auto\\MDK-ARM\\Control",
+      "d:\\GithubProject\\R2_YEZI\\yezi_R2\\R2_Lift_auto\\MDK-ARM\\Device\\Motor"
+    ]
+  }
+}

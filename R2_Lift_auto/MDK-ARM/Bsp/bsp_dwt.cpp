@@ -53,13 +53,13 @@ double DWT_Timer::getDeltaT64(uint32_t *cnt_last)
 {
     uint32_t cnt_now = DWT->CYCCNT;
 
-    //计算时间差
+    // 计算时间差
     double dt = (double)(cnt_now - *cnt_last) / (double)cpu_freq_hz;
 
-    //更新上次的计数值
+    // 更新上次的计数值
     *cnt_last = cnt_now;
 
-    //更新计数器轮次
+    // 更新计数器轮次
     cntUpdate();
 
     return dt;

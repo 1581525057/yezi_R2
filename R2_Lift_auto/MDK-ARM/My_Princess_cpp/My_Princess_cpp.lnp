@@ -76,6 +76,7 @@
 "my_princess_cpp\laser_distance.o"
 "my_princess_cpp\vescmotor.o"
 "my_princess_cpp\dt35.o"
+"my_princess_cpp\as5047p.o"
 --strict --scatter "My_Princess_cpp\My_Princess_cpp.sct"
 --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers

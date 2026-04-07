@@ -10,6 +10,7 @@
 #include "yun_j60.h"
 #include "dm_imu.h"
 #include "lift_auto.h"
+#include "VescMotor.h"
 
 // 代码回退标志位
 
@@ -24,13 +25,14 @@ PID pid_chassis_0, pid_chassis_1, pid_chassis_2, pid_chassis_3;
 PID pid_F_chassis_linear_x, pid_F_chassis_angle, pid_F_chassis_linear_y;
 // 航向角 PID，用于结合 IMU yaw 实现底盘定向或航向保持。
 PID pid_yaw;
-
+float rpm;
 extern "C" void chassis_task(void *argument)
 {
     // 初始化底盘任务依赖的 CAN、串口以及高精度计时模块。
     BSP_CAN::Init();
     BSP_USART::Init();
     DWT_.init(480);
+    VescMotors[0].init(&hfdcan2, 80);
 
     // 配置相关 GPIO 电平，完成底盘板级外设的上电或使能控制。
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
@@ -40,6 +42,9 @@ extern "C" void chassis_task(void *argument)
 
     // 初始化底盘控制链路中全部 PID 控制器。
     chassis_pid_init();
+    osDelay(200);
+
+   
     while (1) {
         // 1. 更新遥控器/离线保护等状态，并刷新底盘控制指令。
         remove_dji.monitor();
@@ -95,6 +100,11 @@ extern "C" void chassis_task(void *argument)
         //     第二帧发送其余挂载电机的固定控制指令。
         chassis_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame, 0x200, motor_input[0], motor_input[1], motor_input[2], motor_input[3]);
         chassis_motor.Send_CurrentCommand(&BSP_CAN::FDCAN2_TxFrame, 0x200, 3000, 0, 0, 0);
+      
+            
+           VescMotors[0].setRpm(rpm);
+         //VescMotors[0].setHandbrakeCurrent(3000);
+
         // 12. 任务周期延时，维持底盘控制循环频率。
         osDelay(1);
     }

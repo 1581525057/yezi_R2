@@ -1,5 +1,6 @@
 #include "usart_task.h"
 #include "usart.h"
+#include "spi.h"
 #include "cmsis_os.h"
 #include "MiniPC.h"
 #include "main.h"
@@ -8,6 +9,7 @@
 #include <string.h>
 #include "dm_imu.h"
 #include "laser_distance.h"
+#include "AS5047.h"
 
 /* 内部函数前向声明 */
 static void SendCurveArray_Float_LORA(const float *data, uint16_t len);
@@ -17,8 +19,8 @@ static float fast_atof_simple_computer(const uint8_t **pp, const uint8_t *end);
 /* LoRa 发送静态缓冲区：float 数据区 + 4 字节结束标志 */
 static uint8_t lora_tx_buf[CURVE_TX_MAX_FLOATS * 4 + 4];
 
-uint8_t data_usb[30];   /* USB 串口接收缓冲区 */
-uint8_t data_lora[30];  /* LoRa 串口接收缓冲区 */
+uint8_t data_usb[30];  /* USB 串口接收缓冲区 */
+uint8_t data_lora[30]; /* LoRa 串口接收缓冲区 */
 
 /**
  * @brief USART 任务入口（FreeRTOS 任务）
@@ -26,13 +28,16 @@ uint8_t data_lora[30];  /* LoRa 串口接收缓冲区 */
  */
 extern "C" void usart_task(void *argument)
 {
+    as5047.init(&hspi1);
     for (;;) {
         /* 组装调试数据：[0]=yaw角(°), [1]=激光距离(m) */
         float data_debug[2] = {dm_imu.imu.yaw, laser.data.distance_m};
 
         SendCurveArray_Float_LORA(data_debug, 2);
 
-        osDelay(1);  /* 1ms 周期 */
+        as5047.updata();
+
+        osDelay(1); /* 1ms 周期 */
     }
 }
 
@@ -77,8 +82,8 @@ static void SendCurveArray_Float(const float *data, uint16_t len)
     if (data == NULL || len == 0)
         return;
 
-    uint16_t total = (uint16_t)(len * 4u + 4u);  /* 总字节数 */
-    uint8_t buf[4u * (uint32_t)len + 4u];         /* VLA：float 区 + 结束标志区 */
+    uint16_t total = (uint16_t)(len * 4u + 4u); /* 总字节数 */
+    uint8_t buf[4u * (uint32_t)len + 4u];       /* VLA：float 区 + 结束标志区 */
 
     /* 将 float 数组原始字节拷入缓冲 */
     memcpy(buf, data, (size_t)len * 4u);
@@ -159,7 +164,7 @@ int parse_SE_simple(uint8_t *data, uint16_t len, float out[], uint8_t out_max)
         }
     }
     if (!s)
-        return 0;  /* 未找到帧头 */
+        return 0; /* 未找到帧头 */
 
     /* 查找帧尾 'E' */
     for (const uint8_t *p = s + 1; p < data + len; p++) {
@@ -169,7 +174,7 @@ int parse_SE_simple(uint8_t *data, uint16_t len, float out[], uint8_t out_max)
         }
     }
     if (!e)
-        return 0;  /* 未找到帧尾 */
+        return 0; /* 未找到帧尾 */
 
     uint8_t n        = 0;
     const uint8_t *p = s + 1;
@@ -178,7 +183,7 @@ int parse_SE_simple(uint8_t *data, uint16_t len, float out[], uint8_t out_max)
     while (p < e && n < out_max) {
         out[n++] = fast_atof_simple(&p, e);
         if (p < e && *p == ',')
-            p++;  /* 跳过分隔符 */
+            p++; /* 跳过分隔符 */
         else
             break;
     }
