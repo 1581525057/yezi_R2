@@ -138,8 +138,8 @@ void Remote::updateChassosCommand()
     //   ch[3] -> Vy（左右平移），最大 2.0
     //   ch[0] -> Vz（旋转），最大 3.0
     //   ch[1] -> Vl（升降/附加轴），最大 0.5
-    chassis_.Vx = static_cast<float>(rc_.ch[2]) / 660.0f * 2.0f;
-    chassis_.Vy = static_cast<float>(rc_.ch[3]) / 660.0f * 2.0f;
+    chassis_.Vx = static_cast<float>(rc_.ch[2]) / 660.0f * 2.5f;
+    chassis_.Vy = static_cast<float>(rc_.ch[3]) / 660.0f * 2.5f;
     chassis_.Vz = static_cast<float>(rc_.ch[0]) / 660.0f * 3.0f;
     chassis_.Vl = static_cast<float>(rc_.ch[1]) / 660.0f * 0.5f;
 }

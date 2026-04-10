@@ -1,4 +1,4 @@
-﻿#ifndef DT35_H
+  #ifndef DT35_H
 #define DT35_H
 
 #include "main.h"
@@ -50,30 +50,34 @@
 
 /* ====================== DT35 Sensor Parameters =========================== */
 #define DT35_VOLTAGE_MAX_V      10.0f     // DT35 在当前应用下的有效满量程输出电压，单位 V，用于距离换算上限。
-#define DT35_DIST_AT_0V_MM      50.0f     // 当传感器输出 0V 时，对应的测量距离，单位 mm。
-#define DT35_DIST_AT_10V_MM     10000.0f  // 当传感器输出 10V 时，对应的测量距离，单位 mm。
+#define DT35_DIST_AT_0V_MM      30.0f      // 当传感器输出 0V 时，对应的测量距离，单位 mm。
+#define DT35_DIST_AT_10V_MM     30000.0f   // 当传感器输出 10V 时，对应的测量距离，单位 mm。
 
 #define ADS8688_FS_VOLTAGE      10.24f    // ADS8688 在当前量程配置下的满量程电压，单位 V。
 #define ADS8688_ADC_MAX         65535.0f  // 16 位 ADC 的最大码值，用于把原始计数换算成电压。
 
 /* ====================== CS / RST Pin Definition ========================== */
-#define ADS8688_CS_PORT         GPIOE       // ADS8688 片选信号所在的 GPIO 端口。
+#define   ADS8688_CS_PORT         GPIOE       // ADS8688 片选信号所在的 GPIO 端口。
 #define ADS8688_CS_PIN          GPIO_PIN_14 // ADS8688 片选信号引脚，SPI 每次事务前拉低、结束后拉高。
 #define ADS8688_RST_PORT        GPIOB       // ADS8688 硬件复位信号所在的 GPIO 端口。
 #define ADS8688_RST_PIN         GPIO_PIN_8  // ADS8688 硬件复位引脚，用于在初始化阶段强制复位芯片。
 
 /* ====================== Data Struct ====================================== */
 struct DT35_Data_t {
-    float    distance_mm;  // 当前换算后的距离值，单位 mm，每次调用 update() 后刷新。
-    float    voltage_V;    // 由 ADC 原始值换算得到的输入电压，单位 V，反映 DT35 当前模拟输出。
-    uint16_t adc_raw;      // 直接从 ADS8688 读出的 16 位原始采样值，便于调试和标定。
-    uint8_t  valid;        // 数据有效标志：0 表示尚未完成有效更新，1 表示至少成功执行过一次 update()。
+    float    distance_mm;    // 当前换算后的距离值，单位 mm，每次调用 update() 后刷新。
+    float    voltage_V;      // 由 ADC 原始值换算得到的输入电压，单位 V，反映 DT35 当前模拟输出。
+    uint16_t adc_raw;        // 直接从 ADS8688 读出的 16 位原始采样值，便于调试和标定。
+    uint8_t  valid;          // 数据有效标志：0 表示尚未完成有效更新，1 表示至少成功执行过一次 update()。
 };
 
 /* ====================== DT35 Class ======================================= */
 class DT35 {
 public:
-    DT35_Data_t data;  // 对外公开的数据缓存区，保存最近一次采样和换算结果。
+    DT35_Data_t ch0;  // CH0 通道的采样和换算结果。
+    DT35_Data_t ch1;  // CH1 通道的采样和换算结果。
+
+    // 兼容旧代码：data 指向 ch0（默认通道）
+    DT35_Data_t &data = ch0;
 
     /*
      * 初始化 DT35 模块。
@@ -83,24 +87,24 @@ public:
      *   系统 GPIO、SPI 外设准备完毕之后调用一次即可。
      * 主要动作：
      *   1. 保存 SPI 句柄；
-     *   2. 清空 data 中的历史值；
-     *   3. 完成 ADS8688 的硬复位、软复位和通道量程配置。
+     *   2. 清空 ch0/ch1 中的历史值；
+     *   3. 完成 ADS8688 的硬复位、软复位、CH0+CH1 量程配置。
      */
     void init(SPI_HandleTypeDef *hspi);
 
     /*
-     * 执行一次采样更新。
+     * 执行一次双通道采样更新。
      * 主要动作：
-     *   1. 从 ADS8688 读取一次 CH0 的 16 位原始值；
-     *   2. 把原始值换算为实际电压；
-     *   3. 把电压限制到 DT35 的有效输出范围内；
-     *   4. 根据线性关系换算出毫米距离；
-     *   5. 将 valid 置 1，表示 data 中已有有效结果。
+     *   1. 发送 MAN_CH0 命令，读取 CH0 的 16 位原始值；
+     *   2. 发送 MAN_CH1 命令，读取 CH1 的 16 位原始值；
+     *   3. 分别换算电压、限幅、换算距离；
+     *   4. 将 ch0.valid 和 ch1.valid 置 1。
      */
     void update(void);
 
 private:
-    SPI_HandleTypeDef *spi;  // 内部保存的 SPI 句柄指针，供所有寄存器读写函数复用。
+    SPI_HandleTypeDef *spi;       // 内部保存的 SPI 句柄指针，供所有寄存器读写函数复用。
+    uint16_t last_cmd_adc = 0;    // 最近一次命令帧同步返回的 ADC 值（手动模式流水线数据）。
 
     /*
      * 完成 ADS8688 的初始化配置。

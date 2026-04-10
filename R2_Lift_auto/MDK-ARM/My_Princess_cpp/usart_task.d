@@ -221,4 +221,5 @@ my_princess_cpp/usart_task.o: TASK\usart_task.cpp TASK\usart_task.h \
   Device\Motor\dji_motor.h Bsp\bsp_can.h ..\Core\Inc\fdcan.h \
   D:\Keil5\ARM\ARMCLANG\include\libcxx\string.h \
   D:\Keil5\ARM\ARMCLANG\include\string.h Bsp\dm_imu.h \
-  Device\laser_distance\laser_distance.h Device\AS5047P\AS5047.h
+  Device\laser_distance\laser_distance.h Device\AS5047P\AS5047.h \
+  Device\DT35\DT35.h

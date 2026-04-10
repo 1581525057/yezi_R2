@@ -10,7 +10,7 @@
 #include "dm_imu.h"
 #include "laser_distance.h"
 #include "AS5047.h"
-
+#include "DT35.h"
 /* 内部函数前向声明 */
 static void SendCurveArray_Float_LORA(const float *data, uint16_t len);
 static void SendCurveArray_Float(const float *data, uint16_t len);
@@ -29,13 +29,20 @@ uint8_t data_lora[30]; /* LoRa 串口接收缓冲区 */
 extern "C" void usart_task(void *argument)
 {
     as5047.init(&hspi1);
+    dt35.init(&hspi3);
     for (;;) {
-        /* 组装调试数据：[0]=yaw角(°), [1]=激光距离(m) */
-        float data_debug[2] = {dm_imu.imu.yaw, laser.data.distance_m};
+        /* 组装调试数据：[0]=CH0电压(V), [1]=CH1电压(V), [2]=CH0距离(mm), [3]=CH1距离(mm) */
+        float data_debug[4] = {
+            dt35.ch0.voltage_V,
+            dt35.ch1.voltage_V,
+            dt35.ch0.distance_mm,
+            dt35.ch1.distance_mm
+        };
 
-        SendCurveArray_Float_LORA(data_debug, 2);
+        SendCurveArray_Float_LORA(data_debug, 4);
 
         as5047.updata();
+        dt35.update();
 
         osDelay(1); /* 1ms 周期 */
     }

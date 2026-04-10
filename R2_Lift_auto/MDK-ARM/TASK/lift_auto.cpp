@@ -39,13 +39,13 @@ LiftAuto::LiftAuto()
 // ===================== 重置函数：清空所有状态，回到空闲 =====================
 void LiftAuto::reset(void)
 {
-    state_ = STEP_IDLE;                   // 状态机回到空闲状态
-    lift_switch_target_ = 0U;             // 抬升档位目标清零
-    lift_linear_speed_target_ = 0.0f;     // 抬升线速度目标清零
-    chassis_vy_override_ = 0U;            // 关闭底盘Y轴速度接管
-    chassis_vy_target_ = 0.0f;            // 底盘Y轴速度目标清零
-    stable_count_ = 0U;                   // 稳定计数清零
-    last_laser_mm_ = UINT32_MAX;          // 上次激光距离置为无效值
+    state_                    = STEP_IDLE;  // 状态机回到空闲状态
+    lift_switch_target_       = 0U;         // 抬升档位目标清零
+    lift_linear_speed_target_ = 0.0f;       // 抬升线速度目标清零
+    chassis_vy_override_      = 0U;         // 关闭底盘Y轴速度接管
+    chassis_vy_target_        = 0.0f;       // 底盘Y轴速度目标清零
+    stable_count_             = 0U;         // 稳定计数清零
+    last_laser_mm_            = UINT32_MAX; // 上次激光距离置为无效值
 }
 
 // ===================== 主更新函数：每帧调用，驱动状态机 =====================
@@ -56,8 +56,8 @@ void LiftAuto::update(void)
     const uint8_t right_sw = remove_dji.rc_.s[1];
 
     // 读取激光测距数据
-    const uint32_t laser_mm    = laser.data.distance_mm; // 当前距离（mm）
-    const uint8_t  laser_valid = laser.data.valid;        // 数据是否有效
+    const uint32_t laser_mm   = laser.data.distance_mm; // 当前距离（mm）
+    const uint8_t laser_valid = laser.data.valid;       // 数据是否有效
 
     // 安全检查：只有左右拨杆都在"上"位（值为1）时才执行自动抬升
     // 否则立即重置，防止误触发
@@ -76,9 +76,9 @@ void LiftAuto::update(void)
 
         // ---------- 第一步：靠近目标（底盘向目标移动，直到激光距离足够近）----------
         case STEP_APPROACH_Y:
-            chassis_vy_override_      = 1U;    // 接管底盘Y轴速度
-            lift_switch_target_       = 1U;    // 抬升档位设为1（低位/待机）
-            lift_linear_speed_target_ = 0.0f;  // 抬升线速度为0，不动
+            chassis_vy_override_      = 1U;   // 接管底盘Y轴速度
+            lift_switch_target_       = 1U;   // 抬升档位设为1（低位/待机）
+            lift_linear_speed_target_ = 0.0f; // 抬升线速度为0，不动
 
             // 激光有效且距离大于准备阈值：继续向目标靠近
             if (laser_valid != 0U && laser_mm > LIFT_AUTO_PREPARE_MM) {
@@ -94,19 +94,19 @@ void LiftAuto::update(void)
 
             // 激光有效且已靠近到准备距离以内：切换到等待抬升到位阶段
             if (laser_valid != 0U && laser_mm <= LIFT_AUTO_PREPARE_MM) {
-                chassis_vy_target_  = 0.0f; // 停止底盘
-                lift_switch_target_ = 2U;   // 抬升档位切换为2（高位/抬升）
-                stable_count_       = 0U;   // 稳定计数清零
+                chassis_vy_target_  = 0.0f;                 // 停止底盘
+                lift_switch_target_ = 2U;                   // 抬升档位切换为2（高位/抬升）
+                stable_count_       = 0U;                   // 稳定计数清零
                 state_              = STEP_WAIT_NEW_HEIGHT; // 进入下一阶段
             }
             break;
 
         // ---------- 第二步：等待抬升到位（检测激光高度稳定在目标范围内）----------
         case STEP_WAIT_NEW_HEIGHT:
-            chassis_vy_override_      = 1U;    // 继续接管底盘Y轴（保持不动）
-            chassis_vy_target_        = 0.0f;  // 底盘停止
-            lift_switch_target_       = 2U;    // 继续保持抬升档位2
-            lift_linear_speed_target_ = 0.0f;  // 抬升线速度为0（等待到位）
+            chassis_vy_override_      = 1U;   // 继续接管底盘Y轴（保持不动）
+            chassis_vy_target_        = 0.0f; // 底盘停止
+            lift_switch_target_       = 2U;   // 继续保持抬升档位2
+            lift_linear_speed_target_ = 0.0f; // 抬升线速度为0（等待到位）
 
             // 判断激光距离是否在目标高度的容差范围内
             if (laser_valid != 0U &&
@@ -129,25 +129,25 @@ void LiftAuto::update(void)
 
         // ---------- 第三步：爬坡前进（抬升机构驱动，直到激光检测到完成位置）----------
         case STEP_CLIMB_FORWARD:
-            chassis_vy_override_      = 1U;                     // 继续接管底盘Y轴
-            chassis_vy_target_        = 0.0f;                   // 底盘停止
-            lift_switch_target_       = 2U;                     // 保持抬升档位2
+            chassis_vy_override_      = 1U;                        // 继续接管底盘Y轴
+            chassis_vy_target_        = 0.0f;                      // 底盘停止
+            lift_switch_target_       = 2U;                        // 保持抬升档位2
             lift_linear_speed_target_ = LIFT_AUTO_CLIMB_SPEED_MPS; // 抬升机构以爬坡速度运行
 
             // 激光距离小于完成阈值，认为已爬坡完成
             if (laser_valid != 0U && laser_mm <= LIFT_AUTO_FINISH_MM) {
-                lift_switch_target_       = 1U;    // 抬升档位切回1（低位/收起）
-                lift_linear_speed_target_ = 0.0f;  // 停止抬升
+                lift_switch_target_       = 1U;            // 抬升档位切回1（低位/收起）
+                lift_linear_speed_target_ = 0.0f;          // 停止抬升
                 state_                    = STEP_FINISHED; // 进入完成状态
             }
             break;
 
         // ---------- 第四步：完成（保持静止，等待人工接管）----------
         case STEP_FINISHED:
-            chassis_vy_override_      = 0U;    // 释放底盘Y轴接管，还给手动控制
-            chassis_vy_target_        = 0.0f;  // 底盘速度目标清零
-            lift_switch_target_       = 1U;    // 抬升档位1（低位）
-            lift_linear_speed_target_ = 0.0f;  // 抬升线速度为0
+            chassis_vy_override_      = 0U;   // 释放底盘Y轴接管，还给手动控制
+            chassis_vy_target_        = 0.0f; // 底盘速度目标清零
+            lift_switch_target_       = 1U;   // 抬升档位1（低位）
+            lift_linear_speed_target_ = 0.0f; // 抬升线速度为0
             break;
 
         // ---------- 异常情况：未知状态，重置 ----------

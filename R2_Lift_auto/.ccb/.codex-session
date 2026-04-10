@@ -1,0 +1,19 @@
+{
+  "session_id": "ai-1775835129-30648",
+  "ccb_project_id": "ad1c1a4cc0d21d01035732cd28895c007f6b1f74574990353f75074ed6ad880e",
+  "runtime_dir": "D:\\TEMP\\claude-ai-15pro\\ai-1775835129-30648\\codex",
+  "input_fifo": "D:\\TEMP\\claude-ai-15pro\\ai-1775835129-30648\\codex\\input.fifo",
+  "output_fifo": "D:\\TEMP\\claude-ai-15pro\\ai-1775835129-30648\\codex\\output.fifo",
+  "terminal": "wezterm",
+  "tmux_session": null,
+  "pane_id": "1",
+  "pane_title_marker": "CCB-Codex-ad1c1a4c",
+  "tmux_log": "D:\\TEMP\\claude-ai-15pro\\ai-1775835129-30648\\codex\\bridge_output.log",
+  "work_dir": "D:\\GithubProject\\R2_YEZI\\yezi_R2\\R2_Lift_auto",
+  "work_dir_norm": "d:/githubproject/r2_yezi/yezi_r2/r2_lift_auto",
+  "start_dir": "D:\\GithubProject\\R2_YEZI\\yezi_R2\\R2_Lift_auto",
+  "active": true,
+  "started_at": "2026-04-10 23:32:10",
+  "codex_start_cmd": "codex -c disable_paste_burst=true; $code = $LASTEXITCODE; Write-Host \"`n[codex] exited with code $code. Press Enter to close...\"; Read-Host; exit $code",
+  "start_cmd": "codex -c disable_paste_burst=true; $code = $LASTEXITCODE; Write-Host \"`n[codex] exited with code $code. Press Enter to close...\"; Read-Host; exit $code"
+}

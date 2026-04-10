@@ -25,6 +25,7 @@ virtualFolder:
                 - path: ../Core/Src/freertos.c
                 - path: ../Core/Src/dma.c
                 - path: ../Core/Src/fdcan.c
+                - path: ../Core/Src/spi.c
                 - path: ../Core/Src/usart.c
                 - path: ../Core/Src/stm32h7xx_it.c
                 - path: ../Core/Src/stm32h7xx_hal_msp.c
@@ -70,6 +71,8 @@ virtualFolder:
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c_ex.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_exti.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_fdcan.c
+            - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi.c
+            - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi_ex.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart_ex.c
           folders: []
@@ -104,10 +107,14 @@ virtualFolder:
       files:
         - path: Control/omni_chassis.cpp
         - path: Control/plan_route.cpp
+        - path: Control/PID.cpp
       folders: []
     - name: Bsp
       files:
         - path: Bsp/bsp_can.cpp
+        - path: Bsp/bsp_usart.cpp
+        - path: Bsp/dm_imu.cpp
+        - path: Bsp/bsp_dwt.cpp
       folders: []
     - name: DSP
       files:
@@ -118,6 +125,7 @@ virtualFolder:
         - path: TASK/chassis_task.cpp
         - path: TASK/lift_class.cpp
         - path: TASK/usart_task.cpp
+        - path: TASK/lift_auto.cpp
       folders: []
     - name: DEVICE
       files:
@@ -127,6 +135,10 @@ virtualFolder:
         - path: Device/Motor/yun_J60.cpp
         - path: Device/Motor/dji_motor.cpp
         - path: Device/Motor/dm_motor.cpp
+        - path: Device/laser_distance/laser_distance.cpp
+        - path: Device/Motor/VescMotor.cpp
+        - path: Device/DT35/DT35.cpp
+        - path: Device/AS5047P/AS5047P.cpp
       folders: []
     - name: ::CMSIS
       files: []
@@ -165,10 +177,14 @@ targets:
         - Device/USB
         - Device/StepMotor/MyStepMotor
         - Bsp
+        - Device/laser_distance
+        - Device/DT35
+        - Device/AS5047P
         - .cmsis/include
         - RTE/_My_Princess_cpp
       libList: []
     excludeList: []
+    settings: {}
     toolchain: AC6
     toolchainConfigMap:
       AC6:
