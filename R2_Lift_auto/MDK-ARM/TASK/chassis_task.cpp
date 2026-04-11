@@ -44,7 +44,7 @@ extern "C" void chassis_task(void *argument)
     chassis_pid_init();
     osDelay(200);
 
-   
+       //
     while (1) {
         // 1. 更新遥控器/离线保护等状态，并刷新底盘控制指令。
         remove_dji.monitor();
