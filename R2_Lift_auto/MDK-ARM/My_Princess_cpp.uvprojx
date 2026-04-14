@@ -1985,6 +1985,11 @@
               <FilePath>.\TASK\usart_task.cpp</FilePath>
             </File>
             <File>
+              <FileName>route_task.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\TASK\route_task.cpp</FilePath>
+            </File>
+            <File>
               <FileName>lift_auto.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\TASK\lift_auto.cpp</FilePath>

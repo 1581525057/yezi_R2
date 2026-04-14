@@ -1,178 +1,217 @@
-  # yezi_R2
+# yezi_R2 Embedded Control
 
-  基于 STM32H723VGTx + FreeRTOS，主要用于 R2 底盘、升
-  降机构、传感器采集、CAN 电机驱动、串口通信和路线状态机控制。
+面向 R2 机器人的 STM32H723VGTx 嵌入式控制工程。项目基于 STM32CubeMX、HAL、FreeRTOS CMSIS-RTOS V2 和 Keil MDK，覆盖全向底盘、升降机构、CAN 电机、传感器采集、遥控器输入、USB/MiniPC 通信以及自动上台阶控制链路。
 
-  ## 项目概览
+> 当前仓库保存的是机器人下位机控制代码。底盘、升降、电机、传感器和通信链路已有实现；路线规划任务已经在 RTOS 层预留，具体动作执行层仍需要继续接入和联调。
 
-  本工程由 STM32CubeMX 生成底层外设初始化代码，使用 Keil MDK / EIDE 进行开发。核
-  心业务代码集中在 `R2_Lift_auto/MDK-ARM` 下，底层 HAL、CMSIS、FreeRTOS、USB
-  Device 等依赖已随工程一起保存。
+## Highlights
 
-  当前主要包含：
+- STM32H723VGTx Cortex-M7，480 MHz 主频，FreeRTOS 静态任务栈
+- 三路 FDCAN 总线，统一收发与设备分发
+- 四轮全向底盘运动学/动力学解算，速度环 PID 与电机电流控制
+- DJI M3508 / M2006、云深 J60、达妙电机、VESC 扩展帧驱动接入
+- DT35 激光测距 + ADS8688 模拟采样链路
+- AS5047P 磁编码器 SPI 采集
+- SBUS 遥控器、DM IMU、激光测距串口 DMA 接收
+- USB CDC、MiniPC、LoRa 调试数据通道
+- 升降高度轨迹生成与半自动上台阶状态机
 
-  - 四轮全向底盘运动学、动力学解算与 PID 闭环控制
-  - DJI M3508 / M2006 电机 CAN 控制
-  - 云深 J60 电机控制
-  - VESC 电调 FDCAN 扩展帧驱动
-  - 升降机构高度轨迹控制与半自动上台阶逻辑
-  - DT35 激光测距传感器 + ADS8688 ADC 采集
-  - AS5047P 磁编码器 SPI 读取
-  - SBUS 遥控器、DM IMU、激光测距串口 DMA 接收
-  - USB CDC / MiniPC / LoRa 调试通信
-  - R2 路线规划与动作状态机框架
+## Platform
 
-  ## 硬件平台
+| Category | Configuration |
+| --- | --- |
+| MCU | STM32H723VGTx |
+| Core | ARM Cortex-M7 |
+| Clock | 480 MHz |
+| RTOS | FreeRTOS + CMSIS-RTOS V2 |
+| IDE | Keil MDK-ARM / EIDE / STM32CubeMX |
+| CAN | FDCAN1 / FDCAN2 / FDCAN3 |
+| SPI | SPI1 / SPI3 |
+| UART | UART5 / UART7 / UART8 / USART1 / USART2 / USART3 / USART10 |
+| USB | USB Device CDC |
 
-  - MCU：STM32H723VGTx
-  - RTOS：FreeRTOS CMSIS-RTOS V2
-  - 主频：480 MHz
-  - CAN：FDCAN1 / FDCAN2 / FDCAN3
-  - SPI：SPI1、SPI3
-  - UART：UART5、UART7、UART8、USART1、USART2、USART3、USART10
-  - USB：USB Device CDC
+## Repository Layout
 
-  ## 目录结构
+```text
+yezi_R2/
+├── README.md
+├── R2_Lift_auto/
+│   ├── My_Princess_cpp.ioc              # STM32CubeMX 工程配置
+│   ├── Core/                            # CubeMX 生成的启动、外设、RTOS 入口
+│   ├── Drivers/                         # STM32 HAL / CMSIS
+│   ├── Middlewares/                     # FreeRTOS、USB Device、CMSIS-DSP
+│   ├── USB_DEVICE/                      # USB CDC 设备层
+│   ├── EIDE_Project/                    # EIDE 工程配置
+│   └── MDK-ARM/
+│       ├── My_Princess_cpp.uvprojx      # Keil MDK 工程
+│       ├── Bsp/                         # CAN、USART、DWT、IMU 等板级支持
+│       ├── Control/                     # PID、全向底盘、路线规划接口
+│       ├── Device/                      # 电机、传感器、遥控器、USB/MiniPC 驱动
+│       └── TASK/                        # FreeRTOS 任务实现
+└── 说明文档/
+    ├── DT35_ADS8688_使用文档.md
+    └── VescMotor 驱动使用文档.md
+```
 
-  ```text
-  yezi_R2/
-  ├── README.md
-  ├── R2_Lift_auto/
-  │   ├── My_Princess_cpp.ioc          # STM32CubeMX 工程
-  │   ├── Core/                        # CubeMX 生成的主程序、外设初始化、
-  FreeRTOS 入口
-  │   ├── Drivers/                     # STM32 HAL / CMSIS
-  │   ├── Middlewares/                 # FreeRTOS、USB Device、CMSIS-DSP
-  │   ├── USB_DEVICE/                  # USB CDC 设备层
-  │   ├── MDK-ARM/
-  │   │   ├── My_Princess_cpp.uvprojx  # Keil MDK 工程
-  │   │   ├── Bsp/                     # CAN、USART、DWT 等板级支持
-  │   │   ├── Control/                 # PID、全向底盘、路线规划
-  │   │   ├── Device/                  # 电机、传感器、遥控器、USB/MiniPC 驱动
-  │   │   └── TASK/                    # FreeRTOS 任务实现
-  │   └── EIDE_Project/                # EIDE 工程配置
-  └── 说明文档/
-      ├── DT35_ADS8688_使用文档.md
-      └── VescMotor 驱动使用文档.md
+## Runtime Architecture
 
-  ## 主要任务
+```text
+Remote / MiniPC / Sensors
+          │
+          ▼
+  BSP_CAN / BSP_USART / SPI / USB CDC
+          │
+          ▼
+Device drivers: DJI / J60 / DM / VESC / DT35 / AS5047P / SBUS / IMU
+          │
+          ▼
+Control layer: PID / omni chassis / lift trajectory / lift auto
+          │
+          ▼
+FreeRTOS tasks: CHASSIS_TASK / USART_TASK / LIFT_TASK / PLAN_ROUTE
+          │
+          ▼
+Actuators: chassis motors / lift motors / lift wheels / external ESC
+```
 
-  工程中 FreeRTOS 创建了 4 个主要任务：
+## FreeRTOS Tasks
 
-  | 任务 | 周期/用途 |
-  |------|-----------|
-  | CHASSIS_TASK | 底盘控制、遥控器指令更新、底盘运动学解算、电机电流发送 |
-  | USART_TASK | DT35 / AS5047P 数据更新，LoRa 调试数据发送 |
-  | LIFT_TASK | 升降机构高度控制、2006 升降轮速度控制、半自动上台阶状态机 |
-  | PLAN_ROUTE | R2 路线规划与动作状态机周期更新 |
+任务创建入口位于 `R2_Lift_auto/Core/Src/freertos.c`。当前使用静态任务栈，每个任务栈为 512 words。
 
-  ## 核心模块
+| Task | Priority | Period | Responsibility |
+| --- | --- | --- | --- |
+| `CHASSIS_TASK` | `osPriorityNormal` | 1 ms | 初始化 CAN/USART/DWT，读取遥控器指令，更新底盘运动学，计算 PID，发送底盘电机控制帧 |
+| `USART_TASK` | `osPriorityNormal` | 1 ms | 更新 AS5047P、DT35 数据，通过 LoRa/MiniPC 通道发送调试曲线数据 |
+| `LIFT_TASK` | `osPriorityNormal` | 1 ms | 升降高度轨迹、J60 角度控制、M2006 升降轮速度控制、自动上台阶状态机 |
+| `PLAN_ROUTE` | `osPriorityNormal2` | 1 ms | 路线规划任务入口已预留，等待动作执行层和状态机继续接入 |
 
-  ### 底盘控制
+## Core Modules
 
-  底盘控制代码位于：
+### Chassis Control
 
-  R2_Lift_auto/MDK-ARM/TASK/chassis_task.cpp
-  R2_Lift_auto/MDK-ARM/Control/omni_chassis.cpp
+主要文件：
 
-  功能包括：
+- `R2_Lift_auto/MDK-ARM/TASK/chassis_task.cpp`
+- `R2_Lift_auto/MDK-ARM/Control/omni_chassis.cpp`
+- `R2_Lift_auto/MDK-ARM/Device/Motor/dji_motor.cpp`
+- `R2_Lift_auto/MDK-ARM/Device/Motor/VescMotor.cpp`
 
-  - 读取遥控器底盘速度指令
-  - 四轮全向底盘正 / 逆运动学解算
-  - x/y 方向速度 PID
-  - 四个底盘电机转速 PID
-  - DJI 电机 CAN 电流控制
-  - VESC 电调转速控制接口预留
+控制链路：
 
-  ### 升降与上台阶
+1. `remove_dji.monitor()` 监控遥控器在线状态。
+2. `remove_dji.updateChassosCommand()` 刷新底盘速度目标。
+3. `omni_chassis.forwardKinematics()` 根据四轮反馈转速反解底盘当前状态。
+4. `lift_auto.getChassisVyTarget()` 在自动上台阶时接管底盘 Y 轴速度。
+5. `pid_F_chassis_linear_x/y` 计算底盘 x/y 方向驱动力。
+6. `omni_chassis.dynamicsInverse()` 和 `inverseKinematics()` 完成力/速度到轮速的分配。
+7. 四个 3508 速度环 PID 输出叠加前馈，最终通过 FDCAN 发送电流指令。
 
-  相关代码位于：
+### Lift And Climb Automation
 
-  R2_Lift_auto/MDK-ARM/TASK/lift_class.cpp
-  R2_Lift_auto/MDK-ARM/TASK/lift_auto.cpp
+主要文件：
 
-  功能包括：
+- `R2_Lift_auto/MDK-ARM/TASK/lift_class.cpp`
+- `R2_Lift_auto/MDK-ARM/TASK/lift_auto.cpp`
+- `R2_Lift_auto/MDK-ARM/Device/Motor/yun_J60.cpp`
+- `R2_Lift_auto/MDK-ARM/Device/Motor/dji_motor.cpp`
 
-  - 云深 J60 电机高度控制
-  - DJI M2006 升降轮速度闭环
-  - 升降高度线性轨迹生成
-  - 基于遥控器拨杆的手动 / 半自动切换
-  - 基于激光距离的靠近、抬升、爬坡、完成状态机
+升降控制包含两条链路：
 
-  ### 路线规划状态机
+- 高度链路：J60 电机位置反馈 -> 高度换算 -> 线性高度轨迹 -> 左右高度 PID -> J60 力矩/位置控制
+- 升降轮链路：M2006 反馈转速 -> 线速度换算 -> 目标线速度反算转速 -> 速度环 PID -> CAN 电流控制
 
-  相关代码位于：
+半自动上台阶状态机位于 `LiftAuto`，由左右拨杆同时处于指定位置触发，核心状态为：
 
-  R2_Lift_auto/MDK-ARM/Control/plan_route.cpp
-  R2_Lift_auto/MDK-ARM/TASK/route_task.cpp
+| State | Behavior |
+| --- | --- |
+| `STEP_IDLE` | 空闲，手动指令透传 |
+| `STEP_APPROACH_Y` | 接管底盘 Y 轴，依据激光距离靠近目标 |
+| `STEP_WAIT_NEW_HEIGHT` | 停车并等待升降高度稳定 |
+| `STEP_CLIMB_FORWARD` | 输出升降线速度，执行爬坡 |
+| `STEP_FINISHED` | 释放底盘接管，等待人工操作 |
 
-  当前实现了 R2 路线执行框架：
+### Communication And Sensors
 
-  - 根据 target_id 生成路线步骤
-  - 全场导航阶段
-  - 入口 DT35 精定位阶段
-  - 局部路线执行阶段
-  - 上台阶后强制重新定位
-  - 吸取失败重试
-  - 动作 DONE / FAIL / UNKNOWN 结果处理
-  - 超时与故障状态管理
+| Module | Path | Notes |
+| --- | --- | --- |
+| CAN BSP | `R2_Lift_auto/MDK-ARM/Bsp/bsp_can.cpp` | 三路 FDCAN 初始化、发送、接收中断分发 |
+| USART BSP | `R2_Lift_auto/MDK-ARM/Bsp/bsp_usart.cpp` | DMA 接收、空闲中断、串口设备分发 |
+| DT35 + ADS8688 | `R2_Lift_auto/MDK-ARM/Device/DT35/` | 双通道电压与距离采集 |
+| AS5047P | `R2_Lift_auto/MDK-ARM/Device/AS5047P/` | SPI 磁编码器读取 |
+| Remote | `R2_Lift_auto/MDK-ARM/Device/Remote_control/` | SBUS 遥控器解析 |
+| DM IMU | `R2_Lift_auto/MDK-ARM/Bsp/dm_imu.cpp` | IMU 串口数据解析 |
+| Laser UART | `R2_Lift_auto/MDK-ARM/Device/laser_distance/` | 串口激光测距 |
+| USB/MiniPC | `R2_Lift_auto/MDK-ARM/Device/USB/` | USB CDC / MiniPC 数据接口 |
 
-  注意：当前 dispatchMove()、dispatchClimbUp()、dispatchSuckBlock() 等具体执行函
-  数仍是占位，需要后续接入真实底盘、机械臂、上台阶执行层。
+## Build And Flash
 
-  ### 通信与传感器
+### Keil MDK
 
-  - Bsp/bsp_can.cpp：三路 FDCAN 初始化、发送、接收中断分发
-  - Bsp/bsp_usart.cpp：USART DMA 双缓冲接收、空闲中断分发
-  - Device/DT35：DT35 + ADS8688 双通道模拟采集
-  - Device/AS5047P：AS5047P 磁编码器 SPI 读取
-  - Device/Motor：DJI、DM、Yun J60、VESC 电机驱动
-  - Device/Remote_control：SBUS 遥控器解析
-  - Device/USB：MiniPC / USB CDC 通信接口
+1. 打开工程：
 
-  ## 构建与烧录
+   ```text
+   R2_Lift_auto/MDK-ARM/My_Princess_cpp.uvprojx
+   ```
 
-  ### Keil MDK
+2. 确认目标芯片为 `STM32H723VGTx`。
+3. 编译 `My_Princess_cpp` target。
+4. 连接 ST-LINK/J-LINK 或团队使用的调试器。
+5. 下载到目标板并复位运行。
 
-  1. 打开工程：
+### STM32CubeMX
 
-  R2_Lift_auto/MDK-ARM/My_Princess_cpp.uvprojx
+外设配置入口：
 
-  2. 确认芯片型号为：
+```text
+R2_Lift_auto/My_Princess_cpp.ioc
+```
 
-  STM32H723VGTx
+修改 `.ioc` 后重新生成代码时，需要重点检查：
 
-  3. 编译工程。
-  4. 连接调试器后下载到目标板。
+- `Core/Src/freertos.c` 中任务入口是否仍指向业务实现
+- `Core/Inc/*` 和 `Core/Src/*` 的 USER CODE 区是否被保留
+- `MDK-ARM` 工程是否仍包含新增的 `.cpp/.h` 文件
+- FDCAN、USART DMA、SPI、USB CDC 配置是否与硬件接线一致
 
-  ### STM32CubeMX
+## Debugging Notes
 
-  如需修改外设配置，可打开：
+- LoRa 调试数据通过 `USART10` DMA 发送。
+- `USART_TASK` 当前发送 DT35 CH0/CH1 的电压与距离数据。
+- SBUS 遥控器通过 `UART5` 接收。
+- DM IMU 通过 `USART2` 接收。
+- 串口激光测距通过 `UART8` 接收。
+- CAN 接收由 `bsp_can.cpp` 统一分发到电机驱动。
+- 高精度时间基由 `Bsp/bsp_dwt.*` 提供，初始化时使用 480 MHz 参数。
 
-  R2_Lift_auto/My_Princess_cpp.ioc
+## Development Rules
 
-  修改后重新生成代码，再检查 MDK-ARM 下的用户代码是否仍在工程中。
+- CubeMX 生成区只在 `USER CODE BEGIN/END` 内写业务代码。
+- 新增 C++ 源文件后同步检查 Keil 工程文件是否已经收录。
+- 控制参数集中放在对应模块头文件或配置文件中，避免散落在任务循环中。
+- 1 ms 周期任务内避免阻塞式串口发送和长时间计算。
+- CAN/USART 中断回调只做分发、缓存和轻量解析，复杂逻辑放回任务上下文。
+- 修改电机方向、零点、行程限位前先断开负载或抬高机器人做空载验证。
 
-  ## 调试说明
+## Reference Documents
 
-  - LoRa 调试数据通过 USART10 DMA 发送。
-  - 当前 USART_TASK 会发送 DT35 CH0 / CH1 的电压和距离数据。
-  - 遥控器通过 UART5 接收 SBUS。
-  - DM IMU 通过 USART2 接收。
-  - 激光测距串口通过 UART8 接收。
-  - CAN 接收由 bsp_can.cpp 统一分发到对应电机驱动。
+- `说明文档/DT35_ADS8688_使用文档.md`
+- `说明文档/VescMotor 驱动使用文档.md`
 
-  ## 说明文档
+## Current Status
 
-  仓库中附带了两个模块文档：
+| Area | Status |
+| --- | --- |
+| Chassis | 已实现基础闭环、四轮解算和 DJI 电机电流控制 |
+| Lift | 已实现高度轨迹、J60 控制、M2006 升降轮速度控制 |
+| Auto climb | 已实现基于遥控器触发和激光距离判断的半自动状态机 |
+| Sensors | DT35、AS5047P、DM IMU、串口激光测距链路已接入 |
+| Communication | CAN、USART DMA、USB CDC、MiniPC/LoRa 调试链路已接入 |
+| Route planning | RTOS 任务入口已预留，具体路线状态机与动作派发仍待补齐 |
 
-  说明文档/DT35_ADS8688_使用文档.md
-  说明文档/VescMotor 驱动使用文档.md
+## Roadmap
 
-  分别说明 DT35 + ADS8688 采集链路和 VESC 电调 CAN 驱动的使用方法。
-
-  ## 当前状态
-
-  本仓库保存的是 R2 机器人嵌入式控制代码。底盘、升降、电机、传感器和通信模块已有
-  实现；路线规划部分已经搭好状态机框架，但具体动作执行层还需要继续接入和联调。
-
+- 补齐 `PLAN_ROUTE` 的目标选择、步骤生成、动作派发和失败恢复逻辑
+- 将底盘、升降、吸取机构抽象为统一动作执行接口
+- 为关键传感器增加离线检测、数据有效性窗口和降级策略
+- 整理 PID 参数表和现场标定流程
+- 增加上位机调试协议说明，统一 LoRa、USB、MiniPC 数据帧格式
