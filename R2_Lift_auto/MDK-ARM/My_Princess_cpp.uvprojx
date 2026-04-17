@@ -10,8 +10,8 @@
       <TargetName>My_Princess_cpp</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
-      <pArmCC>6210000::V6.21::ARMCLANG</pArmCC>
-      <pCCUsed>6210000::V6.21::ARMCLANG</pCCUsed>
+      <pArmCC>6240000::V6.24::ARMCLANG</pArmCC>
+      <pCCUsed>6240000::V6.24::ARMCLANG</pCCUsed>
       <uAC6>1</uAC6>
       <TargetOption>
         <TargetCommonOption>
@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>USE_PWR_LDO_SUPPLY,USE_HAL_DRIVER,STM32H723xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../USB_DEVICE/App;../USB_DEVICE/Target;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/STM32_USB_Device_Library/Core/Inc;../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Middlewares/ST/ARM/DSP/Inc;./Control;../Middlewares/ST/ARM/DSP/Lib;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;./TASK;./Device/Motor;./Device/Remote_control;./Device/StepMotor/EmmV5;./Device/USB;./Device/StepMotor/MyStepMotor;./Bsp;./Device/laser_distance;./Device/DT35;./Device/AS5047P</IncludePath>
+              <IncludePath>../Core/Inc;../USB_DEVICE/App;../USB_DEVICE/Target;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/STM32_USB_Device_Library/Core/Inc;../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Middlewares/ST/ARM/DSP/Inc;./Control;../Middlewares/ST/ARM/DSP/Lib;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;./TASK;./Device/Motor;./Device/Remote_control;./Device/StepMotor/EmmV5;./Device/USB;./Device/StepMotor/MyStepMotor;./Bsp;./Device/laser_distance;./Device/DT35;./Device/AS5047P;.\Route_Plan</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -1217,11 +1217,6 @@
               <FilePath>.\Control\omni_chassis.cpp</FilePath>
             </File>
             <File>
-              <FileName>plan_route.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\Control\plan_route.cpp</FilePath>
-            </File>
-            <File>
               <FileName>PID.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\Control\PID.cpp</FilePath>
@@ -2048,6 +2043,31 @@
               <FileName>AS5047P.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\Device\AS5047P\AS5047P.cpp</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Route_Plan</GroupName>
+          <Files>
+            <File>
+              <FileName>meiling.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Route_Plan\meiling.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>plan_route.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Route_Plan\plan_route.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>mieling.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Route_Plan\mieling.h</FilePath>
+            </File>
+            <File>
+              <FileName>plan_route.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Route_Plan\plan_route.h</FilePath>
             </File>
           </Files>
         </Group>

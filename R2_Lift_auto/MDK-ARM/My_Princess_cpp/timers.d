@@ -1,9 +1,7 @@
 my_princess_cpp/timers.o: \
   ..\Middlewares\Third_Party\FreeRTOS\Source\timers.c \
-  D:\Keil5\ARM\ARMCLANG\include\stdlib.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\FreeRTOS.h \
-  D:\Keil5\ARM\ARMCLANG\include\stddef.h \
-  D:\Keil5\ARM\ARMCLANG\include\stdint.h ..\Core\Inc\FreeRTOSConfig.h \
+  ..\Core\Inc\FreeRTOSConfig.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\projdefs.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\portable.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\deprecated_definitions.h \

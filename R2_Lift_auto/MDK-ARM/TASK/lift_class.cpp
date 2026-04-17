@@ -69,7 +69,7 @@ extern "C" void lift_task(void *argument)
         static uint8_t last_sw = 0;
 
         // 如果半自动接管，则这里返回自动档位；否则返回手动拨杆档位
-        uint8_t now_sw = lift_auto.getLiftSwitch(remove_dji.rc_.s[0]);
+        uint8_t now_sw = lift_auto.getLiftSwitch(remove_dji.rc_.s[1]);
 
         // 只有档位变化时，才重新设置目标高度
         if (now_sw != last_sw) {

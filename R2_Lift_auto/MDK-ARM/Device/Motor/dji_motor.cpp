@@ -47,10 +47,9 @@ DJI_Motor_Info_Typedef DJI_Motor_Class::Lift_2006[2]{
  * @retval None
  */
 
-void
-    DJI_Motor_Class::Info_Update(uint32_t *Identifier,
-                                 uint8_t *Rx_Buf,
-                                 DJI_Motor_Info_Typedef *DJI_Motor)
+void DJI_Motor_Class::Info_Update(uint32_t *Identifier,
+                                  uint8_t *Rx_Buf,
+                                  DJI_Motor_Info_Typedef *DJI_Motor)
 {
     if (*Identifier != DJI_Motor->FDCANFrame.RxIdentifier)
         return;
@@ -68,12 +67,12 @@ void
 
     case DJI_M3508:
         DJI_Motor->Data.Angle = Encoder_To_Anglesum(&DJI_Motor->Data, 3591.0f / 187.0f, 8192);
-        DJI_Motor->Data.Rpm   = DJI_Motor->Data.Velocity / 19.0f;
+        DJI_Motor->Data.Rpm = DJI_Motor->Data.Velocity / 19.0f;
         break;
 
     case DJI_M2006:
         DJI_Motor->Data.Angle = Encoder_To_Angle(&DJI_Motor->Data, 36.0f, 8192);
-        DJI_Motor->Data.Rpm   = DJI_Motor->Data.Velocity / 36.0f;
+        DJI_Motor->Data.Rpm = DJI_Motor->Data.Velocity / 36.0f;
         break;
 
     default:
@@ -94,8 +93,8 @@ void DJI_Motor_Class::RxHandler(uint32_t *Identifier, uint8_t Data[8])
     {
         Info_Update(Identifier, Data, &Chassis_Motor[i]);
     }
-	
-	 for (int i = 0; i < 4; i++)
+
+    for (int i = 0; i < 4; i++)
     {
         Info_Update(Identifier, Data, &Lift_2006[i]);
     }

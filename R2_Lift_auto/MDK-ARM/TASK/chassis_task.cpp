@@ -11,6 +11,7 @@
 #include "dm_imu.h"
 #include "lift_auto.h"
 #include "VescMotor.h"
+#include "mieling.h"
 
 // 代码回退标志位
 
@@ -69,7 +70,18 @@ extern "C" void chassis_task(void *argument)
         //    - y 方向速度经过 lift_auto 处理，用于与升降机构动作联动
         float target_vx = -remove_dji.chassis_.Vx;
         float target_vy = lift_auto.getChassisVyTarget(-remove_dji.chassis_.Vy);
-        omni_chassis.setRemote(target_vx, target_vy, remove_dji.chassis_.Vz);
+        float target_vz = remove_dji.chassis_.Vz;
+
+        float meiling_vx = 0.0f;
+        float meiling_vy = 0.0f;
+        float meiling_vz = 0.0f;
+        if (meiling_chassis_get_command(&meiling_vx, &meiling_vy, &meiling_vz) != 0U) {
+            target_vx = meiling_vx;
+            target_vy = meiling_vy;
+            target_vz = meiling_vz;
+        }
+
+        omni_chassis.setRemote(target_vx, target_vy, target_vz);
 
         // 6. 速度控制 PID：
         //    根据当前速度与目标速度误差，计算底盘在 x/y 方向所需的驱动力。
@@ -128,3 +140,5 @@ static void chassis_pid_init(void)
     // 航向角保持 PID：根据 IMU yaw 偏差输出底盘自转控制量。
     pid_yaw.Init(2, 0, 0, 2, 0, 0, 0, 0x00);
 }
+///实际距离是20.7cm
+///测得距离是18.5cm

@@ -1,7 +1,6 @@
 my_princess_cpp/freertos.o: ..\Core\Src\freertos.c \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\FreeRTOS.h \
-  D:\Keil5\ARM\ARMCLANG\include\stddef.h \
-  D:\Keil5\ARM\ARMCLANG\include\stdint.h ..\Core\Inc\FreeRTOSConfig.h \
+  ..\Core\Inc\FreeRTOSConfig.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\projdefs.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\portable.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\deprecated_definitions.h \
@@ -16,15 +15,8 @@ my_princess_cpp/freertos.o: ..\Core\Src\freertos.c \
   ..\Drivers\CMSIS\Device\ST\STM32H7xx\Include\stm32h7xx.h \
   ..\Drivers\CMSIS\Device\ST\STM32H7xx\Include\stm32h723xx.h \
   ..\Drivers\CMSIS\Include\core_cm7.h \
-  D:\GithubProject\R2_YEZI\yezi_R2\R2_Lift_auto\Drivers\CMSIS\Include\cmsis_version.h \
-  D:\GithubProject\R2_YEZI\yezi_R2\R2_Lift_auto\Drivers\CMSIS\Include\cmsis_compiler.h \
-  D:\GithubProject\R2_YEZI\yezi_R2\R2_Lift_auto\Drivers\CMSIS\Include\cmsis_armclang.h \
-  D:\Keil5\ARM\ARMCLANG\include\arm_compat.h \
-  D:\Keil5\ARM\ARMCLANG\include\arm_acle.h \
-  D:\GithubProject\R2_YEZI\yezi_R2\R2_Lift_auto\Drivers\CMSIS\Include\mpu_armv7.h \
   ..\Drivers\CMSIS\Device\ST\STM32H7xx\Include\system_stm32h7xx.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\Legacy\stm32_hal_legacy.h \
-  D:\Keil5\ARM\ARMCLANG\include\math.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_rcc_ex.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_gpio.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_gpio_ex.h \

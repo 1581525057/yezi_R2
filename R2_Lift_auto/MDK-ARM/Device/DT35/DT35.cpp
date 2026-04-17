@@ -3,10 +3,10 @@
 DT35 dt35;
 
 /* ======================== GPIO Helpers =================================== */
-#define ADS8688_CS_LOW()    HAL_GPIO_WritePin(ADS8688_CS_PORT,  ADS8688_CS_PIN,  GPIO_PIN_RESET)
-#define ADS8688_CS_HIGH()   HAL_GPIO_WritePin(ADS8688_CS_PORT,  ADS8688_CS_PIN,  GPIO_PIN_SET)
-#define ADS8688_RST_LOW()   HAL_GPIO_WritePin(ADS8688_RST_PORT, ADS8688_RST_PIN, GPIO_PIN_RESET)
-#define ADS8688_RST_HIGH()  HAL_GPIO_WritePin(ADS8688_RST_PORT, ADS8688_RST_PIN, GPIO_PIN_SET)
+#define ADS8688_CS_LOW() HAL_GPIO_WritePin(ADS8688_CS_PORT, ADS8688_CS_PIN, GPIO_PIN_RESET)
+#define ADS8688_CS_HIGH() HAL_GPIO_WritePin(ADS8688_CS_PORT, ADS8688_CS_PIN, GPIO_PIN_SET)
+#define ADS8688_RST_LOW() HAL_GPIO_WritePin(ADS8688_RST_PORT, ADS8688_RST_PIN, GPIO_PIN_RESET)
+#define ADS8688_RST_HIGH() HAL_GPIO_WritePin(ADS8688_RST_PORT, ADS8688_RST_PIN, GPIO_PIN_SET)
 
 /* ======================== ADS8688 SPI Protocol ============================ */
 
@@ -83,30 +83,34 @@ void DT35::ADS8688_Init(void)
     ADS8688_WriteCmd(ADS8688_CMD_RST);
     HAL_Delay(25);
 
-    /* 通道使能：CH0 + CH1 */
-    // AUTO_SEQ_EN bit0=CH0, bit1=CH1 → 0x03
-    ADS8688_WriteReg(ADS8688_REG_AUTO_SEQ_EN, 0x03);
-    // CH_PD：bit=1 掉电，bit=0 工作。0xFC = bit0/bit1 工作，其余掉电
-    ADS8688_WriteReg(ADS8688_REG_CH_PD, 0xFC);
+    /* 通道使能：CH0 + CH1 + CH2 + CH3 */
+    // AUTO_SEQ_EN bit0=CH0, bit1=CH1, bit2=CH2, bit3=CH3 → 0x0F
+    ADS8688_WriteReg(ADS8688_REG_AUTO_SEQ_EN, 0x0F);
+    // CH_PD：bit=1 掉电，bit=0 工作。0xF0 = bit0~bit3 工作，其余掉电
+    ADS8688_WriteReg(ADS8688_REG_CH_PD, 0xF0);
 
-    /* 量程：CH0 和 CH1 均配置为 0~10.24V */
+    /* 量程：CH0~CH3 均配置为 0~10.24V */
     ADS8688_WriteReg(ADS8688_REG_CHIR_0, ADS8688_RANGE_0_10V24);
     ADS8688_WriteReg(ADS8688_REG_CHIR_1, ADS8688_RANGE_0_10V24);
+    ADS8688_WriteReg(ADS8688_REG_CHIR_2, ADS8688_RANGE_0_10V24);
+    ADS8688_WriteReg(ADS8688_REG_CHIR_3, ADS8688_RANGE_0_10V24);
     HAL_Delay(10);
 
     /* 回读校验 */
     uint8_t retry = 0;
-    while (ADS8688_ReadReg(ADS8688_REG_AUTO_SEQ_EN) != 0x03) {
-        ADS8688_WriteReg(ADS8688_REG_AUTO_SEQ_EN, 0x03);
-        ADS8688_WriteReg(ADS8688_REG_CH_PD, 0xFC);
+    while (ADS8688_ReadReg(ADS8688_REG_AUTO_SEQ_EN) != 0x0F)
+    {
+        ADS8688_WriteReg(ADS8688_REG_AUTO_SEQ_EN, 0x0F);
+        ADS8688_WriteReg(ADS8688_REG_CH_PD, 0xF0);
         HAL_Delay(50);
-        if (++retry > 10) break;
+        if (++retry > 10)
+            break;
     }
 
     /* 切手动CH0，清空流水线 */
     ADS8688_WriteCmd(ADS8688_CMD_MAN_CH0);
     HAL_Delay(1);
-    ADS8688_ReadADC();  // 丢弃：命令切换后第一帧 NO_OP 才把流水线冲干净
+    ADS8688_ReadADC(); // 丢弃：命令切换后第一帧 NO_OP 才把流水线冲干净
 }
 
 /* ======================== Public ========================================= */
@@ -117,23 +121,31 @@ void DT35::init(SPI_HandleTypeDef *hspi)
 
     ch0 = {0.0f, 0.0f, 0, 0};
     ch1 = {0.0f, 0.0f, 0, 0};
+    ch2 = {0.0f, 0.0f, 0, 0};
+    ch3 = {0.0f, 0.0f, 0, 0};
 
     ADS8688_Init();
 }
 
-static void convert_channel(uint16_t raw, DT35_Data_t &out)
+static void convert_channel(uint16_t raw, DT35_Data_t &out, uint8_t channel)
 {
-    out.adc_raw   = raw;
+    out.adc_raw = raw;
     out.voltage_V = (float)raw * ADS8688_FS_VOLTAGE / ADS8688_ADC_MAX;
 
     float v = out.voltage_V;
-    if (v < 0.0f)               v = 0.0f;
-    if (v > DT35_VOLTAGE_MAX_V) v = DT35_VOLTAGE_MAX_V;
 
-    out.distance_mm = DT35_DIST_AT_0V_MM
-                    + v * (DT35_DIST_AT_10V_MM - DT35_DIST_AT_0V_MM)
-                          / DT35_VOLTAGE_MAX_V;
-    out.valid = 1;
+    if (v < 0.0f)
+        v = 0.0f;
+    if (v > DT35_VOLTAGE_MAX_V)
+        v = DT35_VOLTAGE_MAX_V;
+
+    switch (channel)
+    {
+    case 0:  out.distance_mm = 471.917f   * v + 37.495f;  break; // 测试1
+    case 1:  out.distance_mm = 466.865f   * v + 44.383f;  break; // 测试2
+    case 2:  out.distance_mm = 488.73101f * v + 41.85081f; break; // 测试3
+    default: out.distance_mm = 0; break;
+    }
 }
 
 void DT35::update(void)
@@ -144,9 +156,17 @@ void DT35::update(void)
 
     ADS8688_WriteCmd(ADS8688_CMD_MAN_CH0);
     uint16_t raw0 = ADS8688_ReadADC();
-    convert_channel(raw0, ch0);
+    convert_channel(raw0, ch0, 0);
 
     ADS8688_WriteCmd(ADS8688_CMD_MAN_CH1);
     uint16_t raw1 = ADS8688_ReadADC();
-    convert_channel(raw1, ch1);
+    convert_channel(raw1, ch1, 1);
+
+    ADS8688_WriteCmd(ADS8688_CMD_MAN_CH2);
+    uint16_t raw2 = ADS8688_ReadADC();
+    convert_channel(raw2, ch2, 2);
+
+    ADS8688_WriteCmd(ADS8688_CMD_MAN_CH3);
+    uint16_t raw3 = ADS8688_ReadADC();
+    convert_channel(raw3, ch3, 3);
 }

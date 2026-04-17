@@ -2,7 +2,7 @@ version: "4.1"
 name: My_Princess_cpp
 type: ARM
 deviceName: null
-packDir: null
+packDir: .pack/Keil/STM32H7xx_DFP.4.1.2
 srcDirs: []
 virtualFolder:
   name: <virtual_root>
@@ -106,7 +106,6 @@ virtualFolder:
     - name: Control
       files:
         - path: Control/omni_chassis.cpp
-        - path: Control/plan_route.cpp
         - path: Control/PID.cpp
       folders: []
     - name: Bsp
@@ -125,6 +124,7 @@ virtualFolder:
         - path: TASK/chassis_task.cpp
         - path: TASK/lift_class.cpp
         - path: TASK/usart_task.cpp
+        - path: TASK/route_task.cpp
         - path: TASK/lift_auto.cpp
       folders: []
     - name: DEVICE
@@ -139,6 +139,11 @@ virtualFolder:
         - path: Device/Motor/VescMotor.cpp
         - path: Device/DT35/DT35.cpp
         - path: Device/AS5047P/AS5047P.cpp
+      folders: []
+    - name: Route_Plan
+      files:
+        - path: Route_Plan/meiling.cpp
+        - path: Route_Plan/plan_route.cpp
       folders: []
     - name: ::CMSIS
       files: []
@@ -155,6 +160,7 @@ targets:
         - USE_HAL_DRIVER
         - STM32H723xx
       incList:
+        - .
         - ../Core/Inc
         - ../USB_DEVICE/App
         - ../USB_DEVICE/Target
@@ -180,6 +186,7 @@ targets:
         - Device/laser_distance
         - Device/DT35
         - Device/AS5047P
+        - Route_Plan
         - .cmsis/include
         - RTE/_My_Princess_cpp
       libList: []
@@ -306,6 +313,6 @@ targets:
       OpenOCD:
         baseAddr: "0x08000000"
         bin: ""
-        interface: cmsis-dap
+        interface: stlink
         target: stm32h7x
     uploader: OpenOCD

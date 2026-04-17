@@ -49,9 +49,13 @@
 #define ADS8688_RANGE_0_5V12    0x06    // 单极性 0 ~ 5.12V 量程：当前模块未使用。
 
 /* ====================== DT35 Sensor Parameters =========================== */
-#define DT35_VOLTAGE_MAX_V      10.0f     // DT35 在当前应用下的有效满量程输出电压，单位 V，用于距离换算上限。
-#define DT35_DIST_AT_0V_MM      30.0f      // 当传感器输出 0V 时，对应的测量距离，单位 mm。
-#define DT35_DIST_AT_10V_MM     30000.0f   // 当传感器输出 10V 时，对应的测量距离，单位 mm。
+#define DT35_VOLTAGE_MAX_V      10.00f     // DT35 在当前应用下的有效满量程输出电压，单位 V，用于距离换算上限。
+#define DT35_DIST_AT_0V_MM      5.3f      // 当传感器输出 0V 时，对应的测量距离，单位 mm。
+#define DT35_DIST_AT_10V_MM     2854.0f   // 当传感器输出 10V 时，对应的测量距离，单位 mm。
+
+//4719.17
+#define DT35_FIT_A 0.09921174f
+#define DT35_FIT_B 0.00788262f
 
 #define ADS8688_FS_VOLTAGE      10.24f    // ADS8688 在当前量程配置下的满量程电压，单位 V。
 #define ADS8688_ADC_MAX         65535.0f  // 16 位 ADC 的最大码值，用于把原始计数换算成电压。
@@ -75,6 +79,8 @@ class DT35 {
 public:
     DT35_Data_t ch0;  // CH0 通道的采样和换算结果。
     DT35_Data_t ch1;  // CH1 通道的采样和换算结果。
+    DT35_Data_t ch2;  // CH2 通道的采样和换算结果。
+    DT35_Data_t ch3;  // CH3 通道的采样和换算结果。
 
     // 兼容旧代码：data 指向 ch0（默认通道）
     DT35_Data_t &data = ch0;
@@ -87,8 +93,8 @@ public:
      *   系统 GPIO、SPI 外设准备完毕之后调用一次即可。
      * 主要动作：
      *   1. 保存 SPI 句柄；
-     *   2. 清空 ch0/ch1 中的历史值；
-     *   3. 完成 ADS8688 的硬复位、软复位、CH0+CH1 量程配置。
+     *   2. 清空 ch0/ch1/ch2/ch3 中的历史值；
+     *   3. 完成 ADS8688 的硬复位、软复位、CH0~CH3 量程配置。
      */
     void init(SPI_HandleTypeDef *hspi);
 
@@ -97,8 +103,10 @@ public:
      * 主要动作：
      *   1. 发送 MAN_CH0 命令，读取 CH0 的 16 位原始值；
      *   2. 发送 MAN_CH1 命令，读取 CH1 的 16 位原始值；
-     *   3. 分别换算电压、限幅、换算距离；
-     *   4. 将 ch0.valid 和 ch1.valid 置 1。
+     *   3. 发送 MAN_CH2 命令，读取 CH2 的 16 位原始值；
+     *   4. 发送 MAN_CH3 命令，读取 CH3 的 16 位原始值；
+     *   5. 分别换算电压、限幅、换算距离；
+     *   6. 将 ch0~ch3 的 valid 置 1。
      */
     void update(void);
 
@@ -110,8 +118,8 @@ private:
      * 完成 ADS8688 的初始化配置。
      * 当前代码的配置目标是：
      *   1. 复位芯片；
-     *   2. 只使能 CH0；
-     *   3. 将 CH0 配置为 0 ~ 10.24V 输入量程；
+     *   2. 只使能 CH0~CH3；
+     *   3. 将 CH0~CH3 配置为 0 ~ 10.24V 输入量程；
      *   4. 切换到手动 CH0 采样模式；
      *   5. 丢弃首次无效或不稳定的采样结果。
      */

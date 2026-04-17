@@ -1,8 +1,7 @@
 my_princess_cpp/port.o: \
   ..\Middlewares\Third_Party\FreeRTOS\Source\portable\RVDS\ARM_CM4F\port.c \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\FreeRTOS.h \
-  D:\Keil5\ARM\ARMCLANG\include\stddef.h \
-  D:\Keil5\ARM\ARMCLANG\include\stdint.h ..\Core\Inc\FreeRTOSConfig.h \
+  ..\Core\Inc\FreeRTOSConfig.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\projdefs.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\portable.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\deprecated_definitions.h \
