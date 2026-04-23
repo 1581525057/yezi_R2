@@ -48,5 +48,5 @@ my_princess_cpp/chassis_task.o: TASK\chassis_task.cpp TASK\chassis_task.h \
   ..\Middlewares\ST\ARM\DSP\Inc\arm_math.h \
   ..\Drivers\CMSIS\Include\cmsis_compiler.h Device\Motor\dji_motor.h \
   Device\Remote_control\bsp_remove.h Bsp\bsp_dwt.h Bsp\bsp_usart.h \
-  Control\PID.h Device\Motor\yun_j60.h Bsp\dm_imu.h TASK\lift_auto.h \
-  Device\Motor\VescMotor.h Route_Plan\mieling.h
+  Control\PID.h Device\Motor\yun_j60.h Bsp\dm_imu.h \
+  Route_Plan\lift_auto.h Device\Motor\VescMotor.h Route_Plan\mieling.h

@@ -125,7 +125,6 @@ virtualFolder:
         - path: TASK/lift_class.cpp
         - path: TASK/usart_task.cpp
         - path: TASK/route_task.cpp
-        - path: TASK/lift_auto.cpp
       folders: []
     - name: DEVICE
       files:
@@ -144,6 +143,7 @@ virtualFolder:
       files:
         - path: Route_Plan/meiling.cpp
         - path: Route_Plan/plan_route.cpp
+        - path: Route_Plan/lift_auto.cpp
       folders: []
     - name: ::CMSIS
       files: []

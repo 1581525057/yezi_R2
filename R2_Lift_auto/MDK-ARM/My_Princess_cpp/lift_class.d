@@ -47,4 +47,4 @@ my_princess_cpp/lift_class.o: TASK\lift_class.cpp TASK\lift_class.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2\cmsis_os2.h \
   Bsp\bsp_can.h ..\Core\Inc\fdcan.h Device\Motor\dji_motor.h \
   Device\Remote_control\bsp_remove.h Bsp\bsp_dwt.h Bsp\bsp_usart.h \
-  Control\PID.h Device\Motor\yun_j60.h TASK\lift_auto.h
+  Control\PID.h Device\Motor\yun_j60.h Route_Plan\lift_auto.h

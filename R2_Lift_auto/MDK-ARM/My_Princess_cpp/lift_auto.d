@@ -1,5 +1,6 @@
-my_princess_cpp/lift_auto.o: TASK\lift_auto.cpp TASK\lift_auto.h \
-  ..\Core\Inc\main.h ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal.h \
+my_princess_cpp/lift_auto.o: Route_Plan\lift_auto.cpp \
+  Route_Plan\lift_auto.h ..\Core\Inc\main.h \
+  ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal.h \
   ..\Core\Inc\stm32h7xx_hal_conf.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_rcc.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_def.h \
