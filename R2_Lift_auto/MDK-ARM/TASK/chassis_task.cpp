@@ -61,27 +61,20 @@ extern "C" void chassis_task(void *argument)
         float VZ_OUT = 0.0f;
         // 4. 遥控器输入处理：
         //    当拨杆处于指定档位时，启用航向保持控制，通过 yaw PID 输出底盘自转角速度。
-        // if (remove_dji.rc_.s[0] == 3 || remove_dji.rc_.s[0] == 1) {
-        //     VZ_OUT = pid_yaw.PID_Calculate(0.0f, dm_imu.imu.yaw);
-        // }
+        VZ_OUT = pid_yaw.PID_Calculate(0.0f, dm_imu.imu.yaw);
 
         // 5. 生成底盘目标速度：
         //    - x 方向速度直接使用上层输入
         //    - y 方向速度经过 lift_auto 处理，用于与升降机构动作联动
-        float target_vx = -remove_dji.chassis_.Vx;
-        float target_vy = lift_auto.getChassisVyTarget(-remove_dji.chassis_.Vy);
+        float target_vx = remove_dji.chassis_.Vx;
+        float target_vy = lift_auto.getChassisVyTarget(remove_dji.chassis_.Vy);
         float target_vz = remove_dji.chassis_.Vz;
 
-        float meiling_vx = 0.0f;
-        float meiling_vy = 0.0f;
-        float meiling_vz = 0.0f;
-        if (meiling_chassis_get_command(&meiling_vx, &meiling_vy, &meiling_vz) != 0U) {
-            target_vx = meiling_vx;
-            target_vy = meiling_vy;
-            target_vz = meiling_vz;
-        }
+//        target_vx = meiling.getChassisVxTarget(target_vx);
+//        target_vy = meiling.getChassisVyTarget(target_vy);
+//        target_vz = meiling.getChassisVzTarget(target_vz);
 
-        omni_chassis.setRemote(target_vx, target_vy, target_vz);
+        omni_chassis.setRemote(target_vx, target_vy, VZ_OUT);
 
         // 6. 速度控制 PID：
         //    根据当前速度与目标速度误差，计算底盘在 x/y 方向所需的驱动力。
@@ -114,7 +107,7 @@ extern "C" void chassis_task(void *argument)
        // chassis_motor.Send_CurrentCommand(&BSP_CAN::FDCAN2_TxFrame, 0x200, 3000, 0, 0, 0);
       
             
-           VescMotors[0].setRpm(rpm);
+        //VescMotors[0].setRpm(rpm);
          //VescMotors[0].setHandbrakeCurrent(3000);
 
         // 12. 任务周期延时，维持底盘控制循环频率。

@@ -45,7 +45,5 @@ my_princess_cpp/usart_task.o: TASK\usart_task.cpp TASK\usart_task.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\task.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\list.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2\cmsis_os2.h \
-  Device\USB\MiniPC.h Control\PID.h Device\Motor\dji_motor.h \
-  Bsp\bsp_can.h ..\Core\Inc\fdcan.h Bsp\dm_imu.h \
-  Device\laser_distance\laser_distance.h Device\AS5047P\AS5047.h \
-  Device\DT35\DT35.h
+  Device\AS5047P\AS5047.h Device\DT35\DT35.h Device\USB\MiniPC.h \
+  Bsp\bsp_dwt.h

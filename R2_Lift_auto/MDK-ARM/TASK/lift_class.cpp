@@ -65,32 +65,36 @@ extern "C" void lift_task(void *argument)
         calc_motor_rpm_from_linear_speed_target(
             lift_auto.getLiftLinearSpeedTarget(remove_dji.chassis_.Vl));
 
-        // 记录上一拍的档位，只在档位变化时重新生成高度目标
-        static uint8_t last_sw = 0;
+        // // 记录上一拍的档位，只在档位变化时重新生成高度目标
+        // static uint8_t last_sw = 0;
 
-        // 如果半自动接管，则这里返回自动档位；否则返回手动拨杆档位
-        uint8_t now_sw = lift_auto.getLiftSwitch(remove_dji.rc_.s[1]);
+        // // 如果半自动接管，则这里返回自动档位；否则返回手动拨杆档位
+        // uint8_t now_sw = lift_auto.getLiftSwitch(remove_dji.rc_.s[1]);
 
-        // 只有档位变化时，才重新设置目标高度
-        if (now_sw != last_sw) {
-            if (now_sw == 3U) {
-                // 3 档对应目标高度
-                lift_debug.height_target = 0.0f;
-                lift_debug.flag          = 1.0f;
-            } else if (now_sw == 1U) {
-                // 1 档对应目标高度
-                lift_debug.height_target = 50.0f;
-                lift_debug.flag          = 1.0f;
-            } else if (now_sw == 2U) {
-                // 2 档对应目标高度
-                lift_debug.height_target = -205.0f;
-                lift_debug.flag          = 1.0f;
-            }
+        // // 只有档位变化时，才重新设置目标高度
+        // if (now_sw != last_sw) {
+        //     if (now_sw == 3U) {
+        //         // 3 档对应目标高度
+        //         lift_debug.height_target = 0.0f;
+        //         lift_debug.flag          = 1.0f;
+        //     } else if (now_sw == 1U) {
+        //         // 1 档对应目标高度
+        //         lift_debug.height_target = 50.0f;
+        //         lift_debug.flag          = 1.0f;
+        //     } else if (now_sw == 2U) {
+        //         // 2 档对应目标高度
+        //         lift_debug.height_target = -205.0f;
+        //         lift_debug.flag          = 1.0f;
+        //     }
 
-            // 更新上一拍档位
-            last_sw = now_sw;
-        }
+        //     // 更新上一拍档位
+        //     last_sw = now_sw;
+        // }
 
+		 lift_debug.height_target = 50.0f;
+              
+		
+		
         // 当标志位置位时，重新生成一条 0.7s 的线性轨迹
         if (lift_debug.flag == 1.0f) {
             lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.7f);
