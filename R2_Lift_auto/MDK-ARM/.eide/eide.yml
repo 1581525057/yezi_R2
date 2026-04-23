@@ -125,11 +125,18 @@ virtualFolder:
         - path: TASK/lift_class.cpp
         - path: TASK/usart_task.cpp
         - path: TASK/route_task.cpp
+        - path: TASK/FTMTask.cpp
       folders: []
     - name: DEVICE
       files:
         - path: Device/USB/MiniPC.cpp
-        - path: Device/StepMotor/EmmV5/Emm_V5.cpp
+        - path: Device/Communication/CommData.cpp
+        - path: Device/StepMotor/EmmV5.cpp
+        - path: Device/StepMotor/StepMotorTask.cpp
+        - path: Device/M2006/M2006Follower.cpp
+        - path: Device/RS05/RS05.cpp
+        - path: Device/RS05/RobStride.cpp
+        - path: Device/Relay/GripPush.cpp
         - path: Device/Remote_control/bsp_remove.cpp
         - path: Device/Motor/yun_J60.cpp
         - path: Device/Motor/dji_motor.cpp
@@ -179,7 +186,11 @@ targets:
         - TASK
         - Device/Motor
         - Device/Remote_control
-        - Device/StepMotor/EmmV5
+        - Device/Communication
+        - Device/M2006
+        - Device/RS05
+        - Device/StepMotor
+        - Device/Relay
         - Device/USB
         - Device/StepMotor/MyStepMotor
         - Bsp

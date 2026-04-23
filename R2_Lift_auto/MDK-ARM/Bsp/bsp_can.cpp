@@ -7,6 +7,7 @@
 /* USER CODE END Header */
 
 #include "bsp_can.h"
+#include "CommData.h"
 #include "dji_motor.h"
 #include "dm_motor.h"
 #include "yun_j60.h"
@@ -107,7 +108,7 @@ void BSP_CAN::Init(void)
     FilterConfig.FilterID2 = 0x00000000;
 
     HAL_FDCAN_ConfigFilter(&hfdcan3, &FilterConfig);
-    HAL_FDCAN_ConfigGlobalFilter(&hfdcan3, FDCAN_REJECT, FDCAN_REJECT, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE);
+    HAL_FDCAN_ConfigGlobalFilter(&hfdcan3, FDCAN_REJECT, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE);
     HAL_FDCAN_ActivateNotification(&hfdcan3, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0);
     HAL_FDCAN_Start(&hfdcan3);
 }
@@ -152,6 +153,10 @@ void BSP_CAN::RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
                            FDCAN_RX_FIFO0,
                            &FDCAN_RxFIFO0Frame.Header,
                            FDCAN_RxFIFO0Frame.Data);
+
+    FTM_FdcanRxDispatch(hfdcan,
+                        &FDCAN_RxFIFO0Frame.Header,
+                        FDCAN_RxFIFO0Frame.Data);
 
     if (hfdcan == &hfdcan1)
     {

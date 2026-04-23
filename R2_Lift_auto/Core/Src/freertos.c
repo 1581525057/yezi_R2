@@ -96,6 +96,18 @@ const osThreadAttr_t PLAN_ROUTE_attributes = {
   .stack_size = sizeof(PLAN_ROUTEBuffer),
   .priority = (osPriority_t) osPriorityNormal2,
 };
+/* Definitions for FTMTask */
+osThreadId_t FTMTaskHandle;
+uint32_t FTMTaskBuffer[ 512 ];
+osStaticThreadDef_t FTMTaskControlBlock;
+const osThreadAttr_t FTMTask_attributes = {
+  .name = "FTMTask",
+  .cb_mem = &FTMTaskControlBlock,
+  .cb_size = sizeof(FTMTaskControlBlock),
+  .stack_mem = &FTMTaskBuffer[0],
+  .stack_size = sizeof(FTMTaskBuffer),
+  .priority = (osPriority_t) osPriorityNormal,
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -106,6 +118,7 @@ void chassis_task(void *argument);
 void usart_task(void *argument);
 void lift_task(void *argument);
 void plan_route(void *argument);
+void ftm_task(void *argument);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -148,6 +161,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of PLAN_ROUTE */
   PLAN_ROUTEHandle = osThreadNew(plan_route, NULL, &PLAN_ROUTE_attributes);
+
+  /* creation of FTMTask */
+  FTMTaskHandle = osThreadNew(ftm_task, NULL, &FTMTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -231,6 +247,24 @@ __weak void plan_route(void *argument)
     osDelay(1);
   }
   /* USER CODE END plan_route */
+}
+
+/* USER CODE BEGIN Header_ftm_task */
+/**
+* @brief Function implementing the FTMTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_ftm_task */
+__weak void ftm_task(void *argument)
+{
+  /* USER CODE BEGIN ftm_task */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END ftm_task */
 }
 
 /* Private application code --------------------------------------------------*/
