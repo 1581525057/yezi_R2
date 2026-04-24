@@ -33,6 +33,6 @@ my_princess_cpp/bsp_can.o: Bsp\bsp_can.cpp Bsp\bsp_can.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_ll_usb.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd_ex.h \
-  ..\Core\Inc\fdcan.h ..\Core\Inc\main.h Device\Motor\dji_motor.h \
-  Device\Motor\dm_motor.h Device\Motor\yun_j60.h \
-  Device\Motor\VescMotor.h
+  ..\Core\Inc\fdcan.h ..\Core\Inc\main.h Device\Communication\CommData.h \
+  ..\Core\Inc\usart.h Device\Motor\dji_motor.h Device\Motor\dm_motor.h \
+  Device\Motor\yun_j60.h Device\Motor\VescMotor.h

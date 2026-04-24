@@ -33,6 +33,7 @@ my_princess_cpp/bsp_usart.o: Bsp\bsp_usart.cpp Bsp\bsp_usart.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_ll_usb.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd_ex.h \
+  Device\Communication\CommData.h ..\Core\Inc\fdcan.h \
   ..\Core\Inc\usart.h ..\Core\Inc\dma.h \
   Device\Remote_control\bsp_remove.h Bsp\dm_imu.h TASK\usart_task.h \
   Device\laser_distance\laser_distance.h

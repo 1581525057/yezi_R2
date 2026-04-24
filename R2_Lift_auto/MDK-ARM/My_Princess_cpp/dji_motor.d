@@ -34,4 +34,5 @@ my_princess_cpp/dji_motor.o: Device\Motor\dji_motor.cpp \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_ll_usb.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd_ex.h \
-  ..\Core\Inc\fdcan.h ..\Core\Inc\main.h Device\Motor\dm_motor.h
+  ..\Core\Inc\fdcan.h ..\Core\Inc\main.h Device\Communication\CommData.h \
+  ..\Core\Inc\usart.h Device\Motor\dm_motor.h
