@@ -51,7 +51,9 @@ extern "C" void lift_task(void *argument)
     // 上电后先给一个回到 0 高度的初始轨迹
     lift_height_set_target(&lift_calulate, 0.0f, 2.0f);
 
-    for (;;) {
+    lift_debug.flag = 1;
+    for (;;)
+    {
         // 读取当前机械位置并换算为左右两侧高度
         lift_cauclate_height();
 
@@ -117,7 +119,7 @@ extern "C" void lift_task(void *argument)
         yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 15, 0.5f, pid_lift_right.pid.Output);
 
         //2006 电机电流控制发送口目前保留
-        lift_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame,
+        lift_motor.Send_CurrentCommand(&BSP_CAN::FDCAN1_TxFrame,
                                         0x1FF,
                                         pid_2006_r.pid.Output,
                                         -pid_2006_l.pid.Output,

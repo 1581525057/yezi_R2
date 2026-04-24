@@ -88,7 +88,7 @@ void OmniChassis::dynamicsInverse(float Fx, float Fy, float T)
 
     for (uint8_t i = 0; i < 4; i++)
     {
-        Current_rpm[i] = torqueToCurrent(motor_out[i]);
+        feedforward_current[i] = torqueToCurrent(motor_out[i]);
     }
 }
 

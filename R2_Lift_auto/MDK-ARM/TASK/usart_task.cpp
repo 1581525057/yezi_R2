@@ -72,7 +72,7 @@ static float fast_atof(const uint8_t **pp, const uint8_t *end)
     *pp = p;
     return v * sign;
 }
-   
+
 /**
  * @brief  解析视觉帧，提取三个字段写入 VisionData_t
  *
@@ -90,9 +90,9 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
         return 0;
 
     /* 清零输出 */
-    out->B       = 0;
-    out->x_diff  = 0.0f;
-    out->y_diff  = 0.0f;
+    out->B = 0;
+    out->x_diff = 0.0f;
+    out->y_diff = 0.0f;
     out->angle_x = 0.0f;
 
     /* 查找帧头 'S' */
@@ -159,11 +159,11 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
 /**
  * @brief  通过 USB 向上位机发送位置信息
  *
- * 帧格式（ASCII 文本）：L,<x_diff>,<y_diff>,<angle_x>E
+ * 帧格式（ASCII 文本）：L,behavior,posi,x,y,yawE
  * 使用静态缓冲区 posi_conputer，通过 USB CDC 发送。
  *
  */
-static void send_position_to_pc(int16_t behaivor,uint8_t  p_diff, float X_diff, float Y_diff,float yaw)
+static void send_position_to_pc(int16_t behaivor, uint8_t p_diff, float X_diff, float Y_diff, float yaw)
 {
     /* 格式化为 L,x,y,aE 文本帧，%.2f 保留两位小数 */
     int n = snprintf(reinterpret_cast<char *>(posi_conputer),
@@ -234,21 +234,17 @@ extern "C" void usart_task(void *argument)
         };
         send_curve_lora(debug_data, 4);
 
-		 parse_vision_frame_computer(data_usb, sizeof(data_usb), &vision);
+        parse_vision_frame_computer(data_usb, sizeof(data_usb), &vision);
 
         /* 每 2 秒向上位机发送一次位置信息（2000ms / 1ms 周期 = 2000 次） */
         static uint16_t pc_send_cnt = 0;
-        if (++pc_send_cnt >= 2000)
+        if (Flag1)
         {
             pc_send_cnt = 0;
-            send_position_to_pc(beh, p_diff, 1.0f, 2.0f, 3.0f);
+            send_position_to_pc(beh, 1, 0.0f, 0.0f, 0.0f);
         }
-			
-		
-      
 
         /* 解析上位机视觉帧 */
-       
 
         osDelay(1);
     }

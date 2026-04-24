@@ -125,6 +125,7 @@ virtualFolder:
         - path: TASK/lift_class.cpp
         - path: TASK/usart_task.cpp
         - path: TASK/route_task.cpp
+        - path: TASK/Config.h
       folders: []
     - name: DEVICE
       files:

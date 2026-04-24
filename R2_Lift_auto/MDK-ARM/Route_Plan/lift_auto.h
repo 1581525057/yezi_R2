@@ -25,6 +25,7 @@ private:
         STEP_FINISHED,
     };
 
+    uint8_t flag_start; //启动条件
     StepState state_;
     uint8_t lift_switch_target_;
     float lift_linear_speed_target_;

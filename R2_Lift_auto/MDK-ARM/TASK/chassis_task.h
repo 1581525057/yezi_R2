@@ -55,6 +55,18 @@ extern "C" {
 #define KI_CHASSIS_TRACK 0
 #define KD_CHASSIS_TRACK 0
 
+
+struct chassis_pid
+{
+    /* data */
+    float kp;
+    float ki;
+    float kd;
+    float output_max;
+    float limit;
+};
+
+
 #ifdef __cplusplus
 }
 #endif

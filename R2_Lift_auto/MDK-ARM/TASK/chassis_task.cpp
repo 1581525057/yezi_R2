@@ -12,21 +12,29 @@
 #include "lift_auto.h"
 #include "VescMotor.h"
 #include "mieling.h"
+#include "usart_task.h"
 
 // 代码回退标志位
 
 // 底盘控制任务内部使用的 PID 初始化函数。
 static void chassis_pid_init(void);
+static float ramp_limit(float target, float current, float step);
 
 // 4 个底盘驱动电机的转速闭环 PID，用于让每个车轮稳定跟踪目标转速。
-PID pid_chassis_0, pid_chassis_1, pid_chassis_2, pid_chassis_3;
+PID pid_chassis_0,
+    pid_chassis_1, pid_chassis_2, pid_chassis_3;
 // 底盘平动/姿态相关 PID：
 // - linear_x / linear_y：将速度误差转换为底盘 x、y 方向驱动力
 // - angle：预留给底盘角度闭环控制
 PID pid_F_chassis_linear_x, pid_F_chassis_angle, pid_F_chassis_linear_y;
 // 航向角 PID，用于结合 IMU yaw 实现底盘定向或航向保持。
 PID pid_yaw;
+static float target_vx_last = 0.0f;
+static float target_vy_last = 0.0f;
+static float target_vz_last = 0.0f;
 float rpm;
+
+chassis_pid yaw;
 extern "C" void chassis_task(void *argument)
 {
     // 初始化底盘任务依赖的 CAN、串口以及高精度计时模块。
@@ -45,14 +53,19 @@ extern "C" void chassis_task(void *argument)
     chassis_pid_init();
     osDelay(200);
 
-       //
-    while (1) {
+    //
+    while (1)
+    {
+
+		
+		
         // 1. 更新遥控器/离线保护等状态，并刷新底盘控制指令。
         remove_dji.monitor();
         remove_dji.updateChassosCommand();
 
         // 2. 读取 4 个底盘电机的实时转速，为后续底盘状态解算提供输入。
-        for (uint8_t i = 0; i < 4; i++) {
+        for (uint8_t i = 0; i < 4; i++)
+        {
             omni_chassis.now.rpm[i] = chassis_motor.Chassis_Motor[i].Data.Rpm;
         }
         // 3. 正运动学解算：根据各轮转速反推出底盘当前线速度等状态量。
@@ -61,6 +74,7 @@ extern "C" void chassis_task(void *argument)
         float VZ_OUT = 0.0f;
         // 4. 遥控器输入处理：
         //    当拨杆处于指定档位时，启用航向保持控制，通过 yaw PID 输出底盘自转角速度。
+
         VZ_OUT = pid_yaw.PID_Calculate(0.0f, dm_imu.imu.yaw);
 
         // 5. 生成底盘目标速度：
@@ -70,9 +84,11 @@ extern "C" void chassis_task(void *argument)
         float target_vy = lift_auto.getChassisVyTarget(remove_dji.chassis_.Vy);
         float target_vz = remove_dji.chassis_.Vz;
 
-//        target_vx = meiling.getChassisVxTarget(target_vx);
-//        target_vy = meiling.getChassisVyTarget(target_vy);
-//        target_vz = meiling.getChassisVzTarget(target_vz);
+        target_vx = meiling.getChassisVxTarget(target_vx);
+        target_vy = meiling.getChassisVyTarget(target_vy);
+        target_vz = meiling.getChassisVzTarget(target_vz);
+
+//    
 
         omni_chassis.setRemote(target_vx, target_vy, VZ_OUT);
 
@@ -95,20 +111,19 @@ extern "C" void chassis_task(void *argument)
 
         float motor_input[4];
         // 10. 将转速环 PID 输出与模型计算得到的前馈量叠加，形成最终电机电流指令。
-        motor_input[0] = pid_chassis_0.pid.Output + omni_chassis.Current_rpm[0];
-        motor_input[1] = pid_chassis_1.pid.Output + omni_chassis.Current_rpm[1];
-        motor_input[2] = pid_chassis_2.pid.Output + omni_chassis.Current_rpm[2];
-        motor_input[3] = pid_chassis_3.pid.Output + omni_chassis.Current_rpm[3];
+        motor_input[0] = pid_chassis_0.pid.Output + omni_chassis.feedforward_current[0];
+        motor_input[1] = pid_chassis_1.pid.Output + omni_chassis.feedforward_current[1];
+        motor_input[2] = pid_chassis_2.pid.Output + omni_chassis.feedforward_current[2];
+        motor_input[3] = pid_chassis_3.pid.Output + omni_chassis.feedforward_current[3];
 
         // 11. 通过 CAN 总线发送电机电流：
         //     第一帧发送 4 个底盘驱动轮的控制电流；
         //     第二帧发送其余挂载电机的固定控制指令。
         chassis_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame, 0x200, motor_input[0], motor_input[1], motor_input[2], motor_input[3]);
-       // chassis_motor.Send_CurrentCommand(&BSP_CAN::FDCAN2_TxFrame, 0x200, 3000, 0, 0, 0);
-      
-            
-        //VescMotors[0].setRpm(rpm);
-         //VescMotors[0].setHandbrakeCurrent(3000);
+        // chassis_motor.Send_CurrentCommand(&BSP_CAN::FDCAN2_TxFrame, 0x200, 3000, 0, 0, 0);
+
+        // VescMotors[0].setRpm(rpm);
+        // VescMotors[0].setHandbrakeCurrent(3000);
 
         // 12. 任务周期延时，维持底盘控制循环频率。
         osDelay(1);
@@ -129,9 +144,17 @@ static void chassis_pid_init(void)
     pid_F_chassis_linear_y.Init(OUTPUT_CHASSIS_LINEAR, INTERLIMIT_CHASSIS_LINEAR, DEBAND_CHASSIS_LINEAR, KP_CHASSIS_LINEAR, KI_CHASSIS_LINEAR, KD_CHASSIS_LINEAR, 0, 0x00);
     // 底盘角度 PID：用于姿态或转角闭环控制，当前文件中暂未直接参与主循环计算。
     pid_F_chassis_angle.Init(OUTPUT_CHASSIS_ANGLE, INTERLIMIT_CHASSIS_ANGLE, DEBAND_CHASSIS_ANGLE, KP_CHASSIS_ANGLE, KI_CHASSIS_ANGLE, KD_CHASSIS_ANGLE, 0, 0x00);
-
-    // 航向角保持 PID：根据 IMU yaw 偏差输出底盘自转控制量。
-    pid_yaw.Init(2, 0, 0, 2, 0, 0, 0, 0x00);
+		  // 航向角保持 PID：根据 IMU yaw 偏差输出底盘自转控制量。
+    pid_yaw.Init(1.5, 0.5, 0.1, 0.400000006, 0.015, 0, 0, 0x00);
+  
 }
-///实际距离是20.7cm
-///测得距离是18.5cm
+
+static float ramp_limit(float target, float current, float step)
+{
+    if (target > current + step)
+        return current + step;
+    else if (target < current - step)
+        return current - step;
+    else
+        return target;
+}

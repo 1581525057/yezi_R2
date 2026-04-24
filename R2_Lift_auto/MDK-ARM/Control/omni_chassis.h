@@ -25,7 +25,7 @@ public:
     {
         memset(&target, 0, sizeof(target));
         memset(&now, 0, sizeof(now));
-        memset(Current_rpm, 0, sizeof(Current_rpm));
+        memset(feedforward_current, 0, sizeof(feedforward_current));
         flag = 0;
     }
 
@@ -49,7 +49,7 @@ public:
     Speed_t target; // 目标速度
     Speed_t now;    // 当前速度
 
-    float Current_rpm[4];
+    float feedforward_current[4];
     uint8_t flag; // 0: 普通模式  1: 无头模式
 
 private:

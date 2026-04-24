@@ -121,13 +121,13 @@ void DJI_Motor_Class::Send_CurrentCommand(FDCAN_TxFrame_TypeDef *DJI_Motor,
     DJI_Motor->Header.DataLength = FDCAN_DLC_BYTES_8;
 
     DJI_Motor->Data[0] = (uint8_t)(M1 >> 8);
-    DJI_Motor->Data[1] = (uint8_t)(M1 >> 8);
+    DJI_Motor->Data[1] = (uint8_t)(M1);
     DJI_Motor->Data[2] = (uint8_t)(M2 >> 8);
-    DJI_Motor->Data[3] = (uint8_t)(M2 >> 8);
+    DJI_Motor->Data[3] = (uint8_t)(M2);
     DJI_Motor->Data[4] = (uint8_t)(M3 >> 8);
-    DJI_Motor->Data[5] = (uint8_t)(M3 >> 8);
+    DJI_Motor->Data[5] = (uint8_t)(M3);
     DJI_Motor->Data[6] = (uint8_t)(M4 >> 8);
-    DJI_Motor->Data[7] = (uint8_t)(M4 >> 8);
+    DJI_Motor->Data[7] = (uint8_t)(M4);
 
     BSP_CAN::AddMessageToTxFifoQ(DJI_Motor);
 }

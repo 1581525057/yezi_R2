@@ -123,6 +123,7 @@ void BSP_CAN::FDCAN1_RxFifo0RxHandler(uint32_t *Identifier, uint8_t Data[8])
 {
     // Yun_J60 接收分发（原有逻辑保留）
     Yun_J60_Class::RxHandler(&FDCAN_RxFIFO0Frame, Data);
+    DJI_Motor_Class::RxHandler(Identifier, Data);   
 }
 
 void BSP_CAN::FDCAN2_RxFifo1RxHandler(uint32_t *Identifier, uint8_t Data[8])
