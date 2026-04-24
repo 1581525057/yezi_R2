@@ -7,6 +7,7 @@
 /* USER CODE END Header */
 
 #include "dji_motor.h"
+#include "CommData.h"
 #include "bsp_can.h"
 #include "dm_motor.h"
 
@@ -129,6 +130,7 @@ void DJI_Motor_Class::Send_CurrentCommand(FDCAN_TxFrame_TypeDef *DJI_Motor,
     DJI_Motor->Data[6] = (uint8_t)(M4 >> 8);
     DJI_Motor->Data[7] = (uint8_t)(M4);
 
+    FTM_PatchDjiCurrentCommand(&DJI_Motor->Header, DJI_Motor->Data);
     BSP_CAN::AddMessageToTxFifoQ(DJI_Motor);
 }
 

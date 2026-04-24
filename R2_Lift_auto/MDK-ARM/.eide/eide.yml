@@ -2,7 +2,7 @@ version: "4.1"
 name: My_Princess_cpp
 type: ARM
 deviceName: null
-packDir: .pack/Keil/STM32H7xx_DFP.4.1.2
+packDir: null
 srcDirs: []
 virtualFolder:
   name: <virtual_root>
@@ -125,12 +125,18 @@ virtualFolder:
         - path: TASK/lift_class.cpp
         - path: TASK/usart_task.cpp
         - path: TASK/route_task.cpp
-        - path: TASK/Config.h
+        - path: TASK/FTMTask.cpp
       folders: []
     - name: DEVICE
       files:
         - path: Device/USB/MiniPC.cpp
-        - path: Device/StepMotor/EmmV5/Emm_V5.cpp
+        - path: Device/Communication/CommData.cpp
+        - path: Device/StepMotor/EmmV5.cpp
+        - path: Device/StepMotor/StepMotorTask.cpp
+        - path: Device/M2006/M2006Follower.cpp
+        - path: Device/RS05/RS05.cpp
+        - path: Device/RS05/RobStride.cpp
+        - path: Device/Relay/GripPush.cpp
         - path: Device/Remote_control/bsp_remove.cpp
         - path: Device/Motor/yun_J60.cpp
         - path: Device/Motor/dji_motor.cpp
@@ -144,6 +150,8 @@ virtualFolder:
       files:
         - path: Route_Plan/meiling.cpp
         - path: Route_Plan/plan_route.cpp
+        - path: Route_Plan/mieling.h
+        - path: Route_Plan/plan_route.h
         - path: Route_Plan/lift_auto.cpp
       folders: []
     - name: ::CMSIS
@@ -152,7 +160,7 @@ virtualFolder:
 dependenceList: []
 outDir: build
 miscInfo:
-  uid: 6a2fc073b1dbad0ebbca649303955ddf
+  uid: ae7f3de30f2ed9f7306f7c2ec66a8f4b
 targets:
   My_Princess_cpp:
     cppPreprocessAttrs:
@@ -161,7 +169,6 @@ targets:
         - USE_HAL_DRIVER
         - STM32H723xx
       incList:
-        - .
         - ../Core/Inc
         - ../USB_DEVICE/App
         - ../USB_DEVICE/Target
@@ -180,9 +187,12 @@ targets:
         - TASK
         - Device/Motor
         - Device/Remote_control
-        - Device/StepMotor/EmmV5
+        - Device/Communication
+        - Device/M2006
+        - Device/RS05
+        - Device/StepMotor
+        - Device/Relay
         - Device/USB
-        - Device/StepMotor/MyStepMotor
         - Bsp
         - Device/laser_distance
         - Device/DT35
@@ -311,9 +321,4 @@ targets:
         otherCmds: ""
         proType: 1
         speed: 8000
-      OpenOCD:
-        baseAddr: "0x08000000"
-        bin: ""
-        interface: cmsis-dap
-        target: stm32h7x
-    uploader: OpenOCD
+    uploader: JLink

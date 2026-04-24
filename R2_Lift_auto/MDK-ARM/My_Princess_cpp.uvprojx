@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>USE_PWR_LDO_SUPPLY,USE_HAL_DRIVER,STM32H723xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../USB_DEVICE/App;../USB_DEVICE/Target;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/STM32_USB_Device_Library/Core/Inc;../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Middlewares/ST/ARM/DSP/Inc;./Control;../Middlewares/ST/ARM/DSP/Lib;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;./TASK;./Device/Motor;./Device/Remote_control;./Device/StepMotor/EmmV5;./Device/USB;./Device/StepMotor/MyStepMotor;./Bsp;./Device/laser_distance;./Device/DT35;./Device/AS5047P;./Route_Plan</IncludePath>
+              <IncludePath>../Core/Inc;../USB_DEVICE/App;../USB_DEVICE/Target;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/STM32_USB_Device_Library/Core/Inc;../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Middlewares/ST/ARM/DSP/Inc;./Control;../Middlewares/ST/ARM/DSP/Lib;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;./TASK;./Device/Motor;./Device/Remote_control;./Device/Communication;./Device/M2006;./Device/RS05;./Device/StepMotor;./Device/Relay;./Device/USB;./Bsp;./Device/laser_distance;./Device/DT35;./Device/AS5047P;./Route_Plan</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -1984,6 +1984,11 @@
               <FileType>8</FileType>
               <FilePath>.\TASK\route_task.cpp</FilePath>
             </File>
+            <File>
+              <FileName>FTMTask.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\TASK\FTMTask.cpp</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -1995,9 +2000,39 @@
               <FilePath>.\Device\USB\MiniPC.cpp</FilePath>
             </File>
             <File>
-              <FileName>Emm_V5.cpp</FileName>
+              <FileName>CommData.cpp</FileName>
               <FileType>8</FileType>
-              <FilePath>.\Device\StepMotor\EmmV5\Emm_V5.cpp</FilePath>
+              <FilePath>.\Device\Communication\CommData.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>EmmV5.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Device\StepMotor\EmmV5.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>StepMotorTask.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Device\StepMotor\StepMotorTask.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>M2006Follower.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Device\M2006\M2006Follower.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>RS05.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Device\RS05\RS05.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>RobStride.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Device\RS05\RobStride.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>GripPush.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Device\Relay\GripPush.cpp</FilePath>
             </File>
             <File>
               <FileName>bsp_remove.cpp</FileName>

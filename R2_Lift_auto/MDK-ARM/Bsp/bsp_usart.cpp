@@ -1,4 +1,5 @@
 #include "bsp_usart.h"
+#include "CommData.h"
 #include "usart.h"
 #include "dma.h"
 #include "bsp_remove.h"
@@ -270,6 +271,8 @@ void BSP_USART::RxEventDispatch(UART_HandleTypeDef *huart, uint16_t Size)
         uart8_dma.RxEventCallback(Size);
         return;
     }
+
+    (void)CommData_UartRxEventDispatch(huart, Size);
 }
 
 //============================================================
