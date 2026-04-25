@@ -9,7 +9,8 @@
 #include <string.h>
 #include <stdio.h>
 #include "bsp_dwt.h"
-
+#include "chassis_task.h"
+#include "PID.h"
 /* ========================== 全局变量 ========================== */
 
 /* USB 串口接收缓冲区 */
@@ -17,12 +18,13 @@ uint8_t data_usb[30];
 
 /* 视觉数据，由 parse_vision_frame_computer() 写入 */
 VisionData_t vision;
-
+pid_data yaw_data;
 /* ========================== 静态变量 ========================== */
 
 /* LoRa 发送缓冲区：float 数据区 + 4 字节帧结束标志 */
 static uint8_t lora_tx_buf[CURVE_TX_MAX_FLOATS * 4 + 4];
-static uint8_t posi_conputer[40]; // 单片机发送给电脑
+static uint8_t lora_rx_buf[40];
+static uint8_t posi_conputer[40]; // usb单片机发送给电脑
 
 /* ===================== 内部工具函数 ===================== */
 
@@ -42,27 +44,23 @@ static float fast_atof(const uint8_t **pp, const uint8_t *end)
 
     /* 处理负号 */
     float sign = 1.0f;
-    if (p < end && *p == '-')
-    {
+    if (p < end && *p == '-') {
         sign = -1.0f;
         ++p;
     }
 
     /* 整数部分 */
     float v = 0.0f;
-    while (p < end && *p >= '0' && *p <= '9')
-    {
+    while (p < end && *p >= '0' && *p <= '9') {
         v = v * 10.0f + static_cast<float>(*p - '0');
         ++p;
     }
 
     /* 小数部分 */
-    if (p < end && *p == '.')
-    {
+    if (p < end && *p == '.') {
         ++p;
         float frac = 0.1f;
-        while (p < end && *p >= '0' && *p <= '9')
-        {
+        while (p < end && *p >= '0' && *p <= '9') {
             v += static_cast<float>(*p - '0') * frac;
             frac *= 0.1f;
             ++p;
@@ -90,17 +88,15 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
         return 0;
 
     /* 清零输出 */
-    out->B = 0;
-    out->x_diff = 0.0f;
-    out->y_diff = 0.0f;
+    out->B       = 0;
+    out->x_diff  = 0.0f;
+    out->y_diff  = 0.0f;
     out->angle_x = 0.0f;
 
     /* 查找帧头 'S' */
     const uint8_t *s = nullptr;
-    for (uint16_t i = 0; i < len; ++i)
-    {
-        if (data[i] == 'S')
-        {
+    for (uint16_t i = 0; i < len; ++i) {
+        if (data[i] == 'S') {
             s = &data[i];
             break;
         }
@@ -110,10 +106,8 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
 
     /* 查找帧尾 'E' */
     const uint8_t *e = nullptr;
-    for (const uint8_t *p = s + 1; p < data + len; ++p)
-    {
-        if (*p == 'E')
-        {
+    for (const uint8_t *p = s + 1; p < data + len; ++p) {
+        if (*p == 'E') {
             e = p;
             break;
         }
@@ -154,6 +148,71 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
     return 1;
 }
 
+int parse_vision_frame_pid(uint8_t *data, uint16_t len, pid_data *out)
+{
+    if (data == nullptr || out == nullptr || len == 0)
+        return -1;
+
+    pid_data parsed = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+
+    const uint8_t *s = nullptr;
+    for (uint16_t i = 0; i < len; ++i) {
+        if (data[i] == 'S') {
+            s = &data[i];
+            break;
+        }
+    }
+    if (!s)
+        return -1;
+
+    const uint8_t *e = nullptr;
+    for (const uint8_t *p = s + 1; p < data + len; ++p) {
+        if (*p == 'E') {
+            e = p;
+            break;
+        }
+    }
+    if (!e)
+        return -1;
+
+    const uint8_t *p = s + 1;
+    if (p < e && *p == ',')
+        ++p;
+    else
+        return -1;
+
+    parsed.kp = fast_atof(&p, e);
+    if (p < e && *p == ',')
+        ++p;
+    else
+        return -1;
+
+    parsed.ki = fast_atof(&p, e);
+    if (p < e && *p == ',')
+        ++p;
+    else
+        return -1;
+
+    parsed.kd = fast_atof(&p, e);
+    if (p < e && *p == ',')
+        ++p;
+    else
+        return -1;
+
+    parsed.limit_inter = fast_atof(&p, e);
+    if (p < e && *p == ',')
+        ++p;
+    else
+        return -1;
+
+    parsed.outputmax = fast_atof(&p, e);
+    if (p != e)
+        return -1;
+
+    *out = parsed;
+    return 0;
+}
+
 /* ===================== LoRa 发送 ===================== */
 
 /**
@@ -163,7 +222,7 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
  * 使用静态缓冲区 posi_conputer，通过 USB CDC 发送。
  *
  */
-static void send_position_to_pc(int16_t behaivor, uint8_t p_diff, float X_diff, float Y_diff, float yaw)
+void send_position_to_pc(int16_t behaivor, uint8_t p_diff, float X_diff, float Y_diff, float yaw)
 {
     /* 格式化为 L,x,y,aE 文本帧，%.2f 保留两位小数 */
     int n = snprintf(reinterpret_cast<char *>(posi_conputer),
@@ -193,19 +252,19 @@ static void send_curve_lora(const float *data, uint16_t len)
     memcpy(lora_tx_buf, data, len * 4);
 
     /* 追加 4 字节帧结束标志 */
-    const uint16_t offset = len * 4;
+    const uint16_t offset   = len * 4;
     lora_tx_buf[offset + 0] = CURVE_END_0;
     lora_tx_buf[offset + 1] = CURVE_END_1;
     lora_tx_buf[offset + 2] = CURVE_END_2;
     lora_tx_buf[offset + 3] = CURVE_END_3;
 
-    HAL_UART_Transmit_DMA(&huart10, lora_tx_buf, offset + 4);
+    HAL_UART_Transmit_DMA(&huart8, lora_tx_buf, offset + 4);
 }
 
 /* ===================== FreeRTOS 任务入口 ===================== */
-int Flag1 = 0;
-uint8_t beh = 0;
-uint8_t p_diff = 0;
+int Flag1      = 0;
+
+extern PID pid_yaw;
 /**
  * @brief  USART 任务主循环（1ms 周期）
  *
@@ -219,33 +278,27 @@ extern "C" void usart_task(void *argument)
     // as5047.init(&hspi1);
     dt35.init(&hspi3);
 
-    for (;;)
-    {
+    for (;;) {
         /* 更新传感器数据 */
         // as5047.updata();
         dt35.update();
 
         /* 组装调试数据并通过 LoRa 发送 */
-        float debug_data[4] = {
-            dt35.ch0.voltage_V,
-            dt35.ch1.voltage_V,
-            dt35.ch0.distance_mm,
-            dt35.ch1.distance_mm,
+        float debug_data[10] = {
+            2,pid_yaw.pid.Ref,pid_yaw.pid.Measure,pid_yaw.pid.Err,pid_yaw.pid.Output,pid_yaw.pid.Kp,
+            pid_yaw.pid.Ki,pid_yaw.pid.Kd,0.001,6
         };
-        send_curve_lora(debug_data, 4);
+        send_curve_lora(debug_data, 10);
+
+        parse_vision_frame_pid(lora_rx_buf, sizeof(lora_tx_buf), &yaw_data);
 
         parse_vision_frame_computer(data_usb, sizeof(data_usb), &vision);
 
-        /* 每 2 秒向上位机发送一次位置信息（2000ms / 1ms 周期 = 2000 次） */
-        static uint16_t pc_send_cnt = 0;
-        if (Flag1)
+        if(Flag1 == 1)
         {
-            pc_send_cnt = 0;
-            send_position_to_pc(beh, 1, 0.0f, 0.0f, 0.0f);
+            send_position_to_pc(0, 1, 0, 0, 0);
         }
-
-        /* 解析上位机视觉帧 */
-
         osDelay(1);
     }
 }
+

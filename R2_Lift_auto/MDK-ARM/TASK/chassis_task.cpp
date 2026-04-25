@@ -75,7 +75,7 @@ extern "C" void chassis_task(void *argument)
         // 4. 遥控器输入处理：
         //    当拨杆处于指定档位时，启用航向保持控制，通过 yaw PID 输出底盘自转角速度。
 
-        VZ_OUT = pid_yaw.PID_Calculate(0.0f, dm_imu.imu.yaw);
+        VZ_OUT = pid_yaw.PID_Calculate(0.0f, vision.angle_x);
 
         // 5. 生成底盘目标速度：
         //    - x 方向速度直接使用上层输入
@@ -145,7 +145,7 @@ static void chassis_pid_init(void)
     // 底盘角度 PID：用于姿态或转角闭环控制，当前文件中暂未直接参与主循环计算。
     pid_F_chassis_angle.Init(OUTPUT_CHASSIS_ANGLE, INTERLIMIT_CHASSIS_ANGLE, DEBAND_CHASSIS_ANGLE, KP_CHASSIS_ANGLE, KI_CHASSIS_ANGLE, KD_CHASSIS_ANGLE, 0, 0x00);
 		  // 航向角保持 PID：根据 IMU yaw 偏差输出底盘自转控制量。
-    pid_yaw.Init(1.5, 0.5, 0.1, 0.400000006, 0.015, 0, 0, 0x00);
+    pid_yaw.Init(1.2, 0.2, 0.1, 0.4, 0.0, 0, 0, 0x00);
   
 }
 

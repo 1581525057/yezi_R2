@@ -62,8 +62,8 @@ private:
     void calcErrors(void);
     uint8_t allInTolerance(void) const;
     uint8_t isTimeout(void) const;
-};
-
+}; 
+extern float abs_limit(float x, float min, float max);
 extern MeilingLocator meiling;
 
 #endif

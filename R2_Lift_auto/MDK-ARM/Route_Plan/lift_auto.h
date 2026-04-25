@@ -9,6 +9,10 @@ class LiftAuto
 public:
     LiftAuto();
 
+    void start(void);
+    void stop(void);
+    uint8_t isFinished(void) const;
+
     void update(void);
     uint8_t getLiftSwitch(uint8_t manual_switch) const;
     float getLiftLinearSpeedTarget(float manual_target) const;
@@ -25,7 +29,7 @@ private:
         STEP_FINISHED,
     };
 
-    uint8_t flag_start; //启动条件
+    uint8_t flag_start;
     StepState state_;
     uint8_t lift_switch_target_;
     float lift_linear_speed_target_;

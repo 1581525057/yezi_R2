@@ -13,17 +13,21 @@ typedef struct
     float angle_x;   /* X 轴角度 */
 } VisionData_t;
 
-/*
- * LoRa 帧结束标志：0x00 0x00 0x80 0x7F
- * 对应 float 的正无穷大（0x7F800000），用作帧同步分隔符，
- * 因为正常传感器数据不会出现这个值。
- */
+/* PID 参数结构体：存储串口 8 接收的 PID 参数 */
+typedef struct
+{
+    float kp;
+    float ki;
+    float kd;
+    float limit_inter;
+    float outputmax;
+} pid_data;
+
 #define CURVE_END_0 0x00
 #define CURVE_END_1 0x00
 #define CURVE_END_2 0x80
 #define CURVE_END_3 0x7F
 
-/* LoRa 单帧最大可携带的 float 数量 */
 #define CURVE_TX_MAX_FLOATS 5
 
 /* USB 串口接收缓冲区（中断回调写入，任务循环读取） */
@@ -39,4 +43,11 @@ extern VisionData_t vision;
  */
 int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out);
 
+/*
+ * 解析 PID 参数帧
+ * 帧格式：S,<kp>,<ki>,<kd>,<inter>,<outmax>E
+ * 返回 0 成功，-1 失败，失败时不修改输出结构体
+ */
+int parse_vision_frame_pid(uint8_t *data, uint16_t len, pid_data *out);
+void send_position_to_pc(int16_t behaivor, uint8_t p_diff, float X_diff, float Y_diff, float yaw);
 #endif

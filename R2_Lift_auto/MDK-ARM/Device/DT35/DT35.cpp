@@ -169,4 +169,9 @@ void DT35::update(void)
     ADS8688_WriteCmd(ADS8688_CMD_MAN_CH3);
     uint16_t raw3 = ADS8688_ReadADC();
     convert_channel(raw3, ch3, 3);
+
+    ch0.valid = 1U;
+    ch1.valid = 1U;
+    ch2.valid = 1U;
+    ch3.valid = 1U;
 }

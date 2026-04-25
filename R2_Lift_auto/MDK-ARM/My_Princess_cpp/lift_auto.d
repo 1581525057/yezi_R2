@@ -34,5 +34,4 @@ my_princess_cpp/lift_auto.o: Route_Plan\lift_auto.cpp \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_ll_usb.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd_ex.h \
-  Device\Remote_control\bsp_remove.h \
-  Device\laser_distance\laser_distance.h Device\DT35\DT35.h
+  Device\DT35\DT35.h Route_Plan\mieling.h

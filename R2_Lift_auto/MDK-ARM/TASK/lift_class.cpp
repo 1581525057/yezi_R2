@@ -51,7 +51,7 @@ extern "C" void lift_task(void *argument)
     // 上电后先给一个回到 0 高度的初始轨迹
     lift_height_set_target(&lift_calulate, 0.0f, 2.0f);
 
-    lift_debug.flag = 1;
+    
     for (;;)
     {
         // 读取当前机械位置并换算为左右两侧高度
@@ -60,40 +60,37 @@ extern "C" void lift_task(void *argument)
         // 读取 2006 电机反馈，换算当前升降轮的线速度
         calc_linear_speed_from_motor_rpm();
 
-        // 更新半自动上台阶状态机
-        lift_auto.update();
-
         // 根据手动或半自动给出的目标线速度，换算升降轮目标转速
         calc_motor_rpm_from_linear_speed_target(
             lift_auto.getLiftLinearSpeedTarget(remove_dji.chassis_.Vl));
 
-        // // 记录上一拍的档位，只在档位变化时重新生成高度目标
-        // static uint8_t last_sw = 0;
+        // 记录上一拍的档位，只在档位变化时重新生成高度目标
+        static uint8_t last_sw = 0;
 
-        // // 如果半自动接管，则这里返回自动档位；否则返回手动拨杆档位
-        // uint8_t now_sw = lift_auto.getLiftSwitch(remove_dji.rc_.s[1]);
+        // 如果半自动接管，则这里返回自动档位；否则返回手动拨杆档位
+        uint8_t now_sw = lift_auto.getLiftSwitch(remove_dji.rc_.s[1]);
 
-        // // 只有档位变化时，才重新设置目标高度
-        // if (now_sw != last_sw) {
-        //     if (now_sw == 3U) {
-        //         // 3 档对应目标高度
-        //         lift_debug.height_target = 0.0f;
-        //         lift_debug.flag          = 1.0f;
-        //     } else if (now_sw == 1U) {
-        //         // 1 档对应目标高度
-        //         lift_debug.height_target = 50.0f;
-        //         lift_debug.flag          = 1.0f;
-        //     } else if (now_sw == 2U) {
-        //         // 2 档对应目标高度
-        //         lift_debug.height_target = -205.0f;
-        //         lift_debug.flag          = 1.0f;
-        //     }
+        // 只有档位变化时，才重新设置目标高度
+        if (now_sw != last_sw) {
+            if (now_sw == 3U) {
+                // 3 档对应目标高度
+                lift_debug.height_target = 0.0f;
+                lift_debug.flag          = 1.0f;
+            } else if (now_sw == 1U) {
+                // 1 档对应目标高度
+                lift_debug.height_target = 50.0f;
+                lift_debug.flag          = 1.0f;
+            } else if (now_sw == 2U) {
+                // 2 档对应目标高度
+                lift_debug.height_target = -215.0f;
+                lift_debug.flag          = 1.0f;
+            }
 
-        //     // 更新上一拍档位
-        //     last_sw = now_sw;
-        // }
+            // 更新上一拍档位
+            last_sw = now_sw;
+        }
 
-		 lift_debug.height_target = 50.0f;
+		
               
 		
 		
@@ -119,7 +116,7 @@ extern "C" void lift_task(void *argument)
         yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 15, 0.5f, pid_lift_right.pid.Output);
 
         //2006 电机电流控制发送口目前保留
-        lift_motor.Send_CurrentCommand(&BSP_CAN::FDCAN1_TxFrame,
+        lift_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame,
                                         0x1FF,
                                         pid_2006_r.pid.Output,
                                         -pid_2006_l.pid.Output,

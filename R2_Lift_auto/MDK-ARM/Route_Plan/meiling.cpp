@@ -5,9 +5,7 @@
 
 MeilingLocator meiling;
 
-namespace
-{
-static float abs_limit(float x, float min, float max)
+ float abs_limit(float x, float min, float max)
 {
     float abs_min = (min < 0.0f) ? -min : min;
     float abs_max = (max < 0.0f) ? -max : max;
@@ -38,8 +36,6 @@ static float abs_limit(float x, float min, float max)
 
     return x;
 }
-}
-
 void MeilingLocator::start(const MeilingTarget_t &target)
 {
     m_target = target;
@@ -175,7 +171,7 @@ float MeilingLocator::getChassisVxTarget(float manual_target) const
     return V;
 }
 
-float ELON_KP = 5.0f;
+float ELON_KP = 6.0f;
 float ELON_MAX = 1.0f;
 
 float MeilingLocator::getChassisVyTarget(float manual_target) const
