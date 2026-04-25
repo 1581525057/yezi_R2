@@ -45,4 +45,5 @@ my_princess_cpp/usart_task.o: TASK\usart_task.cpp TASK\usart_task.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\task.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\list.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2\cmsis_os2.h \
-  Device\DT35\DT35.h Device\USB\MiniPC.h Bsp\bsp_dwt.h
+  Device\DT35\DT35.h Device\USB\MiniPC.h Bsp\bsp_dwt.h \
+  TASK\chassis_task.h Control\PID.h

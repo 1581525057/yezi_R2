@@ -14,7 +14,7 @@
 #include "timers.h"
 
 /* 步进电机 UART 发送接口 */
-#define MotorHuart huart9
+#define MotorHuart huart10
 
 typedef struct
 {

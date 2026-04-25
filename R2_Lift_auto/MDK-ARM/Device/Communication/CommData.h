@@ -13,11 +13,11 @@ extern "C" {
 extern DMA_HandleTypeDef hdma_uart9_rx;
 extern DMA_HandleTypeDef hdma_usart10_rx;
 
-#define huart_vis huart10
-#define hdma_usart_vis_rx hdma_usart10_rx
+#define huart_vis huart9
+#define hdma_usart_vis_rx hdma_uart9_rx
 
-#define huart_cmd huart9
-#define hdma_usart_cmd_rx hdma_uart9_rx
+#define huart_cmd huart10
+#define hdma_usart_cmd_rx hdma_usart10_rx
 
 typedef struct
 {
