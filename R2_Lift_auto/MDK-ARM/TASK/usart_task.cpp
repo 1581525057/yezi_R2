@@ -11,11 +11,13 @@
 #include "bsp_dwt.h"
 #include "chassis_task.h"
 #include "PID.h"
+#include "omni_chassis.h"
+#include "route_task.h"
 /* ========================== 全局变量 ========================== */
 
 /* USB 串口接收缓冲区 */
 uint8_t data_usb[30];
-
+static uint8_t posi_conputer[40]; // usb单片机发送给电脑
 /* 视觉数据，由 parse_vision_frame_computer() 写入 */
 VisionData_t vision;
 pid_data yaw_data;
@@ -24,7 +26,15 @@ pid_data yaw_data;
 /* LoRa 发送缓冲区：float 数据区 + 4 字节帧结束标志 */
 static uint8_t lora_tx_buf[CURVE_TX_MAX_FLOATS * 4 + 4];
 static uint8_t lora_rx_buf[40];
-static uint8_t posi_conputer[40]; // usb单片机发送给电脑
+
+static void lora_rx_dma_init(void)
+{
+    memset(lora_rx_buf, 0, sizeof(lora_rx_buf));
+    HAL_UART_Receive_DMA(&huart8, lora_rx_buf, sizeof(lora_rx_buf));
+    if (huart8.hdmarx != nullptr) {
+        __HAL_DMA_DISABLE_IT(huart8.hdmarx, DMA_IT_HT);
+    }
+}
 
 /* ===================== 内部工具函数 ===================== */
 
@@ -262,7 +272,7 @@ static void send_curve_lora(const float *data, uint16_t len)
 }
 
 /* ===================== FreeRTOS 任务入口 ===================== */
-int Flag1      = 0;
+int Flag1 = 0;
 
 extern PID pid_yaw;
 /**
@@ -277,6 +287,7 @@ extern "C" void usart_task(void *argument)
 {
     // as5047.init(&hspi1);
     dt35.init(&hspi3);
+    lora_rx_dma_init();
 
     for (;;) {
         /* 更新传感器数据 */
@@ -284,21 +295,24 @@ extern "C" void usart_task(void *argument)
         dt35.update();
 
         /* 组装调试数据并通过 LoRa 发送 */
-        float debug_data[10] = {
-            2,pid_yaw.pid.Ref,pid_yaw.pid.Measure,pid_yaw.pid.Err,pid_yaw.pid.Output,pid_yaw.pid.Kp,
-            pid_yaw.pid.Ki,pid_yaw.pid.Kd,0.001,6
-        };
-        send_curve_lora(debug_data, 10);
+        float debug_data[4] = {
+            omni_chassis.now.rpm[0], omni_chassis.now.rpm[1], omni_chassis.now.rpm[2], omni_chassis.now.rpm[3]};
+        send_curve_lora(debug_data, 4);
 
-        parse_vision_frame_pid(lora_rx_buf, sizeof(lora_tx_buf), &yaw_data);
+        parse_vision_frame_pid(lora_rx_buf, sizeof(lora_rx_buf), &yaw_data);
 
-        parse_vision_frame_computer(data_usb, sizeof(data_usb), &vision);
+        // USB 视觉帧只处理一次；解析成功后保留 vision 中的最新数据，
+        // 直到 ROUTE_TASK::vision_choice() 根据 flag_vision 完成消费。
+        if (memchr(data_usb, 'S', sizeof(data_usb)) != nullptr) {
+            if (parse_vision_frame_computer(data_usb, sizeof(data_usb), &vision) == 1) {
+                route_t.flag_vision = 1;
+            }
+            memset(data_usb, 0, sizeof(data_usb));
+        }
 
-        if(Flag1 == 1)
-        {
+        if (Flag1 == 1) {
             send_position_to_pc(0, 1, 0, 0, 0);
         }
         osDelay(1);
     }
 }
-

@@ -119,4 +119,3 @@ void DM_IMU::ParseIMUStream(uint8_t *streamData)
     ParseSingleIMUPacket(streamData + 19);
     ParseSingleIMUPacket(streamData + 38);
 }
-

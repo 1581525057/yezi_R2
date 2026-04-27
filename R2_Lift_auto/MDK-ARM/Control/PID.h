@@ -61,8 +61,11 @@ public:
               float Kp, float Ki, float Kd, float output_fiter_factor, uint8_t improve);
 
     float PID_Calculate(float measure, float ref);
+    float PID_Calculate_Angle(float measure, float ref);
 
 private:
+    float PID_Calculate_WithErr(float measure, float ref, float err);
+
     void f_Integral_Limit();
 
     void f_Output_Filter();

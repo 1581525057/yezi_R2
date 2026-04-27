@@ -49,4 +49,4 @@ my_princess_cpp/route_task.o: TASK\route_task.cpp TASK\route_task.h \
   ..\Middlewares\ST\ARM\DSP\Inc\arm_math.h \
   ..\Drivers\CMSIS\Include\cmsis_compiler.h Bsp\bsp_dwt.h \
   Bsp\bsp_usart.h Route_Plan\lift_auto.h Route_Plan\mieling.h \
-  Route_Plan\plan_route.h TASK\usart_task.h
+  Route_Plan\plan_route.h TASK\usart_task.h Control\PID.h

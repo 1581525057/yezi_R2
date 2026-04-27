@@ -20,51 +20,51 @@ FDCAN_RxFrame_TypeDef BSP_CAN::FDCAN_RxFIFO1Frame;
 /* 发送帧对象 ---------------------------------------------------------------*/
 FDCAN_TxFrame_TypeDef BSP_CAN::FDCAN1_TxFrame =
     {
-        .hcan = &hfdcan1,
+        .hcan   = &hfdcan1,
         .Header = {
-            .Identifier = 0,
-            .IdType = FDCAN_STANDARD_ID,
-            .TxFrameType = FDCAN_DATA_FRAME,
-            .DataLength = FDCAN_DLC_BYTES_8,
+            .Identifier          = 0,
+            .IdType              = FDCAN_STANDARD_ID,
+            .TxFrameType         = FDCAN_DATA_FRAME,
+            .DataLength          = FDCAN_DLC_BYTES_8,
             .ErrorStateIndicator = FDCAN_ESI_ACTIVE,
-            .BitRateSwitch = FDCAN_BRS_OFF,
-            .FDFormat = FDCAN_CLASSIC_CAN,
-            .TxEventFifoControl = FDCAN_NO_TX_EVENTS,
-            .MessageMarker = 0,
+            .BitRateSwitch       = FDCAN_BRS_OFF,
+            .FDFormat            = FDCAN_CLASSIC_CAN,
+            .TxEventFifoControl  = FDCAN_NO_TX_EVENTS,
+            .MessageMarker       = 0,
         },
         .Data = {0},
 };
 
 FDCAN_TxFrame_TypeDef BSP_CAN::FDCAN2_TxFrame =
     {
-        .hcan = &hfdcan2,
+        .hcan   = &hfdcan2,
         .Header = {
-            .Identifier = 0,
-            .IdType = FDCAN_EXTENDED_ID,
-            .TxFrameType = FDCAN_DATA_FRAME,
-            .DataLength = FDCAN_DLC_BYTES_8,
+            .Identifier          = 0,
+            .IdType              = FDCAN_EXTENDED_ID,
+            .TxFrameType         = FDCAN_DATA_FRAME,
+            .DataLength          = FDCAN_DLC_BYTES_8,
             .ErrorStateIndicator = FDCAN_ESI_ACTIVE,
-            .BitRateSwitch = FDCAN_BRS_OFF,
-            .FDFormat = FDCAN_CLASSIC_CAN,
-            .TxEventFifoControl = FDCAN_NO_TX_EVENTS,
-            .MessageMarker = 0,
+            .BitRateSwitch       = FDCAN_BRS_OFF,
+            .FDFormat            = FDCAN_CLASSIC_CAN,
+            .TxEventFifoControl  = FDCAN_NO_TX_EVENTS,
+            .MessageMarker       = 0,
         },
         .Data = {0},
 };
 
 FDCAN_TxFrame_TypeDef BSP_CAN::FDCAN3_TxFrame =
     {
-        .hcan = &hfdcan3,
+        .hcan   = &hfdcan3,
         .Header = {
-            .Identifier = 0,
-            .IdType = FDCAN_STANDARD_ID,
-            .TxFrameType = FDCAN_DATA_FRAME,
-            .DataLength = FDCAN_DLC_BYTES_8,
+            .Identifier          = 0,
+            .IdType              = FDCAN_STANDARD_ID,
+            .TxFrameType         = FDCAN_DATA_FRAME,
+            .DataLength          = FDCAN_DLC_BYTES_8,
             .ErrorStateIndicator = FDCAN_ESI_ACTIVE,
-            .BitRateSwitch = FDCAN_BRS_OFF,
-            .FDFormat = FDCAN_CLASSIC_CAN,
-            .TxEventFifoControl = FDCAN_NO_TX_EVENTS,
-            .MessageMarker = 0,
+            .BitRateSwitch       = FDCAN_BRS_OFF,
+            .FDFormat            = FDCAN_CLASSIC_CAN,
+            .TxEventFifoControl  = FDCAN_NO_TX_EVENTS,
+            .MessageMarker       = 0,
         },
         .Data = {0},
 };
@@ -74,12 +74,12 @@ void BSP_CAN::Init(void)
     FDCAN_FilterTypeDef FilterConfig;
 
     /* FDCAN1 --------------------------------------------------------------*/
-    FilterConfig.IdType = FDCAN_STANDARD_ID;
-    FilterConfig.FilterIndex = 0;
-    FilterConfig.FilterType = FDCAN_FILTER_MASK;
+    FilterConfig.IdType       = FDCAN_STANDARD_ID;
+    FilterConfig.FilterIndex  = 0;
+    FilterConfig.FilterType   = FDCAN_FILTER_MASK;
     FilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-    FilterConfig.FilterID1 = 0x00000000;
-    FilterConfig.FilterID2 = 0x00000000;
+    FilterConfig.FilterID1    = 0x00000000;
+    FilterConfig.FilterID2    = 0x00000000;
 
     HAL_FDCAN_ConfigFilter(&hfdcan1, &FilterConfig);
     HAL_FDCAN_ConfigGlobalFilter(&hfdcan1, FDCAN_REJECT, FDCAN_REJECT, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE);
@@ -87,12 +87,12 @@ void BSP_CAN::Init(void)
     HAL_FDCAN_Start(&hfdcan1);
 
     /* FDCAN2 --------------------------------------------------------------*/
-    FilterConfig.IdType = FDCAN_EXTENDED_ID;
-    FilterConfig.FilterIndex = 0;
-    FilterConfig.FilterType = FDCAN_FILTER_MASK;
+    FilterConfig.IdType       = FDCAN_EXTENDED_ID;
+    FilterConfig.FilterIndex  = 0;
+    FilterConfig.FilterType   = FDCAN_FILTER_MASK;
     FilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;
-    FilterConfig.FilterID1 = 0x00000000;
-    FilterConfig.FilterID2 = 0x00000000;
+    FilterConfig.FilterID1    = 0x00000000;
+    FilterConfig.FilterID2    = 0x00000000;
 
     HAL_FDCAN_ConfigFilter(&hfdcan2, &FilterConfig);
     HAL_FDCAN_ConfigGlobalFilter(&hfdcan2, FDCAN_REJECT, FDCAN_REJECT, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE);
@@ -100,12 +100,12 @@ void BSP_CAN::Init(void)
     HAL_FDCAN_Start(&hfdcan2);
 
     /* FDCAN3 --------------------------------------------------------------*/
-    FilterConfig.IdType = FDCAN_STANDARD_ID;
-    FilterConfig.FilterIndex = 0;
-    FilterConfig.FilterType = FDCAN_FILTER_MASK;
+    FilterConfig.IdType       = FDCAN_STANDARD_ID;
+    FilterConfig.FilterIndex  = 0;
+    FilterConfig.FilterType   = FDCAN_FILTER_MASK;
     FilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-    FilterConfig.FilterID1 = 0x00000000;
-    FilterConfig.FilterID2 = 0x00000000;
+    FilterConfig.FilterID1    = 0x00000000;
+    FilterConfig.FilterID2    = 0x00000000;
 
     HAL_FDCAN_ConfigFilter(&hfdcan3, &FilterConfig);
     HAL_FDCAN_ConfigGlobalFilter(&hfdcan3, FDCAN_REJECT, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE);
@@ -124,7 +124,7 @@ void BSP_CAN::FDCAN1_RxFifo0RxHandler(uint32_t *Identifier, uint8_t Data[8])
 {
     // Yun_J60 接收分发（原有逻辑保留）
     Yun_J60_Class::RxHandler(&FDCAN_RxFIFO0Frame, Data);
-    DJI_Motor_Class::RxHandler(Identifier, Data);   
+    DJI_Motor_Class::RxHandler(Identifier, Data);
 }
 
 void BSP_CAN::FDCAN2_RxFifo1RxHandler(uint32_t *Identifier, uint8_t Data[8])
@@ -133,17 +133,14 @@ void BSP_CAN::FDCAN2_RxFifo1RxHandler(uint32_t *Identifier, uint8_t Data[8])
     // VESC 电机接收分发：
     //   canRxHandler 内部按 nodeId_ 过滤，节点ID不匹配的帧直接忽略。
     //   传入整个帧结构体指针，避免重复读全局变量，保持接口统一。
-    for (auto &motor : VescMotors)
-    {
+    for (auto &motor : VescMotors) {
         motor.canRxHandler(&FDCAN_RxFIFO1Frame);
     }
-  
 }
 
 void BSP_CAN::FDCAN3_RxFifo0RxHandler(uint32_t *Identifier, uint8_t Data[8])
 {
-      DJI_Motor_Class::RxHandler(Identifier, Data);
-
+    DJI_Motor_Class::RxHandler(Identifier, Data);
 }
 
 void BSP_CAN::RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
@@ -159,14 +156,12 @@ void BSP_CAN::RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
                         &FDCAN_RxFIFO0Frame.Header,
                         FDCAN_RxFIFO0Frame.Data);
 
-    if (hfdcan == &hfdcan1)
-    {
+    if (hfdcan == &hfdcan1) {
         FDCAN1_RxFifo0RxHandler(&FDCAN_RxFIFO0Frame.Header.Identifier,
                                 FDCAN_RxFIFO0Frame.Data);
     }
 
-    if (hfdcan == &hfdcan3)
-    {
+    if (hfdcan == &hfdcan3) {
         FDCAN3_RxFifo0RxHandler(&FDCAN_RxFIFO0Frame.Header.Identifier,
                                 FDCAN_RxFIFO0Frame.Data);
     }
@@ -181,8 +176,7 @@ void BSP_CAN::RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
                            &FDCAN_RxFIFO1Frame.Header,
                            FDCAN_RxFIFO1Frame.Data);
 
-    if (hfdcan == &hfdcan2)
-    {
+    if (hfdcan == &hfdcan2) {
         FDCAN2_RxFifo1RxHandler(&FDCAN_RxFIFO1Frame.Header.Identifier,
                                 FDCAN_RxFIFO1Frame.Data);
     }

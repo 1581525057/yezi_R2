@@ -4,6 +4,22 @@
 #include "bsp_dwt.h"
 /******************************* PID CONTROL *********************************/
 
+static inline float NormalizeAngleDeg(float angle_deg)
+{
+    while (angle_deg > 180.0f) {
+        angle_deg -= 360.0f;
+    }
+    while (angle_deg < -180.0f) {
+        angle_deg += 360.0f;
+    }
+    return angle_deg;
+}
+
+static inline float ShortestAngleErrorDeg(float target_deg, float current_deg)
+{
+    return NormalizeAngleDeg(target_deg - current_deg);
+}
+
 /* 构造函数：将 pid 结构体全部清零，确保初始状态干净 */
 PID::PID(void)
 {
@@ -47,6 +63,16 @@ void PID::Init(float max_out, float intergral_limit, float deadband,
  */
 float PID::PID_Calculate(float measure, float ref)
 {
+    return PID_Calculate_WithErr(measure, ref, ref - measure);
+}
+
+float PID::PID_Calculate_Angle(float measure, float ref)
+{
+    return PID_Calculate_WithErr(measure, ref, ShortestAngleErrorDeg(ref, measure));
+}
+
+float PID::PID_Calculate_WithErr(float measure, float ref, float err)
+{
     pid.Measure = measure;
     pid.Ref     = ref;
 
@@ -54,7 +80,7 @@ float PID::PID_Calculate(float measure, float ref)
     pid.dt = DWT_.getDeltaT(&pid.DWT_CNT);
 
     /* 计算误差，若在死区内则视为零，避免微小抖动引起积分漂移 */
-    pid.Err = pid.Ref - pid.Measure;
+    pid.Err = err;
     if (fabs(pid.Err) < pid.Deadband) {
         pid.Err = 0.0f;
     }

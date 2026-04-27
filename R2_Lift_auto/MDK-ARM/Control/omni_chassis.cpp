@@ -1,5 +1,5 @@
 #include "omni_chassis.h"
-#include "arm_math.h" 
+#include "arm_math.h"
 #include <string.h> // memset, memcpy
 
 /*
@@ -10,7 +10,6 @@
 */
 
 OmniChassis omni_chassis;
-
 
 // 设置遥控输入
 void OmniChassis::setRemote(float Vx, float Vy, float Vz)
@@ -23,26 +22,18 @@ void OmniChassis::setRemote(float Vx, float Vy, float Vz)
 // 全向轮逆解算
 void OmniChassis::inverseKinematics()
 {
-    if (flag == 0)
-    {
+    if (flag == 0) {
         target.rpm[0] = -(-a * target.Vx + a * target.Vy - target.Vz * b) * 60.0f / wheel_circumference;
         target.rpm[1] = -(-a * target.Vx - a * target.Vy - target.Vz * b) * 60.0f / wheel_circumference;
         target.rpm[2] = -(a * target.Vx - a * target.Vy - target.Vz * b) * 60.0f / wheel_circumference;
         target.rpm[3] = -(a * target.Vx + a * target.Vy - target.Vz * b) * 60.0f / wheel_circumference;
-    }
-    else if (flag == 1)
-    {
-
+    } else if (flag == 1) {
     }
 
-    for (int i = 0; i < 4; i++)
-    {
-        if (target.rpm[i] >= max_rpm)
-        {
+    for (int i = 0; i < 4; i++) {
+        if (target.rpm[i] >= max_rpm) {
             target.rpm[i] = max_rpm;
-        }
-        else if (target.rpm[i] <= -max_rpm)
-        {
+        } else if (target.rpm[i] <= -max_rpm) {
             target.rpm[i] = -max_rpm;
         }
     }
@@ -65,11 +56,8 @@ void OmniChassis::forwardKinematics()
 
     now.Vz = Vz_body;
 
-    if (flag == 1)
-    {
-    }
-    else
-    {
+    if (flag == 1) {
+    } else {
         now.Vx = Vx_body;
         now.Vy = Vy_body;
     }
@@ -86,8 +74,7 @@ void OmniChassis::dynamicsInverse(float Fx, float Fy, float T)
     motor_out[2] = -(k * Fx - k * Fy - T / (4.0f * b)) * wheel_r;
     motor_out[3] = -(k * Fx + k * Fy - T / (4.0f * b)) * wheel_r;
 
-    for (uint8_t i = 0; i < 4; i++)
-    {
+    for (uint8_t i = 0; i < 4; i++) {
         feedforward_current[i] = torqueToCurrent(motor_out[i]);
     }
 }
@@ -112,6 +99,6 @@ float OmniChassis::currentToTorque(int current)
         current = -16384;
 
     float T_A = (float)current / 16384.0f * 20.0f;
-    float T = 0.3f * T_A;
+    float T   = 0.3f * T_A;
     return T;
 }

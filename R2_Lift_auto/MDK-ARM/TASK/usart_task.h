@@ -28,7 +28,7 @@ typedef struct
 #define CURVE_END_2 0x80
 #define CURVE_END_3 0x7F
 
-#define CURVE_TX_MAX_FLOATS 5
+#define CURVE_TX_MAX_FLOATS 10
 
 /* USB 串口接收缓冲区（中断回调写入，任务循环读取） */
 extern uint8_t data_usb[30];

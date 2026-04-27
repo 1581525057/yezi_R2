@@ -51,9 +51,7 @@ extern "C" void lift_task(void *argument)
     // 上电后先给一个回到 0 高度的初始轨迹
     lift_height_set_target(&lift_calulate, 0.0f, 2.0f);
 
-    
-    for (;;)
-    {
+    for (;;) {
         // 读取当前机械位置并换算为左右两侧高度
         lift_cauclate_height();
 
@@ -74,11 +72,11 @@ extern "C" void lift_task(void *argument)
         if (now_sw != last_sw) {
             if (now_sw == 3U) {
                 // 3 档对应目标高度
-                lift_debug.height_target = 0.0f;
+                lift_debug.height_target = 100.0f;
                 lift_debug.flag          = 1.0f;
             } else if (now_sw == 1U) {
                 // 1 档对应目标高度
-                lift_debug.height_target = 50.0f;
+                lift_debug.height_target = 100.0f;
                 lift_debug.flag          = 1.0f;
             } else if (now_sw == 2U) {
                 // 2 档对应目标高度
@@ -90,10 +88,6 @@ extern "C" void lift_task(void *argument)
             last_sw = now_sw;
         }
 
-		
-              
-		
-		
         // 当标志位置位时，重新生成一条 0.7s 的线性轨迹
         if (lift_debug.flag == 1.0f) {
             lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.7f);
@@ -109,19 +103,17 @@ extern "C" void lift_task(void *argument)
         // 计算角度环和升降轮速度环 PID
         lift_class_pid_calculate();
 
-   
-
         // 左右两侧云深电机按目标角度与 PID 力矩输出控制
         yun_j60_motor.SendControl(0x02, -lift_debug.posi, 0, 15, 0.5f, -pid_lift_left.pid.Output);
         yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 15, 0.5f, pid_lift_right.pid.Output);
 
-        //2006 电机电流控制发送口目前保留
+        // 2006 电机电流控制发送口目前保留
         lift_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame,
-                                        0x1FF,
-                                        pid_2006_r.pid.Output,
-                                        -pid_2006_l.pid.Output,
-                                        0,
-                                        0);
+                                       0x1FF,
+                                       pid_2006_r.pid.Output,
+                                       -pid_2006_l.pid.Output,
+                                       0,
+                                       0);
 
         osDelay(1);
     }

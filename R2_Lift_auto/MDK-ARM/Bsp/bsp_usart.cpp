@@ -42,16 +42,6 @@ static void USART5_RxCallback(uint8_t *buf, uint16_t len)
     }
 }
 
-//------------------------------------------------------------
-// USART8 -> LaserDistance
-//------------------------------------------------------------
-static void USART8_RxCallback(uint8_t *buf, uint16_t len)
-{
-    if (len >= 8) {
-        laser.laser_parse_dma_data(buf, len);
-    }
-}
-
 //============================================================
 // UART_DMA_Channel 构造函数
 //============================================================
@@ -73,10 +63,10 @@ void UART_DMA_Channel::Init(UART_HandleTypeDef *huart_,
                             uint16_t buffSize_,
                             void (*rxCallback_)(uint8_t *buf, uint16_t len))
 {
-    huart = huart_;
-    buf0  = buf0_;
-    buf1 = buf1_;
-    buffSize = buffSize_;
+    huart      = huart_;
+    buf0       = buf0_;
+    buf1       = buf1_;
+    buffSize   = buffSize_;
     rxCallback = rxCallback_;
 
     InitMultiBufferDMA();
@@ -91,7 +81,6 @@ void UART_DMA_Channel::InitMultiBufferDMA()
     // 设置为 接收到空闲中断 的模式
     huart->ReceptionType = HAL_UART_RECEPTION_TOIDLE;
 
- 
     huart->RxXferSize = buffSize * 2;
 
     // 打开 UART 的 DMA 接收功能
@@ -111,7 +100,6 @@ void UART_DMA_Channel::InitMultiBufferDMA()
 
     // DMA 外设地址 = UART 数据寄存器地址
     ((DMA_Stream_TypeDef *)huart->hdmarx->Instance)->PAR = (uint32_t)&huart->Instance->RDR;
-
 
     // M0 地址
     ((DMA_Stream_TypeDef *)huart->hdmarx->Instance)->M0AR = (uint32_t)buf0;
@@ -241,13 +229,6 @@ void BSP_USART::Init(void)
     uart5_dma.Init(&huart5, remove_dji.SBUS_MultiRx_Buff[0],
                    remove_dji.SBUS_MultiRx_Buff[1],
                    SBUS_RX_BUF_NUM, USART5_RxCallback);
-
-    //--------------------------------------------------------
-    // USART8 -> LaserDistance
-    //--------------------------------------------------------
-    uart8_dma.Init(&huart8, laser.rx_buf[0],
-                   laser.rx_buf[1],
-                   LASER_RX_LEN, USART8_RxCallback);
 }
 
 //============================================================
@@ -261,14 +242,8 @@ void BSP_USART::RxEventDispatch(UART_HandleTypeDef *huart, uint16_t Size)
         return;
     }
 
-    if(uart5_dma.IsThisUart(huart))
-    {
+    if (uart5_dma.IsThisUart(huart)) {
         uart5_dma.RxEventCallback(Size);
-        return;
-    }
-
-    if (uart8_dma.IsThisUart(huart)) {
-        uart8_dma.RxEventCallback(Size);
         return;
     }
 
