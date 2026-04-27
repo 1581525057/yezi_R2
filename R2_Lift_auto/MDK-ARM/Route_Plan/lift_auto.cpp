@@ -8,7 +8,7 @@ namespace
     static const float LIFT_AUTO_CLIMB_SPEED_MPS = 0.32f;
     static const uint32_t LIFT_AUTO_PREPARE_MM = 45U;
     static const uint32_t LIFT_AUTO_NEW_HEIGHT_MM = 1230U;
-    static const uint32_t LIFT_AUTO_FINISH_MM = 580U;
+    static const uint32_t LIFT_AUTO_FINISH_MM = 630U;
     static const uint32_t LIFT_AUTO_HEIGHT_TOL_MM = 70U;
     static const uint8_t LIFT_AUTO_STABLE_COUNT = 10U;
 }

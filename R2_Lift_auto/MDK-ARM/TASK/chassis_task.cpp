@@ -13,6 +13,13 @@
 #include "VescMotor.h"
 #include "mieling.h"
 #include "usart_task.h"
+#include "chassis_auto_source.h"
+#include "route_task.h"
+
+extern "C" float WuqiquTask_GetChassisVxTarget(float manual);
+extern "C" float WuqiquTask_GetChassisVyTarget(float manual);
+extern "C" float WuqiquTask_GetChassisVzTarget(float manual);
+extern "C" uint8_t WuqiquTask_IsActive(void);
 
 // 代码回退标志位
 
@@ -29,8 +36,13 @@ PID pid_chassis_0,
 PID pid_F_chassis_linear_x, pid_F_chassis_angle, pid_F_chassis_linear_y;
 // 航向角 PID，用于结合 IMU yaw 实现底盘定向或航向保持。
 PID pid_yaw;
-float yaw_target;
+static float target_vx_last = 0.0f;
+static float target_vy_last = 0.0f;
+static float target_vz_last = 0.0f;
+float rpm;
 
+chassis_pid yaw;
+float yaw_target;
 extern "C" void chassis_task(void *argument)
 {
     // 初始化底盘任务依赖的 CAN、串口以及高精度计时模块。
@@ -71,14 +83,35 @@ extern "C" void chassis_task(void *argument)
 
         // 5. 生成底盘目标速度：
         //    - x 方向速度直接使用上层输入
-        //    - y 方向速度经过 lift_auto 处理，用于与升降机构动作联动
+        //    - 自动任务速度由下方仲裁结果决定，避免不同区域同时改写底盘速度
         float target_vx = remove_dji.chassis_.Vx;
-        float target_vy = lift_auto.getChassisVyTarget(remove_dji.chassis_.Vy);
-        float target_vz = remove_dji.chassis_.Vz;
+        float target_vy = remove_dji.chassis_.Vy;
+        float target_vz = VZ_OUT;
 
-        target_vx = meiling.getChassisVxTarget(target_vx);
-        target_vy = meiling.getChassisVyTarget(target_vy);
-        target_vz = meiling.getChassisVzTarget(target_vz);
+        const ChassisAutoSource auto_source = ChassisAuto_SelectSource(WuqiquTask_IsActive(), RouteTask_IsMeilingAreaActive());
+
+        switch (auto_source)
+        {
+        case CHASSIS_AUTO_WUQIQU:
+            target_vx = WuqiquTask_GetChassisVxTarget(target_vx);
+            target_vy = WuqiquTask_GetChassisVyTarget(target_vy);
+            target_vz = WuqiquTask_GetChassisVzTarget(target_vz);
+            break;
+        case CHASSIS_AUTO_MEILING:
+            target_vx = meiling.getChassisVxTarget(target_vx);
+            target_vy = meiling.getChassisVyTarget(target_vy);
+            target_vz = meiling.getChassisVzTarget(target_vz);
+            target_vy = lift_auto.getChassisVyTarget(target_vy);
+            break;
+        case CHASSIS_AUTO_CONFLICT:
+            // 自动任务冲突时清零底盘目标，避免两套规划同时抢控制。
+            target_vx = 0.0f;
+            target_vy = 0.0f;
+            target_vz = 0.0f;
+            break;
+        default:
+            break;
+        }
 
         omni_chassis.setRemote(target_vx, target_vy, VZ_OUT);
 
@@ -110,6 +143,7 @@ extern "C" void chassis_task(void *argument)
         //     第一帧发送 4 个底盘驱动轮的控制电流；
         //     第二帧发送其余挂载电机的固定控制指令。
         chassis_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame, 0x200, motor_input[0], motor_input[1], motor_input[2], motor_input[3]);
+        // chassis_motor.Send_CurrentCommand(&BSP_CAN::FDCAN2_TxFrame, 0x200, 3000, 0, 0, 0);
 
         // VescMotors[0].setRpm(rpm);
         // VescMotors[0].setHandbrakeCurrent(3000);
@@ -134,5 +168,5 @@ static void chassis_pid_init(void)
     // 底盘角度 PID：用于姿态或转角闭环控制，当前文件中暂未直接参与主循环计算。
     pid_F_chassis_angle.Init(OUTPUT_CHASSIS_ANGLE, INTERLIMIT_CHASSIS_ANGLE, DEBAND_CHASSIS_ANGLE, KP_CHASSIS_ANGLE, KI_CHASSIS_ANGLE, KD_CHASSIS_ANGLE, 0, 0x00);
     // 航向角保持 PID：根据 IMU yaw 偏差输出底盘自转控制量。
-    pid_yaw.Init(3.5, 0.2, 0.1, 0.5, 0.0, 0.2, 0, 0x00);
+    pid_yaw.Init(3.5, 0.2, 0.1, 0.5, 0.02, 0, 0, 0x00);
 }

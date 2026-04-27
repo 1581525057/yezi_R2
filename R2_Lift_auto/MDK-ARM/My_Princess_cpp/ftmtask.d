@@ -37,6 +37,7 @@ my_princess_cpp/ftmtask.o: TASK\FTMTask.cpp TASK\FTMTask.h \
   ..\Core\Inc\usart.h Device\M2006\M2006Follower.h \
   Device\StepMotor\StepMotorTask.h Device\StepMotor\EmmV5.h \
   Device\RS05\RS05.h Device\RS05\RobStride.h Device\Relay\GripPush.h \
+  TASK\usart_task.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2\cmsis_os.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\FreeRTOS.h \
   ..\Core\Inc\FreeRTOSConfig.h \
