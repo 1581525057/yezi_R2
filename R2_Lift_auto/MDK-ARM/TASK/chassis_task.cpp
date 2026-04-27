@@ -14,6 +14,10 @@
 #include "mieling.h"
 #include "usart_task.h"
 
+extern "C" float WuqiquTask_GetChassisVxTarget(float manual);
+extern "C" float WuqiquTask_GetChassisVyTarget(float manual);
+extern "C" float WuqiquTask_GetChassisVzTarget(float manual);
+
 // 代码回退标志位
 
 // 底盘控制任务内部使用的 PID 初始化函数。
@@ -87,6 +91,10 @@ extern "C" void chassis_task(void *argument)
         target_vx = meiling.getChassisVxTarget(target_vx);
         target_vy = meiling.getChassisVyTarget(target_vy);
         target_vz = meiling.getChassisVzTarget(target_vz);
+
+        target_vx = WuqiquTask_GetChassisVxTarget(target_vx);
+        target_vy = WuqiquTask_GetChassisVyTarget(target_vy);
+        VZ_OUT = WuqiquTask_GetChassisVzTarget(VZ_OUT);
 
 //    
 

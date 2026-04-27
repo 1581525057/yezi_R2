@@ -126,6 +126,7 @@ virtualFolder:
         - path: TASK/usart_task.cpp
         - path: TASK/route_task.cpp
         - path: TASK/FTMTask.cpp
+        - path: TASK/wuqiqu_task.cpp
       folders: []
     - name: DEVICE
       files:
@@ -153,6 +154,7 @@ virtualFolder:
         - path: Route_Plan/mieling.h
         - path: Route_Plan/plan_route.h
         - path: Route_Plan/lift_auto.cpp
+        - path: Route_Plan/wuqiqu.cpp
       folders: []
     - name: ::CMSIS
       files: []

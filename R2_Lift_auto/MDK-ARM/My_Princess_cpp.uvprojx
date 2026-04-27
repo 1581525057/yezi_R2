@@ -1989,6 +1989,11 @@
               <FileType>8</FileType>
               <FilePath>.\TASK\FTMTask.cpp</FilePath>
             </File>
+            <File>
+              <FileName>wuqiqu_task.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\TASK\wuqiqu_task.cpp</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -2103,6 +2108,11 @@
               <FileName>lift_auto.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\Route_Plan\lift_auto.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>wuqiqu.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Route_Plan\wuqiqu.cpp</FilePath>
             </File>
           </Files>
         </Group>
