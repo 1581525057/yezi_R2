@@ -32,9 +32,9 @@ namespace
 
     MeilingTarget_t second_relocation = {
         .preset_id   = 0,
-        .L_ref       = 357.0f,
-        .R_ref       = 662.0f,
-        .F_ref       = 291.8f,
+        .L_ref       = 222.0f,
+        .R_ref       = 293.0f,
+        .F_ref       = 221.8f,
         .tol_lat     = 6.0f,
         .tol_lon     = 6.0f,
         .timeout_ms  = 500000U,
@@ -54,7 +54,7 @@ void ROUTE_TASK::route_reset()
 
 void ROUTE_TASK::vision_choice()
 {
-    //等待视觉指令
+    // 等待视觉指令
     if (state != PHASE_VISION || flag_vision != 1)
         return;
 
@@ -67,13 +67,13 @@ void ROUTE_TASK::vision_choice()
         case 1:
             // Vision command 1: turn left 90 degrees.
             yaw_stable_count = 0;
-            state = PHASE_TURN_LEFT90;
+            state            = PHASE_TURN_LEFT90;
             break;
 
         case 2:
             // Vision command 2: turn right 90 degrees.
             yaw_stable_count = 0;
-            state = PHASE_TURN_RIGHT90;
+            state            = PHASE_TURN_RIGHT90;
             break;
 
         case 7:
@@ -89,8 +89,8 @@ void ROUTE_TASK::vision_choice()
     }
 
     // Clear the command after consuming it so a stale B value cannot retrigger.
-    vision.B     = 0;
-    flag_vision  = 0;
+    vision.B    = 0;
+    flag_vision = 0;
 }
 
 void ROUTE_TASK::meiling_route()
@@ -115,6 +115,8 @@ void ROUTE_TASK::meiling_route()
                     relocation_number = 2;
                     // First relocation is done; wait for a vision command.
                     state = PHASE_VISION;
+                } else if (relocation_result == MeilingLocator::TIMEOUT) {
+                    meiling.start(first_relocation);
                 }
             }
             break;
@@ -131,6 +133,8 @@ void ROUTE_TASK::meiling_route()
                 // Second relocation is done; ask the vision PC for the next action.
                 send_position_to_pc(1, 0, 0, 0, 0);
                 state = PHASE_VISION;
+            } else if (relocation_result == MeilingLocator::TIMEOUT) {
+                meiling.start(second_relocation);
             }
             break;
         }
@@ -186,9 +190,33 @@ void ROUTE_TASK::meiling_route()
     }
 }
 
+extern "C" uint8_t   RouteTask_IsMeilingAreaActive(void)
+{
+    if (route_t.flag_start != 1U) {
+        return 0U;
+    }
+
+    switch (route_t.state) {
+        case FIRST_RELOCATION:
+        case SECOND_RELOCATION:
+        
+        case PHASE_STEP_UP:
+        case PHASE_TURN_LEFT90:
+        case PHASE_TURN_RIGHT90:
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
+uint16_t flag_meiling = 0;
 extern "C" void plan_route(void *argument)
 {
     for (;;) {
+
+        if (flag_meiling == 1) {
+            route_t.route_reset();
+        }
         route_t.vision_choice();
         route_t.meiling_route();
         lift_auto.update();

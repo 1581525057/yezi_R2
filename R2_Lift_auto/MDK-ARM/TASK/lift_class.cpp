@@ -80,7 +80,7 @@ extern "C" void lift_task(void *argument)
                 lift_debug.flag          = 1.0f;
             } else if (now_sw == 2U) {
                 // 2 档对应目标高度
-                lift_debug.height_target = -215.0f;
+                lift_debug.height_target = -225.0f;
                 lift_debug.flag          = 1.0f;
             }
 

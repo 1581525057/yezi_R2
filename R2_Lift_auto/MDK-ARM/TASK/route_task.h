@@ -18,6 +18,11 @@ class ROUTE_TASK
 {
 private:
     /* data */
+
+    uint8_t flag_relocation;
+    uint8_t relocation_number;
+    uint16_t yaw_stable_count;
+
 public:
     Route_state state;
     ROUTE_TASK()
@@ -29,12 +34,19 @@ public:
     void vision_choice();
 
     uint8_t flag_start;
-    uint8_t flag_relocation;
-    uint8_t flag_vision; // 等待视觉数据
-    uint8_t relocation_number;
-    uint16_t yaw_stable_count;
+    uint8_t flag_vision; // 等待视觉数据s
 };
 
 extern ROUTE_TASK route_t;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+uint8_t RouteTask_IsMeilingAreaActive(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

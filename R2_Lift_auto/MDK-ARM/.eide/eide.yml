@@ -2,7 +2,7 @@ version: "4.1"
 name: My_Princess_cpp
 type: ARM
 deviceName: null
-packDir: null
+packDir: .pack/Keil/STM32H7xx_DFP.4.1.2
 srcDirs: []
 virtualFolder:
   name: <virtual_root>
@@ -126,6 +126,7 @@ virtualFolder:
         - path: TASK/usart_task.cpp
         - path: TASK/route_task.cpp
         - path: TASK/FTMTask.cpp
+        - path: TASK/wuqiqu_task.cpp
       folders: []
     - name: DEVICE
       files:
@@ -153,6 +154,7 @@ virtualFolder:
         - path: Route_Plan/mieling.h
         - path: Route_Plan/plan_route.h
         - path: Route_Plan/lift_auto.cpp
+        - path: Route_Plan/wuqiqu.cpp
       folders: []
     - name: ::CMSIS
       files: []
@@ -169,6 +171,7 @@ targets:
         - USE_HAL_DRIVER
         - STM32H723xx
       incList:
+        - .
         - ../Core/Inc
         - ../USB_DEVICE/App
         - ../USB_DEVICE/Target
@@ -321,4 +324,9 @@ targets:
         otherCmds: ""
         proType: 1
         speed: 8000
-    uploader: JLink
+      OpenOCD:
+        baseAddr: "0x08000000"
+        bin: ""
+        interface: stlink
+        target: stm32h7x
+    uploader: OpenOCD
