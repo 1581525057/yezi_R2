@@ -1,6 +1,13 @@
 # EIDE 工程与本地配置不上传
 EIDE_Project/
 MDK-ARM/.eide/
+MDK-ARM/.cmsis/
+MDK-ARM/.pack/
+MDK-ARM/.vscode/
+MDK-ARM/.claude/
+MDK-ARM/.clang-format
+MDK-ARM/.gitignore
+MDK-ARM/*.code-workspace
 **/.eide/
 .eide/
 .eide.usr.ctx.json

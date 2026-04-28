@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(where openocd *)",
-      "Bash(code --list-extensions)",
-      "mcp__ide__getDiagnostics"
-    ]
-  }
-}
