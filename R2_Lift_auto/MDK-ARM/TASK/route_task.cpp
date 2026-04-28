@@ -236,12 +236,12 @@ void ROUTE_TASK::meiling_route()
         }
         else
         {
-            yaw_stable_count = 0;
+            yaw_stable_count = 0;  
         }
 
         // Hold yaw error inside tolerance for 200 cycles before finishing.
         if (yaw_stable_count >= 200)
-        {
+        { 
             yaw_stable_count = 0;
             send_position_to_pc(1, 0, 0, 0, 0);
             state = PHASE_VISION;
