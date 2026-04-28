@@ -190,7 +190,7 @@ void ROUTE_TASK::meiling_route()
     }
 }
 
-extern "C" uint8_t   RouteTask_IsMeilingAreaActive(void)
+extern "C" uint8_t RouteTask_IsMeilingAreaActive(void)
 {
     if (route_t.flag_start != 1U) {
         return 0U;
@@ -199,7 +199,6 @@ extern "C" uint8_t   RouteTask_IsMeilingAreaActive(void)
     switch (route_t.state) {
         case FIRST_RELOCATION:
         case SECOND_RELOCATION:
-        
         case PHASE_STEP_UP:
         case PHASE_TURN_LEFT90:
         case PHASE_TURN_RIGHT90:

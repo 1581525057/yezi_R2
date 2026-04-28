@@ -32,7 +32,7 @@ typedef struct
 
 } imu_t;
 
-class DM_IMU
+struct DM_IMU
 {
 public:
     uint8_t dmimu_data[2][UART_BUFNUM_DM]; // DMA缓存区，从DMA那里接收到数据

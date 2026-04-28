@@ -41,7 +41,6 @@ static float target_vy_last = 0.0f;
 static float target_vz_last = 0.0f;
 float rpm;
 
-chassis_pid yaw;
 float yaw_target;
 extern "C" void chassis_task(void *argument)
 {
@@ -90,27 +89,26 @@ extern "C" void chassis_task(void *argument)
 
         const ChassisAutoSource auto_source = ChassisAuto_SelectSource(WuqiquTask_IsActive(), RouteTask_IsMeilingAreaActive());
 
-        switch (auto_source)
-        {
-        case CHASSIS_AUTO_WUQIQU:
-            target_vx = WuqiquTask_GetChassisVxTarget(target_vx);
-            target_vy = WuqiquTask_GetChassisVyTarget(target_vy);
-            target_vz = WuqiquTask_GetChassisVzTarget(target_vz);
-            break;
-        case CHASSIS_AUTO_MEILING:
-            target_vx = meiling.getChassisVxTarget(target_vx);
-            target_vy = meiling.getChassisVyTarget(target_vy);
-            target_vz = meiling.getChassisVzTarget(target_vz);
-            target_vy = lift_auto.getChassisVyTarget(target_vy);
-            break;
-        case CHASSIS_AUTO_CONFLICT:
-            // 自动任务冲突时清零底盘目标，避免两套规划同时抢控制。
-            target_vx = 0.0f;
-            target_vy = 0.0f;
-            target_vz = 0.0f;
-            break;
-        default:
-            break;
+        switch (auto_source) {
+            case CHASSIS_AUTO_WUQIQU:
+                target_vx = WuqiquTask_GetChassisVxTarget(target_vx);
+                target_vy = WuqiquTask_GetChassisVyTarget(target_vy);
+                target_vz = WuqiquTask_GetChassisVzTarget(target_vz);
+                break;
+            case CHASSIS_AUTO_MEILING:
+                target_vx = meiling.getChassisVxTarget(target_vx);
+                target_vy = meiling.getChassisVyTarget(target_vy);
+                target_vz = meiling.getChassisVzTarget(target_vz);
+                target_vy = lift_auto.getChassisVyTarget(target_vy);
+                break;
+            case CHASSIS_AUTO_CONFLICT:
+                // 自动任务冲突时清零底盘目标，避免两套规划同时抢控制。
+                target_vx = 0.0f;
+                target_vy = 0.0f;
+                target_vz = 0.0f;
+                break;
+            default:
+                break;
         }
 
         omni_chassis.setRemote(target_vx, target_vy, VZ_OUT);

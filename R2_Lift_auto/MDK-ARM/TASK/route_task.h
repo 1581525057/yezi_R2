@@ -1,6 +1,8 @@
 #ifndef _ROUTE_TASK_H
 #define _ROUTE_TASK_H
+
 #include "main.h"
+
 enum Route_state {
     PHASE_IDLE = 0,
     PHASE_VISION,
