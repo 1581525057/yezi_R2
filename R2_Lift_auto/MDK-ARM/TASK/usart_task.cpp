@@ -312,6 +312,20 @@ extern "C" void usart_task(void *argument)
 
         if (Flag1 == 1) {
             send_position_to_pc(0, 1, 0, 0, 0);
+			Flag1 = 0;
+			
+        }
+		
+		 if (Flag1 == 2) {
+            send_position_to_pc(1, 0, 0, 0, 0);
+			Flag1 = 0;
+			
+        }
+
+        if (Flag1 == 3)
+        {
+            dt35.init(&hspi3);
+            Flag1 = 0;
         }
         osDelay(1);
     }
