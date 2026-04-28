@@ -45,6 +45,7 @@ constexpr uint32_t kRs05CommandSettleMs = 200U;    // RS05 指令稳定时间，
 constexpr uint32_t kRs05MoveTimeoutMs = 2000U;     // RS05 动作超时时间，单位：ms
 constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;
 constexpr uint32_t kWuqiquZeroSettleMs = 200U;
+constexpr uint32_t kPlatformMotionDurationMs = 3750U;
 
 /* 释放阶段的 RS05 参数 */
 constexpr float kReleaseRs05Speed = 1.5f;
@@ -139,11 +140,34 @@ struct WuqiquZeroContext
 
 WuqiquZeroContext g_wuqiqu_zero = {0U, 0U, 0U};
 
+enum PlatformMotionDirection
+{
+    PLATFORM_MOTION_NONE = 0,
+    PLATFORM_MOTION_FORWARD,
+    PLATFORM_MOTION_BACKWARD
+};
+
+struct PlatformMotionContext
+{
+    uint8_t active;
+    uint8_t direction;
+    uint32_t start_tick;
+};
+
+PlatformMotionContext g_platform_motion = {0U, PLATFORM_MOTION_NONE, 0U};
+
 void ResetWuqiquZeroContext(void)
 {
     g_wuqiqu_zero.active = 0U;
     g_wuqiqu_zero.start_tick = 0U;
     g_wuqiqu_zero.last_send_tick = 0U;
+}
+
+void ResetPlatformMotionContext(void)
+{
+    g_platform_motion.active = 0U;
+    g_platform_motion.direction = PLATFORM_MOTION_NONE;
+    g_platform_motion.start_tick = 0U;
 }
 
 /**
@@ -206,6 +230,37 @@ void ResetGripStateMachine(void)
 bool HasElapsed(uint32_t start_tick, uint32_t duration_ms)
 {
     return static_cast<uint32_t>(HAL_GetTick() - start_tick) >= duration_ms;
+}
+
+bool RunPlatformMotionLoop(uint8_t direction)
+{
+    if (g_platform_motion.active == 0U || g_platform_motion.direction != direction)
+    {
+        ResetReleaseStateMachine();
+
+        if (direction == PLATFORM_MOTION_FORWARD)
+        {
+            platform_forward();
+        }
+        else
+        {
+            platform_backward();
+        }
+
+        g_platform_motion.active = 1U;
+        g_platform_motion.direction = direction;
+        g_platform_motion.start_tick = HAL_GetTick();
+        return false;
+    }
+
+    if (HasElapsed(g_platform_motion.start_tick, kPlatformMotionDurationMs) == false)
+    {
+        return false;
+    }
+
+    platform_stop();
+    ResetPlatformMotionContext();
+    return true;
 }
 
 /**
@@ -672,6 +727,14 @@ extern "C" void ftm_task(void *argument)
             ResetWuqiquZeroContext();
         }
 
+        if (g_ftm_state != FTM_STATE_PLATFORM_FORWARD &&
+            g_ftm_state != FTM_STATE_PLATFORM_BACKWARD &&
+            g_platform_motion.active != 0U)
+        {
+            platform_stop();
+            ResetPlatformMotionContext();
+        }
+
         switch (g_ftm_state)
         {
         /* 初始化状态 */
@@ -717,21 +780,22 @@ extern "C" void ftm_task(void *argument)
             break;
         /* 推杆伸出状态 */
         case FTM_STATE_PLATFORM_FORWARD:
-            ResetReleaseStateMachine();
-            platform_forward();
-            osDelay(3750); // 30mm / 8mm/s = 3.75s
-            g_ftm_state = FTM_STATE_PLATFORM_STOP;
+            if (RunPlatformMotionLoop(PLATFORM_MOTION_FORWARD) != false)
+            {
+                g_ftm_state = FTM_STATE_PLATFORM_STOP;
+            }
             break;
         /* 推杆缩回状态 */
         case FTM_STATE_PLATFORM_BACKWARD:
-            ResetReleaseStateMachine();
-            platform_backward();
-            osDelay(3750); // 30mm / 8mm/s = 3.75s
-            g_ftm_state = FTM_STATE_PLATFORM_STOP;
+            if (RunPlatformMotionLoop(PLATFORM_MOTION_BACKWARD) != false)
+            {
+                g_ftm_state = FTM_STATE_PLATFORM_STOP;
+            }
             break;
         /* 推杆停止状态 */
         case FTM_STATE_PLATFORM_STOP:
             ResetReleaseStateMachine();
+            ResetPlatformMotionContext();
             platform_stop();
             break;
         /* 夹爪打开状态 */

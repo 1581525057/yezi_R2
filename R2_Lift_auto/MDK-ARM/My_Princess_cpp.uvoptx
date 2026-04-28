@@ -103,7 +103,7 @@
         <bEvRecOn>1</bEvRecOn>
         <bSchkAxf>0</bSchkAxf>
         <bTchkAxf>0</bTchkAxf>
-        <nTsel>3</nTsel>
+        <nTsel>2</nTsel>
         <sDll></sDll>
         <sDllPa></sDllPa>
         <sDlgDll></sDlgDll>
@@ -159,7 +159,7 @@
           <Type>0</Type>
           <LineNumber>184</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134340516</Address>
+          <Address>134338180</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
@@ -169,22 +169,6 @@
           <Filename>.\Route_Plan\meiling.cpp</Filename>
           <ExecCommand></ExecCommand>
           <Expression>\\My_Princess_cpp\Route_Plan/meiling.cpp\184</Expression>
-        </Bp>
-        <Bp>
-          <Number>1</Number>
-          <Type>0</Type>
-          <LineNumber>103</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>134342666</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
-          <Filename>.\TASK\chassis_task.cpp</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression>\\My_Princess_cpp\TASK/chassis_task.cpp\103</Expression>
         </Bp>
       </Breakpoint>
       <WatchWindow1>
@@ -303,6 +287,16 @@
           <WinNumber>1</WinNumber>
           <ItemText>V,0x0A</ItemText>
         </Ww>
+        <Ww>
+          <count>23</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>route_t,0x0A</ItemText>
+        </Ww>
+        <Ww>
+          <count>24</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>wuqiqu_debug,0x0A</ItemText>
+        </Ww>
       </WatchWindow1>
       <WatchWindow2>
         <Ww>
@@ -387,7 +381,7 @@
       <DebugFlag>
         <trace>0</trace>
         <periodic>1</periodic>
-        <aLwin>0</aLwin>
+        <aLwin>1</aLwin>
         <aCover>0</aCover>
         <aSer1>0</aSer1>
         <aSer2>0</aSer2>

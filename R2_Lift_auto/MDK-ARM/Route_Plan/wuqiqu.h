@@ -6,12 +6,9 @@
 typedef struct
 {
     uint8_t state;
-    uint8_t deviation_flag;
-    uint8_t on_final_point_flag;
-    uint16_t final_xy_stable_count;
-    uint16_t final_theta_stable_count;
-    int current_index;
-    int deviation_index;
+    uint8_t on_target_flag;
+    uint16_t xy_stable_count;
+    uint16_t theta_stable_count;
     float pose_x;
     float pose_y;
     float pose_yaw;
@@ -21,12 +18,6 @@ typedef struct
     float err_x;
     float err_y;
     float err_distance;
-    float safe_distance;
-    float dot_product;
-    float normal_vector_x;
-    float normal_vector_y;
-    float normal_vel_x;
-    float normal_vel_y;
     float err_theta;
     float out_vx;
     float out_vy;
@@ -36,94 +27,85 @@ typedef struct
 class WuqiquPathPlanner
 {
 public:
-    static const uint16_t PATH_POINT_COUNT = 14U;
-
     enum PlannerState
     {
         STATE_IDLE = 0,
-        STATE_RUNNING,
-        STATE_FINAL_POSITION,
-        STATE_FINAL_YAW,
+        STATE_MOVING,          // 移动中
+        STATE_YAW_CORRECTING,  // 角度修正中
         STATE_FINISHED,
         STATE_DEVIATED
     };
 
-    class Point
+    // 目标点结构（规划X/Y对齐底盘Vx/Vy）
+    class TargetPoint
     {
     public:
-        float vx;
-        float vy;
-        float x;
-        float y;
-        float yaw;
+        float x_m;       // 规划X / 底盘+Vx方向坐标，单位m
+        float y_m;       // 规划Y / 底盘+Vy方向坐标，单位m
+        float yaw_deg;   // 目标航向角，单位度
     };
 
+    // 当前位姿结构
     class Pose
     {
     public:
-        float x;
-        float y;
-        float yaw;
-        float yaw_360;
-        float car_speed_x;
-        float car_speed_y;
-        float world_speed_x;
-        float world_speed_y;
-        float omega;
+        float x;          // 规划X / 底盘+Vx方向坐标，单位m
+        float y;          // 规划Y / 底盘+Vy方向坐标，单位m
+        float yaw;        // 航向角，单位rad
+        float yaw_360;    // 航向角，单位度
+        float car_speed_x;  // 车体系速度X，单位m/s
+        float car_speed_y;  // 车体系速度Y，单位m/s
+        float world_speed_x; // 规划X / 底盘Vx方向速度，单位m/s
+        float world_speed_y; // 规划Y / 底盘Vy方向速度，单位m/s
+        float omega;      // 角速度，单位rad/s
     };
 
+    // 输出结构（规划X/Y速度）
     class Output
     {
     public:
-        float world_vx_set;
-        float world_vy_set;
-        float wz_set;
+        float world_vx_mps; // 规划X / 底盘Vx方向速度，单位m/s
+        float world_vy_mps; // 规划Y / 底盘Vy方向速度，单位m/s
+        float wz_radps;     // 角速度，单位rad/s
     };
 
     WuqiquPathPlanner();
 
+    // 设置目标点（规划X/Y对齐底盘Vx/Vy，单位m, m, 度）
+    void setTarget(float x_m, float y_m, float yaw_deg);
+
+    // 执行导航（每周期调用）
     int follow(const Pose &current_pose);
+
+    // 复位
     void reset(void);
 
+    // 获取输出
     const Output &getOutput(void) const;
-    int getCurrentIndex(void) const;
-    PlannerState getState(void) const;
-    uint8_t getDeviationFlag(void) const;
-    int getDeviationIndex(void) const;
-    const Point *getPath(void) const;
-    uint16_t getPathPointCount(void) const;
 
-    float slewRateLimit(float target_vel, float current_vel, float max_acc_step, float max_dec_step) const;
+    // 获取状态
+    PlannerState getState(void) const;
+    bool isFinished(void) const;
 
 private:
-    static const Point action_path_[PATH_POINT_COUNT];
+    TargetPoint target_;       // 目标点
+    Output output_;            // 输出速度
+    PlannerState state_;       // 当前状态
 
-    int current_path_index_;
-    uint8_t vel_calculate_enter_flag_;
-    uint8_t final_point_xy_correct_flag_;
-    uint8_t final_point_theta_correct_flag_;
-    uint8_t on_final_point_flag_;
-    uint16_t point_stable_count_;
-    uint16_t final_xy_stable_count_;
-    uint16_t final_theta_stable_count_;
-    PlannerState state_;
-    uint8_t deviation_flag_;
-    int deviation_index_;
-
-    float last_err_theta_normal_;
-    float last_vector4_[2];
+    // PD控制历史误差
     float last_err_x_;
     float last_err_y_;
-    float last_err_theta_final_;
+    float last_err_yaw_rad_;
 
-    Output output_;
+    // 到达判定
+    uint8_t on_target_flag_;
+    uint16_t xy_stable_count_;
+    uint16_t theta_stable_count_;
 
-    uint8_t safeCheck(const Point &cur_tar_point, const Pose &current_pose) const;
-    void pointCalculate(const Pose &current_pose);
-    int finPointCalculate(const Pose &current_pose);
-    float normalizeAngle(float angle) const;
+    // 工具函数
+    float normalizeAngleRad(float angle) const;
+    float normalizeAngleDeg(float angle) const;
     float safeSqrt(float value) const;
-    float safeInvSqrt(float value) const;
 };
 
 extern WuqiquPathPlanner wuqiqu;
