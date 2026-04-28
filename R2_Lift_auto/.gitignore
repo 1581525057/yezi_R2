@@ -1,0 +1,10 @@
+# EIDE 工程与本地配置不上传
+EIDE_Project/
+MDK-ARM/.eide/
+**/.eide/
+.eide/
+.eide.usr.ctx.json
+*eide*
+*EIDE*
+*.ept
+*.eide-template
