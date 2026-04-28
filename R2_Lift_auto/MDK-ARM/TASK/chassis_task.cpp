@@ -62,14 +62,16 @@ extern "C" void chassis_task(void *argument)
     osDelay(200);
 
     //
-    while (1) {
+    while (1)
+    {
 
         // 1. 更新遥控器/离线保护等状态，并刷新底盘控制指令。
         remove_dji.monitor();
         remove_dji.updateChassosCommand();
 
         // 2. 读取 4 个底盘电机的实时转速，为后续底盘状态解算提供输入。
-        for (uint8_t i = 0; i < 4; i++) {
+        for (uint8_t i = 0; i < 4; i++)
+        {
             omni_chassis.now.rpm[i] = chassis_motor.Chassis_Motor[i].Data.Rpm;
         }
         // 3. 正运动学解算：根据各轮转速反推出底盘当前线速度等状态量。
@@ -79,7 +81,7 @@ extern "C" void chassis_task(void *argument)
         // 4. 遥控器输入处理：
         //    当拨杆处于指定档位时，启用航向保持控制，通过 yaw PID 输出底盘自转角速度。
 
-        VZ_OUT = -pid_yaw.PID_Calculate_Angle(dm_imu.imu.yaw, yaw_target);
+        VZ_OUT = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
 
         // 5. 生成底盘目标速度：
         //    - x 方向速度直接使用上层输入
@@ -168,5 +170,5 @@ static void chassis_pid_init(void)
     // 底盘角度 PID：用于姿态或转角闭环控制，当前文件中暂未直接参与主循环计算。
     pid_F_chassis_angle.Init(OUTPUT_CHASSIS_ANGLE, INTERLIMIT_CHASSIS_ANGLE, DEBAND_CHASSIS_ANGLE, KP_CHASSIS_ANGLE, KI_CHASSIS_ANGLE, KD_CHASSIS_ANGLE, 0, 0x00);
     // 航向角保持 PID：根据 IMU yaw 偏差输出底盘自转控制量。
-    pid_yaw.Init(3.5, 0.2, 0.1, 0.5, 0.02, 0, 0, 0x00);
+    pid_yaw.Init(2.5, 0.2, 0.1, 0.5, 0.02, 0, 0, 0x00);
 }

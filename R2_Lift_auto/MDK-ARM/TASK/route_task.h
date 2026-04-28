@@ -1,11 +1,15 @@
 #ifndef _ROUTE_TASK_H
 #define _ROUTE_TASK_H
+
 #include "main.h"
-enum Route_state {
+
+enum Route_state
+{
     PHASE_IDLE = 0,
     PHASE_VISION,
     FIRST_RELOCATION,   // 第一次重定位
     SECOND_RELOCATION,  // 第二次重定位
+    THIRD_RELOCATION,  // 第三次重定位
     PHASE_STEP_UP,      // 上台阶
     PHASE_STEP_DOWN,    // 下台阶
     PHASE_PICK_KFS,     // 取KFS

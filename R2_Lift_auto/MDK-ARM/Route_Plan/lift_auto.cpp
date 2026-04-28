@@ -5,7 +5,7 @@
 namespace
 {
     static const float LIFT_AUTO_APPROACH_VY_MPS = 0.6f;
-    static const float LIFT_AUTO_CLIMB_SPEED_MPS = 0.32f;
+    static const float LIFT_AUTO_CLIMB_SPEED_MPS = 0.35f;
     static const uint32_t LIFT_AUTO_PREPARE_MM = 45U;
     static const uint32_t LIFT_AUTO_NEW_HEIGHT_MM = 1230U;
     static const uint32_t LIFT_AUTO_FINISH_MM = 630U;
