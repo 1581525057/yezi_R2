@@ -1,56 +1,45 @@
 #include "wuqiqu.h"
 #include <math.h>
-
+//debug变量
 WuqiquDebug_t wuqiqu_debug = {};
-
 namespace
 {
     static const float WUQIQU_PI = 3.14159265358979323846f;
     static const float kDegToRad = WUQIQU_PI / 180.0f;
 
-    /* P控制参数（D暂时关闭） */
-    static const float kPosKp = 0.5f;   // 位置P增益
-    static const float kPosKd = 0.0f;   // 位置D增益
-    static const float kYawKp = 0.5f;   // 角度P增益
-    static const float kYawKd = 0.0f;   // 角度D增益
+    /* PD控制参数 */
+    float kPosKp = 5.0f;   // 位置P增益
+    float kPosKd = 0.0f;   // 位置D增益
+    float kYawKp = 0.5f;   // 角度P增益
+    float kYawKd = 0.0f;   // 角度D增益
 
     /* 速度限幅 */
-    static const float kMaxLinearSpeedMps = 2.0f;
     static const float kMaxAngularSpeedRadps = 0.8f;
+    /* 平移阶段 yaw 并行修正角速度限幅（较小，避免旋转干扰平移精度） */
+    static const float kMovingYawMaxRadps = 0.3f;
 
     /* 到达判定阈值 */
     static const float kPosToleranceM = 0.010f;      // 位置容差 10mm
     static const float kYawToleranceDeg = 1.0f;      // 角度容差 1度
     static const uint16_t kStableCount = 80U;        // 稳定计数
 
-    /* 预定义目标点（规划X/Y对齐底盘Vx/Vy，单位：m, m, 度）*/
-    static const float kTargetX = 0.0f;        // 底盘 +Vx 方向 0m
-    static const float kTargetY = 1.0f;        // 底盘 +Vy 方向 1m
-    static const float kTargetYawDeg = 0.0f;   // 度
+    /* debug 目标点（视觉坐标系，单位：m, m, 度）
+     * kVisionTargetX  对应 vision.x_diff 的期望值
+     * kVisionTargetY  对应 vision.y_diff 的期望值
+     * kVisionTargetYawDeg 对应 vision.angle_x 的期望值
+     * 内部会自动转换为规划坐标，中间映射链不变。 */
+    float kVisionTargetX = 1.0f;         // 期望 vision.x_diff
+    float kVisionTargetY = 0.0f;         // 期望 vision.y_diff
+    float kVisionTargetYawDeg = 0.0f;    // 期望 vision.angle_x，度
 
-    uint8_t hasPassedTargetPlane(float pose_x, float pose_y, float target_x, float target_y)
-    {
-        const float target_len_square = target_x * target_x + target_y * target_y;
-
-        if (target_len_square <= 0.000001f)
-        {
-            return 0U;
-        }
-
-        const float progress = pose_x * target_x + pose_y * target_y;
-        return (progress >= target_len_square) ? 1U : 0U;
-    }
-
-    void limitPlanarVelocity(float &vx, float &vy, float max_speed)
-    {
-        const float speed = sqrtf(vx * vx + vy * vy);
-        if (speed > max_speed && speed > 0.000001f)
-        {
-            const float scale = max_speed / speed;
-            vx *= scale;
-            vy *= scale;
-        }
-    }
+    /* wuqiqu_task.cpp 中的映射常量（保持一致）：
+     * plannerX = -1.0 * vision.y_diff    (kVisionYToPlannerX = -1)
+     * plannerY = +1.0 * vision.x_diff    (kVisionXToPlannerY = +1)
+     * 因此反推：
+     * targetPlannerX = -1.0 * kVisionTargetY
+     * targetPlannerY = +1.0 * kVisionTargetX */
+    constexpr float kVisionYToPlannerX = -1.0f;
+    constexpr float kVisionXToPlannerY =  1.0f;
 }
 
 WuqiquPathPlanner wuqiqu;
@@ -58,10 +47,10 @@ WuqiquPathPlanner wuqiqu;
 WuqiquPathPlanner::WuqiquPathPlanner()
 {
     reset();
-    // 设置默认目标点
-    target_.x_m = kTargetX;
-    target_.y_m = kTargetY;
-    target_.yaw_deg = kTargetYawDeg;
+    // 设置默认目标点（视觉坐标 → 规划坐标）
+    target_.x_m = kVisionYToPlannerX * kVisionTargetY;
+    target_.y_m = kVisionXToPlannerY * kVisionTargetX;
+    target_.yaw_deg = kVisionTargetYawDeg;
 }
 
 void WuqiquPathPlanner::setTarget(float x_m, float y_m, float yaw_deg)
@@ -92,6 +81,11 @@ void WuqiquPathPlanner::reset(void)
 
 int WuqiquPathPlanner::follow(const Pose &current_pose)
 {
+    /* 每次都同步目标点（视觉坐标 → 规划坐标），方便 debug 时修改实时生效 */
+    target_.x_m = kVisionYToPlannerX * kVisionTargetY;
+    target_.y_m = kVisionXToPlannerY * kVisionTargetX;
+    target_.yaw_deg = kVisionTargetYawDeg;
+
     /* 计算位置误差 */
     const float err_x_m = target_.x_m - current_pose.x;
     const float err_y_m = target_.y_m - current_pose.y;
@@ -139,7 +133,7 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         {
             xy_stable_count_ = 0U;
 
-            /* 位置环P控制（规划X/Y对齐底盘Vx/Vy） */
+            /* 位置环控制（规划X/Y对齐底盘Vx/Vy） */
             float world_vx_mps = kPosKp * err_x_m + kPosKd * (err_x_m - last_err_x_);
             float world_vy_mps = kPosKp * err_y_m + kPosKd * (err_y_m - last_err_y_);
 
@@ -147,15 +141,22 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
             last_err_x_ = err_x_m;
             last_err_y_ = err_y_m;
 
-            /* 速度限幅 */
-            limitPlanarVelocity(world_vx_mps, world_vy_mps, kMaxLinearSpeedMps);
-
             output_.world_vx_mps = world_vx_mps;
             output_.world_vy_mps = world_vy_mps;
         }
 
-        /* 平移阶段不修正yaw，避免平移和旋转互相耦合。 */
-        output_.wz_radps = 0.0f;
+        /* 平移阶段并行修正 yaw：PD 控制，角速度限幅较小以减少对平移的干扰 */
+        {
+            float wz_cmd = -(kYawKp * err_yaw_rad + kYawKd * (err_yaw_rad - last_err_yaw_rad_));
+            last_err_yaw_rad_ = err_yaw_rad;
+
+            if (wz_cmd > kMovingYawMaxRadps)
+                wz_cmd = kMovingYawMaxRadps;
+            else if (wz_cmd < -kMovingYawMaxRadps)
+                wz_cmd = -kMovingYawMaxRadps;
+
+            output_.wz_radps = wz_cmd;
+        }
         break;
 
     case STATE_YAW_CORRECTING:
@@ -179,7 +180,7 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         {
             theta_stable_count_ = 0U;
 
-            /* 角度环P控制 */
+            /* 角度环PD控制 */
             output_.wz_radps = -(kYawKp * err_yaw_rad + kYawKd * (err_yaw_rad - last_err_yaw_rad_));
             last_err_yaw_rad_ = err_yaw_rad;
 
@@ -237,15 +238,6 @@ WuqiquPathPlanner::PlannerState WuqiquPathPlanner::getState(void) const
 bool WuqiquPathPlanner::isFinished(void) const
 {
     return (state_ == STATE_FINISHED);
-}
-
-float WuqiquPathPlanner::normalizeAngleRad(float angle) const
-{
-    while (angle > WUQIQU_PI)
-        angle -= 2.0f * WUQIQU_PI;
-    while (angle < -WUQIQU_PI)
-        angle += 2.0f * WUQIQU_PI;
-    return angle;
 }
 
 float WuqiquPathPlanner::normalizeAngleDeg(float angle) const

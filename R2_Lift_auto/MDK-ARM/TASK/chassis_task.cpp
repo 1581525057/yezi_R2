@@ -115,7 +115,7 @@ extern "C" void chassis_task(void *argument)
             break;
         }
 
-        omni_chassis.setRemote(target_vx, target_vy, VZ_OUT);
+        omni_chassis.setRemote(target_vx, target_vy, remove_dji.chassis_.Vz);
 
         // 6. 速度控制 PID：
         //    根据当前速度与目标速度误差，计算底盘在 x/y 方向所需的驱动力。

@@ -758,12 +758,6 @@ extern "C" void ftm_task(void *argument)
                 g_ftm_state = FTM_STATE_MOVE;
             }
             break;
-
-            // 先翻转到半开位，减小后续夹持时的瞬态冲击。
-            RS05_PositionControl(Speed, kGripClawPreOpenAngleRad);
-
-            // 再翻转到最终角度。
-            RS05_PositionControl(Speed, kGripClawFinalAngleRad);
         /* 抓取武器头后回收爪子一半 平台下降80状态 */
         case FTM_STATE_RELEASE:
             if (RunReleaseLoop() != false)

@@ -4,6 +4,8 @@
             "path": "."
         }
     ],
-    "settings": {},
+    "settings": {
+        "stm32LiveWatch.elfPath": "f:\\yezi_R2\\R2_Lift_auto\\MDK-ARM\\build\\My_Princess_cpp\\My_Princess_cpp.elf"
+    },
     "extensions": {}
 }

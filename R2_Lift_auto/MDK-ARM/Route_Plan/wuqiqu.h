@@ -103,7 +103,6 @@ private:
     uint16_t theta_stable_count_;
 
     // 工具函数
-    float normalizeAngleRad(float angle) const;
     float normalizeAngleDeg(float angle) const;
     float safeSqrt(float value) const;
 };

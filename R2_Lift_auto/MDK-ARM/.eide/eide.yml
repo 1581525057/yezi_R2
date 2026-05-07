@@ -205,7 +205,8 @@ targets:
         - RTE/_My_Princess_cpp
       libList: []
     excludeList: []
-    settings: {}
+    settings:
+      debugger: cortex-debug
     toolchain: AC6
     toolchainConfigMap:
       AC6:
@@ -327,6 +328,6 @@ targets:
       OpenOCD:
         baseAddr: "0x08000000"
         bin: ""
-        interface: stlink
+        interface: cmsis-dap
         target: stm32h7x
     uploader: OpenOCD

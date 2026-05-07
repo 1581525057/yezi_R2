@@ -47,18 +47,23 @@ float limitFloat(float value, float min_value, float max_value)
     return value;
 }
 
-/* 单轴斜率限制：加速和减速可以设置不同步长。 */
+/* 单轴斜率限制：根据速度绝对值增减判断加速/减速。 */
 float slewRateLimit(float target, float current, float acc_step, float dec_step)
 {
     const float err = target - current;
 
-    if (err > acc_step)
+    /* 判断是加速还是减速：
+     * 绝对值增大 → 加速（远离零点），用较小的 acc_step
+     * 绝对值减小 → 减速（靠近零点），用较大的 dec_step */
+    const float step = (fabsf(target) > fabsf(current)) ? acc_step : dec_step;
+
+    if (err > step)
     {
-        return current + acc_step;
+        return current + step;
     }
-    if (err < -dec_step)
+    if (err < -step)
     {
-        return current - dec_step;
+        return current - step;
     }
     return target;
 }
