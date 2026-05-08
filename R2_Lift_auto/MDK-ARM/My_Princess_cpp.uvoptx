@@ -292,11 +292,6 @@
           <WinNumber>1</WinNumber>
           <ItemText>route_t,0x0A</ItemText>
         </Ww>
-        <Ww>
-          <count>24</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>wuqiqu_debug,0x0A</ItemText>
-        </Ww>
       </WatchWindow1>
       <WatchWindow2>
         <Ww>

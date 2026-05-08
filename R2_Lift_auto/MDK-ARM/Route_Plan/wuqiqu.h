@@ -3,27 +3,6 @@
 
 #include <stdint.h>
 
-typedef struct
-{
-    uint8_t state;
-    uint8_t on_target_flag;
-    uint16_t xy_stable_count;
-    uint16_t theta_stable_count;
-    float pose_x;
-    float pose_y;
-    float pose_yaw;
-    float target_x;
-    float target_y;
-    float target_yaw;
-    float err_x;
-    float err_y;
-    float err_distance;
-    float err_theta;
-    float out_vx;
-    float out_vy;
-    float out_wz;
-} WuqiquDebug_t;
-
 class WuqiquPathPlanner
 {
 public:
@@ -108,6 +87,5 @@ private:
 };
 
 extern WuqiquPathPlanner wuqiqu;
-extern WuqiquDebug_t wuqiqu_debug;
 
 #endif

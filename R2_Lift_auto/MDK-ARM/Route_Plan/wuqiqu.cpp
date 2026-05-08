@@ -1,7 +1,5 @@
 #include "wuqiqu.h"
 #include <math.h>
-//debug变量
-WuqiquDebug_t wuqiqu_debug = {};
 namespace
 {
     static const float WUQIQU_PI = 3.14159265358979323846f;
@@ -23,21 +21,21 @@ namespace
     static const float kYawToleranceDeg = 1.0f;      // 角度容差 1度
     static const uint16_t kStableCount = 80U;        // 稳定计数
 
-    /* debug 目标点（视觉坐标系，单位：m, m, 度）
-     * kVisionTargetX  对应 vision.x_diff 的期望值
-     * kVisionTargetY  对应 vision.y_diff 的期望值
-     * kVisionTargetYawDeg 对应 vision.angle_x 的期望值
+    /* 默认目标点（视觉坐标系，单位：m, m, 度）
+     * kDefaultVisionTargetX  对应 vision.x_diff 的期望值
+     * kDefaultVisionTargetY  对应 vision.y_diff 的期望值
+     * kDefaultVisionTargetYawDeg 对应 vision.angle_x 的期望值
      * 内部会自动转换为规划坐标，中间映射链不变。 */
-    float kVisionTargetX = 1.0f;         // 期望 vision.x_diff
-    float kVisionTargetY = 0.0f;         // 期望 vision.y_diff
-    float kVisionTargetYawDeg = 0.0f;    // 期望 vision.angle_x，度
+    static const float kDefaultVisionTargetX = 1.0f;         // 期望 vision.x_diff
+    static const float kDefaultVisionTargetY = 0.0f;         // 期望 vision.y_diff
+    static const float kDefaultVisionTargetYawDeg = 0.0f;    // 期望 vision.angle_x，度
 
     /* wuqiqu_task.cpp 中的映射常量（保持一致）：
      * plannerX = -1.0 * vision.y_diff    (kVisionYToPlannerX = -1)
      * plannerY = +1.0 * vision.x_diff    (kVisionXToPlannerY = +1)
      * 因此反推：
-     * targetPlannerX = -1.0 * kVisionTargetY
-     * targetPlannerY = +1.0 * kVisionTargetX */
+     * targetPlannerX = -1.0 * kDefaultVisionTargetY
+     * targetPlannerY = +1.0 * kDefaultVisionTargetX */
     constexpr float kVisionYToPlannerX = -1.0f;
     constexpr float kVisionXToPlannerY =  1.0f;
 }
@@ -48,9 +46,9 @@ WuqiquPathPlanner::WuqiquPathPlanner()
 {
     reset();
     // 设置默认目标点（视觉坐标 → 规划坐标）
-    target_.x_m = kVisionYToPlannerX * kVisionTargetY;
-    target_.y_m = kVisionXToPlannerY * kVisionTargetX;
-    target_.yaw_deg = kVisionTargetYawDeg;
+    target_.x_m = kVisionYToPlannerX * kDefaultVisionTargetY;
+    target_.y_m = kVisionXToPlannerY * kDefaultVisionTargetX;
+    target_.yaw_deg = kDefaultVisionTargetYawDeg;
 }
 
 void WuqiquPathPlanner::setTarget(float x_m, float y_m, float yaw_deg)
@@ -75,17 +73,10 @@ void WuqiquPathPlanner::reset(void)
     output_.world_vy_mps = 0.0f;
     output_.wz_radps = 0.0f;
 
-    wuqiqu_debug = WuqiquDebug_t();
-    wuqiqu_debug.state = (uint8_t)state_;
 }
 
 int WuqiquPathPlanner::follow(const Pose &current_pose)
 {
-    /* 每次都同步目标点（视觉坐标 → 规划坐标），方便 debug 时修改实时生效 */
-    target_.x_m = kVisionYToPlannerX * kVisionTargetY;
-    target_.y_m = kVisionXToPlannerY * kVisionTargetX;
-    target_.yaw_deg = kVisionTargetYawDeg;
-
     /* 计算位置误差 */
     const float err_x_m = target_.x_m - current_pose.x;
     const float err_y_m = target_.y_m - current_pose.y;
@@ -172,7 +163,6 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
             {
                 reset();
                 state_ = STATE_FINISHED;
-                wuqiqu_debug.state = (uint8_t)state_;
                 return 1;  // 完成
             }
         }
@@ -202,25 +192,6 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         output_.wz_radps = 0.0f;
         break;
     }
-
-    /* 更新调试信息 */
-    wuqiqu_debug.state = (uint8_t)state_;
-    wuqiqu_debug.on_target_flag = on_target_flag_;
-    wuqiqu_debug.xy_stable_count = xy_stable_count_;
-    wuqiqu_debug.theta_stable_count = theta_stable_count_;
-    wuqiqu_debug.pose_x = current_pose.x;
-    wuqiqu_debug.pose_y = current_pose.y;
-    wuqiqu_debug.pose_yaw = current_pose.yaw;
-    wuqiqu_debug.target_x = target_.x_m;
-    wuqiqu_debug.target_y = target_.y_m;
-    wuqiqu_debug.target_yaw = target_.yaw_deg;
-    wuqiqu_debug.err_x = err_x_m;
-    wuqiqu_debug.err_y = err_y_m;
-    wuqiqu_debug.err_distance = distance_m;
-    wuqiqu_debug.err_theta = err_yaw_deg;
-    wuqiqu_debug.out_vx = output_.world_vx_mps;
-    wuqiqu_debug.out_vy = output_.world_vy_mps;
-    wuqiqu_debug.out_wz = output_.wz_radps;
 
     return 0;
 }
