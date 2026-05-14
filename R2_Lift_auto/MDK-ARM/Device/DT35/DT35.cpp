@@ -3,9 +3,9 @@
 DT35 dt35;
 
 /* ======================== GPIO Helpers =================================== */
-#define ADS8688_CS_LOW() HAL_GPIO_WritePin(ADS8688_CS_PORT, ADS8688_CS_PIN, GPIO_PIN_RESET)
-#define ADS8688_CS_HIGH() HAL_GPIO_WritePin(ADS8688_CS_PORT, ADS8688_CS_PIN, GPIO_PIN_SET)
-#define ADS8688_RST_LOW() HAL_GPIO_WritePin(ADS8688_RST_PORT, ADS8688_RST_PIN, GPIO_PIN_RESET)
+#define ADS8688_CS_LOW()   HAL_GPIO_WritePin(ADS8688_CS_PORT, ADS8688_CS_PIN, GPIO_PIN_RESET)
+#define ADS8688_CS_HIGH()  HAL_GPIO_WritePin(ADS8688_CS_PORT, ADS8688_CS_PIN, GPIO_PIN_SET)
+#define ADS8688_RST_LOW()  HAL_GPIO_WritePin(ADS8688_RST_PORT, ADS8688_RST_PIN, GPIO_PIN_RESET)
 #define ADS8688_RST_HIGH() HAL_GPIO_WritePin(ADS8688_RST_PORT, ADS8688_RST_PIN, GPIO_PIN_SET)
 
 /* ======================== ADS8688 SPI Protocol ============================ */
@@ -98,8 +98,7 @@ void DT35::ADS8688_Init(void)
 
     /* 回读校验 */
     uint8_t retry = 0;
-    while (ADS8688_ReadReg(ADS8688_REG_AUTO_SEQ_EN) != 0x0F)
-    {
+    while (ADS8688_ReadReg(ADS8688_REG_AUTO_SEQ_EN) != 0x0F) {
         ADS8688_WriteReg(ADS8688_REG_AUTO_SEQ_EN, 0x0F);
         ADS8688_WriteReg(ADS8688_REG_CH_PD, 0xF0);
         HAL_Delay(50);
@@ -127,9 +126,12 @@ void DT35::init(SPI_HandleTypeDef *hspi)
     ADS8688_Init();
 }
 
+// EMA 滤波系数：N 越大越平滑，N=4 对应 alpha=0.25
+#define DT35_EMA_N 4
+
 static void convert_channel(uint16_t raw, DT35_Data_t &out, uint8_t channel)
 {
-    out.adc_raw = raw;
+    out.adc_raw   = raw;
     out.voltage_V = (float)raw * ADS8688_FS_VOLTAGE / ADS8688_ADC_MAX;
 
     float v = out.voltage_V;
@@ -139,12 +141,26 @@ static void convert_channel(uint16_t raw, DT35_Data_t &out, uint8_t channel)
     if (v > DT35_VOLTAGE_MAX_V)
         v = DT35_VOLTAGE_MAX_V;
 
-    switch (channel)
-    {
-    case 0:  out.distance_mm = 471.917f   * v + 37.495f;  break; // 测试1
-    case 1:  out.distance_mm = 466.865f   * v + 44.383f;  break; // 测试2
-    case 2:  out.distance_mm = 488.73101f * v + 41.85081f; break; // 测试3
-    default: out.distance_mm = 0; break;
+    switch (channel) {
+        case 0:
+            out.distance_mm = 162.34842f * v + 17.81856f;
+            break;
+        case 1:
+            out.distance_mm = 296.76123f * v + 40.242f;
+            break;
+        case 2:
+            out.distance_mm = 488.73101f * v + 41.85081f;
+            break;
+        default:
+            out.distance_mm = 0;
+            break;
+    }
+
+    // 首次采样直接赋值，后续 EMA 滤波
+    if (out.valid == 0U) {
+        out.distance_filtered = out.distance_mm;
+    } else {
+        out.distance_filtered += (out.distance_mm - out.distance_filtered) / (float)DT35_EMA_N;
     }
 }
 

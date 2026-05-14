@@ -25,12 +25,7 @@ extern "C" {
 #define KD_LIFT_MOVE 0
 
 // 底盘pid
-#define OUTPUT_CHASSIS_3508 16384
-#define INTERLIMIT_CHASSIS_3508 2000
-#define DEBAND_CHASSIS_3508 1
-#define KP_CHASSIS_3508 15
-#define KI_CHASSIS_3508 0.8
-#define KD_CHASSIS_3508 0
+
 
 // 底盘整体
 #define OUTPUT_CHASSIS_LINEAR 6

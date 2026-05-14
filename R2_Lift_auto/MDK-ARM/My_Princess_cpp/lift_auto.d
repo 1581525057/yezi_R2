@@ -34,4 +34,5 @@ my_princess_cpp/lift_auto.o: Route_Plan\lift_auto.cpp \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_ll_usb.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pcd_ex.h \
-  Device\DT35\DT35.h Route_Plan\mieling.h
+  Device\DT35\DT35.h Route_Plan\mieling.h TASK\usart_task.h \
+  TASK\lift_class.h

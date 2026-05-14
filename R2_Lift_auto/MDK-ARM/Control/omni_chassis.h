@@ -45,6 +45,20 @@ public:
     float torqueToCurrent(float T);
     float currentToTorque(int current);
 
+    // 旧坐标系 ↔ 新坐标系转换
+    // 旧系: +X=右, +Y=前  →  新系: +X=前, +Y=左
+    static inline void legacyToCurrent(float legacy_x, float legacy_y, float *current_x, float *current_y)
+    {
+        *current_x = legacy_y;
+        *current_y = -legacy_x;
+    }
+
+    static inline void currentToLegacy(float current_x, float current_y, float *legacy_x, float *legacy_y)
+    {
+        *legacy_x = -current_y;
+        *legacy_y = current_x;
+    }
+
 public:
     Speed_t target; // 目标速度
     Speed_t now;    // 当前速度

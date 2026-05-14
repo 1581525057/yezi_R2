@@ -9,6 +9,7 @@
 #include "PID.h"
 #include "yun_j60.h"
 #include "lift_auto.h"
+#include <math.h>
 
 // 根据 2006 电机反馈转速，换算当前升降轮的线速度
 static void calc_linear_speed_from_motor_rpm(void);
@@ -31,6 +32,27 @@ static void calc_motor_rpm_from_linear_speed_target(float linear_speed_target);
 PID pid_lift_left, pid_lift_right;
 // 升降轮速度控制 PID
 PID pid_2006_r, pid_2006_l;
+// 抬升动作实际到位允许误差，单位 mm。
+static const float LIFT_HEIGHT_FINISH_TOLERANCE_MM = 5.0f;
+
+static inline uint8_t LiftHeight_IsMoveFinished(float elapsed_time,
+                                                float total_time,
+                                                float target_height,
+                                                float left_height,
+                                                float right_height,
+                                                float tolerance)
+{
+    if (elapsed_time >= total_time) {
+        return 1U;
+    }
+
+    if (fabsf(left_height - target_height) <= tolerance &&
+        fabsf(right_height - target_height) <= tolerance) {
+        return 1U;
+    }
+
+    return 0U;
+}
 
 // 升降机构实时状态
 Lift_Class lift_class;
@@ -211,6 +233,7 @@ static void lift_height_set_target(LiftHeight_t *lift, float target, float T)
     lift->start_time    = DWT_.getTimeline_s();
     lift->started       = 1;
     lift->finished      = 0;
+    lift->command_seq++;
 
     // 如果给出的轨迹时间小于等于 0，则直接瞬时到目标值
     if (T <= 0.0f) {
@@ -244,8 +267,13 @@ static float lift_height_input(LiftHeight_t *lift)
     if (t <= 0.0f) {
         // 时间未正式开始时，保持起点高度
         lift->current_height = lift->start_height;
-    } else if (t >= lift->total_time) {
-        // 超过总时间后，直接到终点并标记完成
+    } else if (LiftHeight_IsMoveFinished(t,
+                                         lift->total_time,
+                                         lift->target_height,
+                                         lift_class.left.height,
+                                         lift_class.right.height,
+                                         LIFT_HEIGHT_FINISH_TOLERANCE_MM) != 0U) {
+        // 时间到达，或者左右实际高度已经到位，都直接切到目标高度并标记完成。
         lift->current_height = lift->target_height;
         lift->finished       = 1U;
     } else {

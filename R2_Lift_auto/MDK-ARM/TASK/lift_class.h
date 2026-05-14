@@ -49,6 +49,7 @@ typedef struct
     float start_time;
     uint8_t started;
     uint8_t finished;
+    uint32_t command_seq; // 每次重新生成高度轨迹时递增，用于外部判断是否已经接收到新动作。
 } LiftHeight_t;
 
 typedef struct debug_lift {

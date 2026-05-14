@@ -22,11 +22,15 @@ void OmniChassis::setRemote(float Vx, float Vy, float Vz)
 // 全向轮逆解算
 void OmniChassis::inverseKinematics()
 {
+    float legacy_vx = 0.0f;
+    float legacy_vy = 0.0f;
+    OmniChassis::currentToLegacy(target.Vx, target.Vy, &legacy_vx, &legacy_vy);
+
     if (flag == 0) {
-        target.rpm[0] = -(-a * target.Vx + a * target.Vy - target.Vz * b) * 60.0f / wheel_circumference;
-        target.rpm[1] = -(-a * target.Vx - a * target.Vy - target.Vz * b) * 60.0f / wheel_circumference;
-        target.rpm[2] = -(a * target.Vx - a * target.Vy - target.Vz * b) * 60.0f / wheel_circumference;
-        target.rpm[3] = -(a * target.Vx + a * target.Vy - target.Vz * b) * 60.0f / wheel_circumference;
+        target.rpm[0] = -(-a * legacy_vx + a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
+        target.rpm[1] = -(-a * legacy_vx - a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
+        target.rpm[2] = -(a * legacy_vx - a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
+        target.rpm[3] = -(a * legacy_vx + a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
     } else if (flag == 1) {
     }
 
@@ -58,8 +62,7 @@ void OmniChassis::forwardKinematics()
 
     if (flag == 1) {
     } else {
-        now.Vx = Vx_body;
-        now.Vy = Vy_body;
+        OmniChassis::legacyToCurrent(Vx_body, Vy_body, &now.Vx, &now.Vy);
     }
 }
 
@@ -68,11 +71,14 @@ void OmniChassis::dynamicsInverse(float Fx, float Fy, float T)
 {
     float motor_out[4];
     float k = 1.41421356f / 4.0f;
+    float legacy_fx = 0.0f;
+    float legacy_fy = 0.0f;
+    OmniChassis::currentToLegacy(Fx, Fy, &legacy_fx, &legacy_fy);
 
-    motor_out[0] = -(-k * Fx + k * Fy - T / (4.0f * b)) * wheel_r;
-    motor_out[1] = -(-k * Fx - k * Fy - T / (4.0f * b)) * wheel_r;
-    motor_out[2] = -(k * Fx - k * Fy - T / (4.0f * b)) * wheel_r;
-    motor_out[3] = -(k * Fx + k * Fy - T / (4.0f * b)) * wheel_r;
+    motor_out[0] = -(-k * legacy_fx + k * legacy_fy - T / (4.0f * b)) * wheel_r;
+    motor_out[1] = -(-k * legacy_fx - k * legacy_fy - T / (4.0f * b)) * wheel_r;
+    motor_out[2] = -(k * legacy_fx - k * legacy_fy - T / (4.0f * b)) * wheel_r;
+    motor_out[3] = -(k * legacy_fx + k * legacy_fy - T / (4.0f * b)) * wheel_r;
 
     for (uint8_t i = 0; i < 4; i++) {
         feedforward_current[i] = torqueToCurrent(motor_out[i]);

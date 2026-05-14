@@ -16,16 +16,89 @@
 /* ========================== 全局变量 ========================== */
 
 /* USB 串口接收缓冲区 */
-uint8_t data_usb[30];
+uint8_t data_usb[USB_RX_BUFFER_SIZE];
 static uint8_t posi_conputer[40]; // usb单片机发送给电脑
 /* 视觉数据，由 parse_vision_frame_computer() 写入 */
 VisionData_t vision;
 pid_data yaw_data;
+
 /* ========================== 静态变量 ========================== */
 
 /* LoRa 发送缓冲区：float 数据区 + 4 字节帧结束标志 */
 static uint8_t lora_tx_buf[CURVE_TX_MAX_FLOATS * 4 + 4];
 static uint8_t lora_rx_buf[40];
+
+/* 动作指令环形队列：缓存视觉帧中 C 后面的不定长动作 */
+#define VISION_COMMAND_QUEUE_SIZE 16U
+int vision_command_queue[VISION_COMMAND_QUEUE_SIZE];
+uint8_t vision_command_head = 0U;
+uint8_t vision_command_tail = 0U;
+
+/* 方块指令环形队列：缓存视觉帧中 B 后面的不定长方块编号 */
+#define VISION_BLOCK_QUEUE_SIZE 16U
+int vision_block_queue[VISION_BLOCK_QUEUE_SIZE];
+uint8_t vision_block_head = 0U;
+uint8_t vision_block_tail = 0U;
+// 每个方块的中心坐标
+Block_Vision block_vision_middle[10];
+float block_middle_x = 0.0;
+float block_middle_y = 0.0;
+// 每个方块的爬升坐标
+Block_Vision block_vision_climb[10];
+float block_climb_x = 0.0;
+float block_climb_y = 0.0;
+
+// 通过第2个方块来计算得到其他8个的坐标位置
+static void Block_claulate_Middle(void)
+{
+    float Block_Size       = 1.2f;
+    float x                = block_middle_x;
+    float y                = block_middle_y;
+    block_vision_middle[0] = {0.0, 0.0};
+
+    block_vision_middle[1] = {x, y - Block_Size};
+
+    block_vision_middle[2] = {x, y};
+
+    block_vision_middle[3] = {x, y + Block_Size};
+
+    block_vision_middle[4] = {x + Block_Size, y - Block_Size};
+
+    block_vision_middle[5] = {x + Block_Size, y - Block_Size};
+
+    block_vision_middle[6] = {x + Block_Size, y + Block_Size};
+
+    block_vision_middle[7] = {x + Block_Size * 2.0f, y - Block_Size};
+
+    block_vision_middle[8] = {x + Block_Size * 2.0f, y};
+
+    block_vision_middle[9] = {x + Block_Size * 2.0f, y + Block_Size};
+}
+static void Block_claulate_Climb(void)
+{
+    float Block_Size      = 1.2f;
+    float x               = block_climb_x;
+    float y               = block_climb_y;
+    block_vision_climb[0] = {0.0, 0.0};
+
+    block_vision_climb[1] = {x, y - Block_Size};
+
+    block_vision_climb[2] = {x, y};
+
+    block_vision_climb[3] = {x, y + Block_Size};
+
+    block_vision_climb[4] = {x + Block_Size, y - Block_Size};
+
+    block_vision_climb[5] = {x + Block_Size, y - Block_Size};
+
+    block_vision_climb[6] = {x + Block_Size, y + Block_Size};
+
+    block_vision_climb[7] = {x + Block_Size * 2.0f, y - Block_Size};
+
+    block_vision_climb[8] = {x + Block_Size * 2.0f, y};
+
+    block_vision_climb[9] = {x + Block_Size * 2.0f, y + Block_Size};
+}
 
 static void lora_rx_dma_init(void)
 {
@@ -81,27 +154,105 @@ static float fast_atof(const uint8_t **pp, const uint8_t *end)
     return v * sign;
 }
 
+/* 向视觉指令环形队列尾部压入一条 B 指令 */
+uint8_t vision_command_push(int cmd)
+{
+    /* 计算 tail 前进一步后的位置，取模实现环形回绕 */
+    const uint8_t next_tail = static_cast<uint8_t>((vision_command_tail + 1U) % VISION_COMMAND_QUEUE_SIZE);
+    /* 若 next_tail 追上 head，说明队列已满，拒绝写入 */
+    if (next_tail == vision_command_head)
+        return 0U;
+
+    /* 在当前 tail 位置写入 B 值，然后推进 tail */
+    vision_command_queue[vision_command_tail] = cmd;
+    vision_command_tail                       = next_tail;
+    return 1U;
+}
+
+/* 从视觉指令环形队列头部取出一条 B 指令 */
+uint8_t vision_command_pop(int *out)
+{
+    /* 输出指针为空，或 head == tail 表示队列空，无数据可取 */
+    if (out == nullptr || vision_command_head == vision_command_tail)
+        return 0U;
+
+    /* 读取 head 位置的 B 值，然后推进 head */
+    *out                = vision_command_queue[vision_command_head];
+    vision_command_head = static_cast<uint8_t>((vision_command_head + 1U) % VISION_COMMAND_QUEUE_SIZE);
+    return 1U;
+}
+
+/* 检查队列中是否有待处理的视觉指令：head != tail 即非空 */
+uint8_t vision_command_has_pending(void)
+{
+    return (vision_command_head != vision_command_tail) ? 1U : 0U;
+}
+
+/* 清空整个视觉指令队列，重置 head 和 tail 到初始位置 */
+void vision_command_clear(void)
+{
+    vision_command_head = 0U;
+    vision_command_tail = 0U;
+}
+
+/* ===================== 方块队列 ===================== */
+
+/* 向方块队列尾部压入一个值 */
+uint8_t vision_block_push(int val)
+{
+    const uint8_t next_tail = static_cast<uint8_t>((vision_block_tail + 1U) % VISION_BLOCK_QUEUE_SIZE);
+    if (next_tail == vision_block_head)
+        return 0U;
+
+    vision_block_queue[vision_block_tail] = val;
+    vision_block_tail                     = next_tail;
+    return 1U;
+}
+
+/* 从方块队列头部取出一个值 */
+uint8_t vision_block_pop(int *out)
+{
+    if (out == nullptr || vision_block_head == vision_block_tail)
+        return 0U;
+
+    *out              = vision_block_queue[vision_block_head];
+    vision_block_head = static_cast<uint8_t>((vision_block_head + 1U) % VISION_BLOCK_QUEUE_SIZE);
+    return 1U;
+}
+
+/* 检查方块队列中是否有待处理数据 */
+uint8_t vision_block_has_pending(void)
+{
+    return (vision_block_head != vision_block_tail) ? 1U : 0U;
+}
+
+/* 清空方块队列 */
+void vision_block_clear(void)
+{
+    vision_block_head = 0U;
+    vision_block_tail = 0U;
+}
+
 /**
- * @brief  解析视觉帧，提取三个字段写入 VisionData_t
+ * @brief  解析视觉帧
  *
- * 帧格式：S,<x_diff>,<y_diff>,<angle_x>,<B>E
- * 注意帧头 'S' 后紧跟一个逗号，B 为整数。
+ * 帧格式：S,<exec>,<x>,<y>,<yaw>,C,<action...>,B,<block...>,E
+ * - exec：执行程（整数）
+ * - x, y, yaw：坐标和角度（浮点数）
+ * - C：固定字母，后面是不定长的动作数字，存入动作队列
+ * - B：固定字母，后面是不定长的方块编号，存入方块队列
  *
  * @param  data  输入字节数组
  * @param  len   数组长度
  * @param  out   输出结构体指针
- * @return 1 成功，0 失败（空指针、帧不完整、格式错误）
+ * @return 1 成功，0 失败
  */
 int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
 {
     if (data == nullptr || out == nullptr || len == 0)
         return 0;
 
-    /* 清零输出 */
-    out->B       = 0;
-    out->x_diff  = 0.0f;
-    out->y_diff  = 0.0f;
-    out->angle_x = 0.0f;
+    VisionData_t parsed = {0, 0.0f, 0.0f, 0.0f, 0};
 
     /* 查找帧头 'S' */
     const uint8_t *s = nullptr;
@@ -133,27 +284,83 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
     else
         return 0;
 
-    /* 依次解析四个字段，每个字段之间以逗号分隔 */
-    out->x_diff = fast_atof(&p, e);
+    /* 解析 exec（整数） */
+    parsed.exec = static_cast<int>(fast_atof(&p, e));
     if (p < e && *p == ',')
         ++p;
     else
         return 0;
 
-    out->y_diff = fast_atof(&p, e);
+    /* 解析 x_diff */
+    parsed.x_diff = fast_atof(&p, e);
     if (p < e && *p == ',')
         ++p;
     else
         return 0;
 
-    out->angle_x = fast_atof(&p, e);
+    /* 解析 y_diff */
+    parsed.y_diff = fast_atof(&p, e);
     if (p < e && *p == ',')
         ++p;
     else
         return 0;
 
-    /* B 是整数，用 fast_atof 解析后截断为 int */
-    out->B = static_cast<int>(fast_atof(&p, e));
+    /* 解析 angle_x (yaw) */
+    parsed.angle_x = fast_atof(&p, e);
+
+    *out = parsed;
+
+    /* 如果已经到帧尾，直接返回 */
+    if (p >= e)
+        return 1;
+
+    /* 跳过逗号，准备解析 C 后面的动作 */
+    if (*p != ',')
+        return 0;
+    ++p;
+
+    /* 期望 'C' 标记动作序列开始 */
+    if (p >= e || *p != 'C')
+        return 0;
+    ++p;
+
+    /* 解析 C 后面的不定长动作数字，压入动作队列 */
+    while (p < e) {
+        if (*p == ',') {
+            ++p;
+            /* 如果逗号后面是 'B'，跳出动作循环，进入方块解析 */
+            if (p < e && *p == 'B')
+                break;
+            /* 否则继续解析动作数字 */
+            if (p >= e)
+                return 0;
+            int action = static_cast<int>(fast_atof(&p, e));
+            if (action != 0)
+                vision_command_push(action);
+        } else {
+            return 0;
+        }
+    }
+
+    /* 现在 p 应该指向 'B' */
+    if (p >= e || *p != 'B')
+        return 0;
+    ++p;
+
+    /* 解析 B 后面的不定长方块编号，压入方块队列 */
+    while (p < e) {
+        if (*p == ',') {
+            ++p;
+            /* 逗号后面可能是数字或者直接到 E */
+            if (p >= e)
+                return 0;
+            int block = static_cast<int>(fast_atof(&p, e));
+            if (block != 0)
+                vision_block_push(block);
+        } else {
+            return 0;
+        }
+    }
 
     return 1;
 }
@@ -274,7 +481,6 @@ static void send_curve_lora(const float *data, uint16_t len)
 /* ===================== FreeRTOS 任务入口 ===================== */
 int Flag1 = 0;
 
-extern PID pid_yaw;
 /**
  * @brief  USART 任务主循环（1ms 周期）
  *
@@ -283,12 +489,14 @@ extern PID pid_yaw;
  *   2. 将 DT35 调试数据通过 LoRa 发送给上位机
  *   3. 解析 USB 串口收到的视觉帧
  */
+
 extern "C" void usart_task(void *argument)
 {
     // as5047.init(&hspi1);
     dt35.init(&hspi3);
     lora_rx_dma_init();
-
+    Block_claulate_Middle();
+    Block_claulate_Climb();
     for (;;) {
         /* 更新传感器数据 */
         // as5047.updata();
@@ -296,34 +504,35 @@ extern "C" void usart_task(void *argument)
 
         /* 组装调试数据并通过 LoRa 发送 */
         float debug_data[4] = {
-            omni_chassis.now.rpm[0], omni_chassis.now.rpm[1], omni_chassis.now.rpm[2], omni_chassis.now.rpm[3]};
+            0, omni_chassis.now.rpm[1], omni_chassis.now.rpm[2], omni_chassis.now.rpm[3]};
         send_curve_lora(debug_data, 4);
 
         parse_vision_frame_pid(lora_rx_buf, sizeof(lora_rx_buf), &yaw_data);
 
-        // USB 视觉帧只处理一次；解析成功后保留 vision 中的最新数据，
-        // 直到 ROUTE_TASK::vision_choice() 根据 flag_vision 完成消费。
+        /* USB 视觉帧处理：每轮主循环只处理一次，处理完立即清零缓冲区 */
+        /* 第一步：快速扫描缓冲区是否包含帧头 'S'，没有则跳过解析 */
         if (memchr(data_usb, 'S', sizeof(data_usb)) != nullptr) {
+            /* 第二步：帧头存在，尝试完整解析；成功（返回1）则更新 vision 结构体 */
             if (parse_vision_frame_computer(data_usb, sizeof(data_usb), &vision) == 1) {
-                route_t.flag_vision = 1;
+                /* 第三步：解析过程中若发现非零 B 字段，会被压入动作队列；
+                   此处检查队列是否有待处理指令，有则通知路由任务 */
+                route_t.flag_vision = vision_command_has_pending();
             }
+            /* 第四步：无论解析成功与否，都清零缓冲区，防止下一轮重复处理同一帧 */
             memset(data_usb, 0, sizeof(data_usb));
         }
 
         if (Flag1 == 1) {
-            send_position_to_pc(0, 1, 0, 0, 0);
-			Flag1 = 0;
-			
-        }
-		
-		 if (Flag1 == 2) {
-            send_position_to_pc(1, 0, 0, 0, 0);
-			Flag1 = 0;
-			
+            send_position_to_pc(0, 1, 0, 0, 90.0f);
+            Flag1 = 0;
         }
 
-        if (Flag1 == 3)
-        {
+        if (Flag1 == 2) {
+            send_position_to_pc(1, 0, 0, 0, 0);
+            Flag1 = 0;
+        }
+
+        if (Flag1 == 3) {
             dt35.init(&hspi3);
             Flag1 = 0;
         }
