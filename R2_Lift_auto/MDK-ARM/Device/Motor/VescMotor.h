@@ -91,22 +91,22 @@
  * ============================================================
  */
 
-#pragma once  // 等价于 #ifndef 头文件保护，更简洁
+#pragma once // 等价于 #ifndef 头文件保护，更简洁
 
 /* ============================================================
  *  头文件包含
  * ============================================================ */
-#include "main.h"               // STM32 HAL 总头文件，包含 stm32h7xx_hal.h
-#include "stm32h7xx_hal_fdcan.h"// FDCAN HAL 驱动（H7 专用，提供 FDCAN_HandleTypeDef）
-#include "bsp_can.h"            // 板级 CAN 支持：FDCAN_RxFrame_TypeDef 等自定义类型
+#include "main.h"                // STM32 HAL 总头文件，包含 stm32h7xx_hal.h
+#include "stm32h7xx_hal_fdcan.h" // FDCAN HAL 驱动（H7 专用，提供 FDCAN_HandleTypeDef）
+#include "bsp_can.h"             // 板级 CAN 支持：FDCAN_RxFrame_TypeDef 等自定义类型
 
 /* ============================================================
  *  外部 FDCAN 句柄声明
  *  这些句柄在 CubeMX 生成的 fdcan.c 中定义，此处声明引用
  * ============================================================ */
-extern FDCAN_HandleTypeDef hfdcan1;  // FDCAN1 外设句柄
-extern FDCAN_HandleTypeDef hfdcan2;  // FDCAN2 外设句柄
-extern FDCAN_HandleTypeDef hfdcan3;  // FDCAN3 外设句柄
+extern FDCAN_HandleTypeDef hfdcan1; // FDCAN1 外设句柄
+extern FDCAN_HandleTypeDef hfdcan2; // FDCAN2 外设句柄
+extern FDCAN_HandleTypeDef hfdcan3; // FDCAN3 外设句柄
 
 /* ============================================================
  *  BSP_CAN 层静态成员引用（不需要额外 extern）
@@ -119,69 +119,66 @@ extern FDCAN_HandleTypeDef hfdcan3;  // FDCAN3 外设句柄
  *  VESC CAN 命令类型枚举
  *  每个枚举值对应 CAN 扩展ID 的 Bits[15:8]，即"命令字"
  * ============================================================ */
-enum class CanPacketID : uint8_t
-{
-    SET_DUTY                     = 0,   ///< 设置占空比（-1.0 ~ +1.0，协议内放大100000倍）
-    SET_CURRENT                  = 1,   ///< 设置目标电流（单位 mA，协议内放大1000倍→μA）
-    SET_CURRENT_BRAKE            = 2,   ///< 设置制动电流（单位 mA，协议内放大1000倍）
-    SET_RPM                      = 3,   ///< 设置目标转速（eRPM，= 机械RPM × 极对数）
-    SET_POS                      = 4,   ///< 设置目标位置（度，协议内放大1000000倍）
+enum class CanPacketID : uint8_t {
+    SET_DUTY          = 0, ///< 设置占空比（-1.0 ~ +1.0，协议内放大100000倍）
+    SET_CURRENT       = 1, ///< 设置目标电流（单位 mA，协议内放大1000倍→μA）
+    SET_CURRENT_BRAKE = 2, ///< 设置制动电流（单位 mA，协议内放大1000倍）
+    SET_RPM           = 3, ///< 设置目标转速（eRPM，= 机械RPM × 极对数）
+    SET_POS           = 4, ///< 设置目标位置（度，协议内放大1000000倍）
 
-    FILL_RX_BUFFER               = 5,   ///< 填充接收缓冲区（多帧传输用）
-    FILL_RX_BUFFER_LONG          = 6,   ///< 填充长缓冲区（多帧传输用）
-    PROCESS_RX_BUFFER            = 7,   ///< 处理接收缓冲区数据（多帧结束标志）
-    PROCESS_SHORT_BUFFER         = 8,   ///< 处理短缓冲区数据
+    FILL_RX_BUFFER       = 5, ///< 填充接收缓冲区（多帧传输用）
+    FILL_RX_BUFFER_LONG  = 6, ///< 填充长缓冲区（多帧传输用）
+    PROCESS_RX_BUFFER    = 7, ///< 处理接收缓冲区数据（多帧结束标志）
+    PROCESS_SHORT_BUFFER = 8, ///< 处理短缓冲区数据
 
-    STATUS                       = 9,   ///< 状态帧1：eRPM、电流、占空比
-    SET_CURRENT_REL              = 10,  ///< 相对电流（-1.0~1.0，对应最大电流百分比）
-    SET_CURRENT_BRAKE_REL        = 11,  ///< 相对制动电流
-    SET_CURRENT_HANDBRAKE        = 12,  ///< 手刹电流（绝对值，mA）
-    SET_CURRENT_HANDBRAKE_REL    = 13,  ///< 手刹相对电流（0~1.0）
-    STATUS_2                     = 14,  ///< 状态帧2：安时消耗 / 安时回充
-    STATUS_3                     = 15,  ///< 状态帧3：瓦时消耗 / 瓦时回充
-    STATUS_4                     = 16,  ///< 状态帧4：MOSFET温度、电机温度、PID位置
-    PING                         = 17,  ///< Ping（探测在线）
-    PONG                         = 18,  ///< Pong（在线应答）
-    DETECT_APPLY_ALL_FOC         = 19,  ///< FOC 自动检测并应用
-    DETECT_APPLY_ALL_FOC_RES     = 20,  ///< FOC 自动检测结果
-    CONF_CURRENT_LIMITS          = 21,  ///< 配置电流限制
-    CONF_STORE_CURRENT_LIMITS    = 22,  ///< 存储电流限制到 EEPROM
-    CONF_CURRENT_LIMITS_IN       = 23,  ///< 配置输入电流限制
-    CONF_STORE_CURRENT_LIMITS_IN = 24,  ///< 存储输入电流限制
-    CONF_FOC_ERPMS               = 25,  ///< 配置 FOC eRPM 参数
-    CONF_STORE_FOC_ERPMS         = 26,  ///< 存储 FOC eRPM 参数
-    STATUS_5                     = 27,  ///< 状态帧5：输入电压、里程计数
+    STATUS                       = 9,  ///< 状态帧1：eRPM、电流、占空比
+    SET_CURRENT_REL              = 10, ///< 相对电流（-1.0~1.0，对应最大电流百分比）
+    SET_CURRENT_BRAKE_REL        = 11, ///< 相对制动电流
+    SET_CURRENT_HANDBRAKE        = 12, ///< 手刹电流（绝对值，mA）
+    SET_CURRENT_HANDBRAKE_REL    = 13, ///< 手刹相对电流（0~1.0）
+    STATUS_2                     = 14, ///< 状态帧2：安时消耗 / 安时回充
+    STATUS_3                     = 15, ///< 状态帧3：瓦时消耗 / 瓦时回充
+    STATUS_4                     = 16, ///< 状态帧4：MOSFET温度、电机温度、PID位置
+    PING                         = 17, ///< Ping（探测在线）
+    PONG                         = 18, ///< Pong（在线应答）
+    DETECT_APPLY_ALL_FOC         = 19, ///< FOC 自动检测并应用
+    DETECT_APPLY_ALL_FOC_RES     = 20, ///< FOC 自动检测结果
+    CONF_CURRENT_LIMITS          = 21, ///< 配置电流限制
+    CONF_STORE_CURRENT_LIMITS    = 22, ///< 存储电流限制到 EEPROM
+    CONF_CURRENT_LIMITS_IN       = 23, ///< 配置输入电流限制
+    CONF_STORE_CURRENT_LIMITS_IN = 24, ///< 存储输入电流限制
+    CONF_FOC_ERPMS               = 25, ///< 配置 FOC eRPM 参数
+    CONF_STORE_FOC_ERPMS         = 26, ///< 存储 FOC eRPM 参数
+    STATUS_5                     = 27, ///< 状态帧5：输入电压、里程计数
 };
 
 /* ============================================================
  *  电机实时接收数据结构体
  *  由 CAN_Rx_Handler 解析后填入，可直接读取
  * ============================================================ */
-struct VescRxData
-{
+struct VescRxData {
     // ------- 状态帧1 (STATUS) 解析字段 -------
-    float eRpm;             ///< 电气转速 (eRPM)，= 机械RPM × 极对数
-    float rpm;              ///< 机械转速 (RPM)，= eRPM / 极对数
-    float duty;             ///< 当前占空比，范围 -1.0 ~ +1.0
-    float totalCurrent;     ///< 总相电流 (A)
+    float eRpm;         ///< 电气转速 (eRPM)，= 机械RPM × 极对数
+    float rpm;          ///< 机械转速 (RPM)，= eRPM / 极对数
+    float duty;         ///< 当前占空比，范围 -1.0 ~ +1.0
+    float totalCurrent; ///< 总相电流 (A)
 
     // ------- 状态帧4 (STATUS_4) 解析字段 -------
-    float pidPositionNow;   ///< 当前 PID 角度 (度)，范围 0~360，VESC 以50倍压缩存储
-    float pidPositionLast;  ///< 上一次 PID 角度，用于检测跨零点方向
+    float pidPositionNow;  ///< 当前 PID 角度 (度)，范围 0~360，VESC 以50倍压缩存储
+    float pidPositionLast; ///< 上一次 PID 角度，用于检测跨零点方向
 
     // ------- 累计位置计算（基于 STATUS_4） -------
-    int   turnCount;        ///< 圈数计数器（正转+1，反转-1）
-    float totalPosition;    ///< 累计角度 (度) = turnCount×360 + pidPositionNow
+    int turnCount;       ///< 圈数计数器（正转+1，反转-1）
+    float totalPosition; ///< 累计角度 (度) = turnCount×360 + pidPositionNow
 
     // ------- 其他（STATUS 中可选） -------
-    float dutyCycle;        ///< 占空比副本（与 duty 相同，保持兼容）
+    float dutyCycle; ///< 占空比副本（与 duty 相同，保持兼容）
 
     // 默认构造清零
     VescRxData()
-        : eRpm(0.f), rpm(0.f), duty(0.f), totalCurrent(0.f)
-        , pidPositionNow(0.f), pidPositionLast(0.f)
-        , turnCount(0), totalPosition(0.f), dutyCycle(0.f)
-    {}
+        : eRpm(0.f), rpm(0.f), duty(0.f), totalCurrent(0.f), pidPositionNow(0.f), pidPositionLast(0.f), turnCount(0), totalPosition(0.f), dutyCycle(0.f)
+    {
+    }
 };
 
 /* ============================================================
@@ -212,6 +209,8 @@ struct VescRxData
 class VescMotor
 {
 public:
+    VescRxData rxData_; ///< 最新接收并解析的状态数据
+
     /* --------------------------------------------------------
      *  构造函数：不绑定外设，需显式调用 init()
      * -------------------------------------------------------- */
@@ -229,7 +228,7 @@ public:
      *    HAL_FDCAN_Start
      *    HAL_FDCAN_ActivateNotification(..., FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0)
      * -------------------------------------------------------- */
-    void init(FDCAN_HandleTypeDef* hfdcan, uint16_t nodeId);
+    void init(FDCAN_HandleTypeDef *hfdcan, uint16_t nodeId);
 
     /* ========================================================
      *  控制接口（TX 方向：MCU → VESC）
@@ -342,7 +341,7 @@ public:
      * 使用方式（在 bsp_can.cpp 分发函数里）：
      *   for (auto& m : VescMotors) m.canRxHandler(&BSP_CAN::FDCAN_RxFIFO0Frame);
      */
-    void canRxHandler(const FDCAN_RxFrame_TypeDef* rxFrame);
+    void canRxHandler(const FDCAN_RxFrame_TypeDef *rxFrame);
 
     /* ========================================================
      *  数据访问接口（读取反馈）
@@ -352,26 +351,28 @@ public:
      * @brief 获取接收数据的 const 引用（只读）
      * @return VescRxData 结构体引用，包含转速、电流、位置等信息
      */
-    const VescRxData& getRxData() const { return rxData_; }
+    const VescRxData &getRxData() const
+    { return rxData_; }
 
     /**
      * @brief 获取节点 ID
      */
-    uint16_t getNodeId() const { return nodeId_; }
+    uint16_t getNodeId() const
+    { return nodeId_; }
 
     /**
      * @brief 获取绑定的 FDCAN 句柄指针
      */
-    FDCAN_HandleTypeDef* getFdcan() const { return hfdcan_; }
+    FDCAN_HandleTypeDef *getFdcan() const
+    { return hfdcan_; }
 
 private:
     /* --------------------------------------------------------
      *  私有成员变量
      * -------------------------------------------------------- */
 
-    FDCAN_HandleTypeDef* hfdcan_;  ///< 绑定的 FDCAN 外设句柄
-    uint16_t             nodeId_;  ///< 本电调的 CAN 节点 ID（0~255）
-    VescRxData           rxData_;  ///< 最新接收并解析的状态数据
+    FDCAN_HandleTypeDef *hfdcan_; ///< 绑定的 FDCAN 外设句柄
+    uint16_t nodeId_;             ///< 本电调的 CAN 节点 ID（0~255）
 
     /**
      * @brief 极对数（pole pairs）
@@ -411,7 +412,7 @@ private:
      *   data[2] = (val >>  8) & 0xFF
      *   data[3] = (val      ) & 0xFF  // 最低字节
      */
-    static void packInt32BigEndian(int32_t val, uint8_t* data);
+    static void packInt32BigEndian(int32_t val, uint8_t *data);
 };
 
 /* ============================================================

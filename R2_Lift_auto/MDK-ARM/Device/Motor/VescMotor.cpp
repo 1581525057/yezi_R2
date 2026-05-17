@@ -49,9 +49,9 @@
  */
 
 #include "VescMotor.h"
-#include "fdcan.h"   // CubeMX 生成的 FDCAN 初始化声明
-#include "gpio.h"    // GPIO 初始化（可选，部分板子需要）
-#include <cstring>   // memset
+#include "fdcan.h" // CubeMX 生成的 FDCAN 初始化声明
+#include "gpio.h"  // GPIO 初始化（可选，部分板子需要）
+#include <cstring> // memset
 
 /* ============================================================
  *  全局电机数组定义（4 个电机实例）
@@ -64,9 +64,7 @@ VescMotor VescMotors[4];
  *  所有指针清零，数值清零，C++ 会自动调用 VescRxData 的默认构造
  * ============================================================ */
 VescMotor::VescMotor()
-    : hfdcan_(nullptr)
-    , nodeId_(0)
-    , rxData_()  // 调用 VescRxData 默认构造，全部清零
+    : hfdcan_(nullptr), nodeId_(0), rxData_() // 调用 VescRxData 默认构造，全部清零
 {
 }
 
@@ -77,7 +75,7 @@ VescMotor::VescMotor()
  *    原来：vesc_motor->SetCurrent = VESC_Set_Current_Struct;
  *    现在：直接通过 motor.setCurrent() 调用，无需指针
  * ============================================================ */
-void VescMotor::init(FDCAN_HandleTypeDef* hfdcan, uint16_t nodeId)
+void VescMotor::init(FDCAN_HandleTypeDef *hfdcan, uint16_t nodeId)
 {
     hfdcan_ = hfdcan;
     nodeId_ = nodeId;
@@ -96,15 +94,15 @@ void VescMotor::init(FDCAN_HandleTypeDef* hfdcan, uint16_t nodeId)
  *    data[2] = 0x56  (bits15..8)
  *    data[3] = 0x78  (最低字节，bits7..0)
  * ============================================================ */
-void VescMotor::packInt32BigEndian(int32_t val, uint8_t* data)
+void VescMotor::packInt32BigEndian(int32_t val, uint8_t *data)
 {
     // 右移后与 0xFF 掩码，安全提取每个字节
     // 注意：对有符号数右移在 C++ 中是实现定义行为，但 VESC 原码也这样用，
     //       在 ARM Cortex-M（算术右移）上是正确的。
-    data[0] = static_cast<uint8_t>((val >> 24) & 0xFF);  // 最高字节
+    data[0] = static_cast<uint8_t>((val >> 24) & 0xFF); // 最高字节
     data[1] = static_cast<uint8_t>((val >> 16) & 0xFF);
-    data[2] = static_cast<uint8_t>((val >>  8) & 0xFF);
-    data[3] = static_cast<uint8_t>((val      ) & 0xFF);  // 最低字节
+    data[2] = static_cast<uint8_t>((val >> 8) & 0xFF);
+    data[3] = static_cast<uint8_t>((val) & 0xFF); // 最低字节
 }
 
 /* ============================================================
@@ -147,12 +145,16 @@ void VescMotor::sendFrame(CanPacketID cmd, const uint8_t data[8])
      *  内部已含 .hcan 指针，AddMessageToTxFifoQ 直接使用它。
      *  若 hfdcan_ 不匹配任何一路（配置错误），直接返回，不发送。
      */
-    FDCAN_TxFrame_TypeDef* txFrame = nullptr;
+    FDCAN_TxFrame_TypeDef *txFrame = nullptr;
 
-    if      (hfdcan_ == &hfdcan1) txFrame = &BSP_CAN::FDCAN1_TxFrame;
-    else if (hfdcan_ == &hfdcan2) txFrame = &BSP_CAN::FDCAN2_TxFrame;
-    else if (hfdcan_ == &hfdcan3) txFrame = &BSP_CAN::FDCAN3_TxFrame;
-    else                          return;   // 未知外设，防御性返回
+    if (hfdcan_ == &hfdcan1)
+        txFrame = &BSP_CAN::FDCAN1_TxFrame;
+    else if (hfdcan_ == &hfdcan2)
+        txFrame = &BSP_CAN::FDCAN2_TxFrame;
+    else if (hfdcan_ == &hfdcan3)
+        txFrame = &BSP_CAN::FDCAN3_TxFrame;
+    else
+        return; // 未知外设，防御性返回
 
     /* --- 填充帧头 ---
      *  VESC 协议 29 位扩展 ID 格式：
@@ -160,12 +162,12 @@ void VescMotor::sendFrame(CanPacketID cmd, const uint8_t data[8])
      *    bits[15: 8] = 命令类型（CanPacketID）
      *    bits[28:16] = 0（VESC 协议未使用高位）
      */
-    txFrame->Header.IdType      = FDCAN_EXTENDED_ID;   // 29位扩展帧
-    txFrame->Header.TxFrameType = FDCAN_DATA_FRAME;    // 数据帧
-    txFrame->Header.DataLength  = FDCAN_DLC_BYTES_8;   // 固定8字节
-    txFrame->Header.Identifier  =
-        (static_cast<uint32_t>(nodeId_) & 0xFF) |      // 低8位 = 节点ID
-        (static_cast<uint32_t>(cmd) << 8);             // 高8位 = 命令类型
+    txFrame->Header.IdType      = FDCAN_EXTENDED_ID; // 29位扩展帧
+    txFrame->Header.TxFrameType = FDCAN_DATA_FRAME;  // 数据帧
+    txFrame->Header.DataLength  = FDCAN_DLC_BYTES_8; // 固定8字节
+    txFrame->Header.Identifier =
+        (static_cast<uint32_t>(nodeId_) & 0xFF) | // 低8位 = 节点ID
+        (static_cast<uint32_t>(cmd) << 8);        // 高8位 = 命令类型
 
     // FD/错误状态字段（经典CAN模式下保持默认，HAL 要求必须填写）
     txFrame->Header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
@@ -201,7 +203,7 @@ void VescMotor::sendFrame(CanPacketID cmd, const uint8_t data[8])
  * ============================================================ */
 void VescMotor::setCurrent(int32_t current_mA)
 {
-    uint8_t data[8] = {0};  // 全部清零，未使用字节保持0
+    uint8_t data[8] = {0}; // 全部清零，未使用字节保持0
 
     // mA → μA（× 1000）：VESC 协议要求单位为 μA 精度的 int32
     // 注意溢出：current_mA 最大约 ±2,147,483 mA（int32_t范围），
@@ -368,7 +370,7 @@ void VescMotor::setHandbrakeCurrentRel(float relative)
  *    int32 = (data[0]<<24)|(data[1]<<16)|(data[2]<<8)|data[3]
  *
  * ============================================================ */
-void VescMotor::canRxHandler(const FDCAN_RxFrame_TypeDef* rxFrame)
+void VescMotor::canRxHandler(const FDCAN_RxFrame_TypeDef *rxFrame)
 {
     // 从传入帧读取 29 位扩展 ID（由 bsp_can 的 HAL_FDCAN_GetRxMessage 已填充）
     const uint32_t rawId = rxFrame->Header.Identifier;
@@ -381,17 +383,15 @@ void VescMotor::canRxHandler(const FDCAN_RxFrame_TypeDef* rxFrame)
     const uint8_t cmd = static_cast<uint8_t>((rawId >> 8) & 0xFF);
 
     // 只处理与本电机 nodeId_ 匹配的帧，过滤掉总线上其他 VESC 的广播
-    if (rxNodeId != static_cast<uint8_t>(nodeId_))
-    {
-        return;  // ID 不匹配，直接返回，不解析
+    if (rxNodeId != static_cast<uint8_t>(nodeId_)) {
+        return; // ID 不匹配，直接返回，不解析
     }
 
     // 取数据指针（避免后续重复写 rxFrame->Data）
-    const uint8_t* data = rxFrame->Data;
+    const uint8_t *data = rxFrame->Data;
 
     // 根据命令类型分发解析逻辑
-    switch (static_cast<CanPacketID>(cmd))
-    {
+    switch (static_cast<CanPacketID>(cmd)) {
         /* ----------------------------------------------------
          *  状态帧1（STATUS）：包含 eRPM、相电流、占空比
          *
@@ -408,25 +408,19 @@ void VescMotor::canRxHandler(const FDCAN_RxFrame_TypeDef* rxFrame)
          *  注：此方式只覆盖 ±65535 eRPM（约 ±4681 RPM@14极对），
          *      若需更高转速请改为标准 int32 big-endian 解析
          * ---------------------------------------------------- */
-        case CanPacketID::STATUS:
-        {
+        case CanPacketID::STATUS: {
             // eRPM 解析：判断高两字节是否为 0xFFFF（负转速标志）
-            if (data[0] == 0xFF && data[1] == 0xFF)
-            {
+            if (data[0] == 0xFF && data[1] == 0xFF) {
                 // 负转速：对 Byte2/Byte3 按位取反得绝对值，取负
                 const float erpm_abs = static_cast<float>(
                     (static_cast<uint16_t>(~data[2] & 0xFF) << 8) |
-                    (static_cast<uint16_t>(~data[3] & 0xFF))
-                );
+                    (static_cast<uint16_t>(~data[3] & 0xFF)));
                 rxData_.eRpm = -erpm_abs;
-            }
-            else
-            {
+            } else {
                 // 正转速：直接拼接 Byte2/Byte3
                 rxData_.eRpm = static_cast<float>(
                     (static_cast<uint16_t>(data[2]) << 8) |
-                    (static_cast<uint16_t>(data[3]))
-                );
+                    (static_cast<uint16_t>(data[3])));
             }
 
             // 机械转速 = eRPM / 极对数
@@ -435,18 +429,18 @@ void VescMotor::canRxHandler(const FDCAN_RxFrame_TypeDef* rxFrame)
             // 相电流（A）= int16(Byte4, Byte5) / 10.0
             // VESC 发送：电流×10（0.1A精度），16位有符号整数，big-endian
             rxData_.totalCurrent = static_cast<float>(
-                static_cast<int16_t>((static_cast<uint16_t>(data[4]) << 8) |
-                                      static_cast<uint16_t>(data[5]))
-            ) / 10.0f;
+                                       static_cast<int16_t>((static_cast<uint16_t>(data[4]) << 8) |
+                                                            static_cast<uint16_t>(data[5]))) /
+                                   10.0f;
 
             // 占空比 = int16(Byte6, Byte7) / 1000.0
             // VESC 发送：占空比×1000（0.001精度），16位有符号整数，big-endian
             rxData_.duty = static_cast<float>(
-                static_cast<int16_t>((static_cast<uint16_t>(data[6]) << 8) |
-                                      static_cast<uint16_t>(data[7]))
-            ) / 1000.0f;
+                               static_cast<int16_t>((static_cast<uint16_t>(data[6]) << 8) |
+                                                    static_cast<uint16_t>(data[7]))) /
+                           1000.0f;
 
-            rxData_.dutyCycle = rxData_.duty;  // 保持兼容
+            rxData_.dutyCycle = rxData_.duty; // 保持兼容
             break;
         }
 
@@ -460,8 +454,7 @@ void VescMotor::canRxHandler(const FDCAN_RxFrame_TypeDef* rxFrame)
          *  解析示例（当需要启用时）：
          *    float amp_hours = (int32解析 data[0..3]) / 1e4f;
          * ---------------------------------------------------- */
-        case CanPacketID::STATUS_2:
-        {
+        case CanPacketID::STATUS_2: {
             // 暂未使用，保留扩展接口
             break;
         }
@@ -469,8 +462,7 @@ void VescMotor::canRxHandler(const FDCAN_RxFrame_TypeDef* rxFrame)
         /* ----------------------------------------------------
          *  状态帧3（STATUS_3）：瓦时消耗（暂未使用）
          * ---------------------------------------------------- */
-        case CanPacketID::STATUS_3:
-        {
+        case CanPacketID::STATUS_3: {
             break;
         }
 
@@ -492,27 +484,23 @@ void VescMotor::canRxHandler(const FDCAN_RxFrame_TypeDef* rxFrame)
          *    delta > +180° → 反转过零（0°→359°），turnCount--
          *    totalPosition = turnCount × 360 + pidPositionNow
          * ---------------------------------------------------- */
-        case CanPacketID::STATUS_4:
-        {
+        case CanPacketID::STATUS_4: {
             // 保存上次角度，用于圈数跟踪
             rxData_.pidPositionLast = rxData_.pidPositionNow;
 
             // PID 当前角度：Byte6/Byte7 组成 int16，除以50得到度数（精度0.02°）
             rxData_.pidPositionNow = static_cast<float>(
-                static_cast<int16_t>((static_cast<uint16_t>(data[6]) << 8) |
-                                      static_cast<uint16_t>(data[7]))
-            ) / 50.0f;
+                                         static_cast<int16_t>((static_cast<uint16_t>(data[6]) << 8) |
+                                                              static_cast<uint16_t>(data[7]))) /
+                                     50.0f;
 
             // 圈数跟踪：处理 0°/360° 边界跳变
             const float delta = rxData_.pidPositionNow - rxData_.pidPositionLast;
 
-            if (delta < -180.0f)
-            {
-                rxData_.turnCount++;   // 正转经过 360°→0° 边界
-            }
-            else if (delta > 180.0f)
-            {
-                rxData_.turnCount--;   // 反转经过 0°→360° 边界
+            if (delta < -180.0f) {
+                rxData_.turnCount++; // 正转经过 360°→0° 边界
+            } else if (delta > 180.0f) {
+                rxData_.turnCount--; // 反转经过 0°→360° 边界
             }
 
             // 累计总角度
@@ -530,8 +518,7 @@ void VescMotor::canRxHandler(const FDCAN_RxFrame_TypeDef* rxFrame)
         /* ----------------------------------------------------
          *  状态帧5（STATUS_5）：输入电压 + 里程计数（暂未使用）
          * ---------------------------------------------------- */
-        case CanPacketID::STATUS_5:
-        {
+        case CanPacketID::STATUS_5: {
             break;
         }
 

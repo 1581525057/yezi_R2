@@ -107,6 +107,7 @@ void LiftAuto::reset(void)
     climbed_                  = 0U;
     chassis_vx_target_        = 0.0f;
     use_radar_                = 0U;
+    block_num_                = 0;
     radar_x_ref_              = 0.0f;
     radar_x_ref_climb_        = 0.0f;
     radar_y_ref_middle_       = 0.0f;
@@ -130,10 +131,8 @@ void LiftAuto::update(void)
 
     // 首次进入自动流程
     if (state_ == STEP_IDLE) {
-        // 从方块队列读取编号，决定传感器模式
-        int block_num = 0;
-        vision_block_pop(&block_num);
-        if (block_num == 1 || block_num == 2) {
+        // 使用外部已设置的 block_num_ 决定传感器模式
+        if (block_num_ == 1 || block_num_ == 2) {
             use_radar_ = 0U;
         } else {
             use_radar_ = 1U;
@@ -219,7 +218,7 @@ void LiftAuto::update(void)
                 // ========== 雷达模式 ==========
                 // Vx: vision.x_diff 走到目标 x 点（前为正）
                 float x_err        = radar_x_ref_ - vision.x_diff;
-                float y_err        = radar_y_ref_middle_ - vision.y_diff;
+                float y_err        = radar_y_ref_middle_ - vision.y_diff; //15 - 10 = 5 误差为正 
                 chassis_vx_target_ = trapezoid_speed(x_err, LIFT_CHASSIS_ACC_SPEED, LIFT_AUTO_APPROACH_MPS);
 
                 // Vy: vision.y_diff 走到目标 y 点（左为正）
@@ -348,4 +347,9 @@ void LiftAuto::setRadarTarget(float x_ref, float x_ref_climb, float y_ref_middle
     radar_x_ref_        = x_ref;
     radar_x_ref_climb_  = x_ref_climb;
     radar_y_ref_middle_ = y_ref_middle;
+}
+
+void LiftAuto::setBlockNum(int num)
+{
+    block_num_ = num;
 }

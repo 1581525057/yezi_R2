@@ -285,87 +285,52 @@
         <Ww>
           <count>4</count>
           <WinNumber>2</WinNumber>
-          <ItemText>pid_F_chassis_linear_x,0x0A</ItemText>
+          <ItemText>lift_auto,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>5</count>
           <WinNumber>2</WinNumber>
-          <ItemText>dm_imu</ItemText>
+          <ItemText>route_t,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>6</count>
           <WinNumber>2</WinNumber>
-          <ItemText>lift_auto,0x0A</ItemText>
+          <ItemText>flag_meiling,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>7</count>
           <WinNumber>2</WinNumber>
-          <ItemText>pid_2006_r,0x0A</ItemText>
+          <ItemText>yaw_target,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>8</count>
           <WinNumber>2</WinNumber>
-          <ItemText>route_t,0x0A</ItemText>
+          <ItemText>vision_command_queue,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>9</count>
           <WinNumber>2</WinNumber>
-          <ItemText>pid_yaw</ItemText>
+          <ItemText>vision_block_queue,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>10</count>
           <WinNumber>2</WinNumber>
-          <ItemText>route_t,0x0A</ItemText>
+          <ItemText>vision_block_tail,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>11</count>
           <WinNumber>2</WinNumber>
-          <ItemText>vision,0x0A</ItemText>
+          <ItemText>vision_command_head,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>12</count>
           <WinNumber>2</WinNumber>
-          <ItemText>vision_command_queue,0x0A</ItemText>
+          <ItemText>Flag1,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>13</count>
           <WinNumber>2</WinNumber>
-          <ItemText>LIFT_AUTO_CLIMB_SPEED_MPS</ItemText>
-        </Ww>
-        <Ww>
-          <count>14</count>
-          <WinNumber>2</WinNumber>
-          <ItemText>LIFT_AUTO_FINISH_MM,0x0A</ItemText>
-        </Ww>
-        <Ww>
-          <count>15</count>
-          <WinNumber>2</WinNumber>
-          <ItemText>vision_command_queue,0x0A</ItemText>
-        </Ww>
-        <Ww>
-          <count>16</count>
-          <WinNumber>2</WinNumber>
-          <ItemText>vision_block_queue,0x0A</ItemText>
-        </Ww>
-        <Ww>
-          <count>17</count>
-          <WinNumber>2</WinNumber>
-          <ItemText>Flag1,0x0A</ItemText>
-        </Ww>
-        <Ww>
-          <count>18</count>
-          <WinNumber>2</WinNumber>
-          <ItemText>LIFT_AUTO_CLIMB_SPEED_MPS</ItemText>
-        </Ww>
-        <Ww>
-          <count>19</count>
-          <WinNumber>2</WinNumber>
-          <ItemText>LIFT_ACC_SPEED</ItemText>
-        </Ww>
-        <Ww>
-          <count>20</count>
-          <WinNumber>2</WinNumber>
-          <ItemText>LIFT_AUTO_PREPARE_MM,0x0A</ItemText>
+          <ItemText>pid_yaw,0x0A</ItemText>
         </Ww>
       </WatchWindow2>
       <Tracepoint>

@@ -213,7 +213,7 @@ const WuqiquPathPlanner::Output &WuqiquPathPlanner::getOutput(void) const
 }
 
 int WuqiquPathPlanner::getCurrentIndex(void) const
-{
+  {
     return current_path_index_;
 }
 

@@ -20,8 +20,7 @@ extern "C" float WuqiquTask_GetChassisVyTarget(float manual);
 extern "C" float WuqiquTask_GetChassisVzTarget(float manual);
 extern "C" uint8_t WuqiquTask_IsActive(void);
 
-typedef enum
-{
+typedef enum {
     CHASSIS_AUTO_NONE = 0,
     CHASSIS_AUTO_MEILING,
     CHASSIS_AUTO_WUQIQU,
@@ -30,16 +29,13 @@ typedef enum
 
 static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, uint8_t meiling_area_active)
 {
-    if (wuqiqu_active != 0U && meiling_area_active != 0U)
-    {
+    if (wuqiqu_active != 0U && meiling_area_active != 0U) {
         return CHASSIS_AUTO_CONFLICT;
     }
-    if (wuqiqu_active != 0U)
-    {
+    if (wuqiqu_active != 0U) {
         return CHASSIS_AUTO_WUQIQU;
     }
-    if (meiling_area_active != 0U)
-    {
+    if (meiling_area_active != 0U) {
         return CHASSIS_AUTO_MEILING;
     }
     return CHASSIS_AUTO_NONE;
@@ -94,7 +90,6 @@ extern "C" void chassis_task(void *argument)
     //
     while (1) {
 
-       
         // 1. 更新遥控器/离线保护等状态，并刷新底盘控制指令。
         remove_dji.monitor();
         remove_dji.updateChassosCommand();
@@ -110,7 +105,7 @@ extern "C" void chassis_task(void *argument)
         // 4. 遥控器输入处理：
         //    当拨杆处于指定档位时，启用航向保持控制，通过 yaw PID 输出底盘自转角速度。
 
-        VZ_OUT = -pid_yaw.PID_Calculate_Angle(dm_imu.imu.yaw, yaw_target);
+        VZ_OUT = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
 
         // 5. 生成底盘目标速度：
         //    - x 方向速度直接使用上层输入
@@ -166,7 +161,7 @@ extern "C" void chassis_task(void *argument)
 
         float motor_input[4];
         // 10. 将转速环 PID 输出与模型计算得到的前馈量叠加，形成最终电机电流指令。
-        motor_input[0] = pid_chassis_0.pid.Output + omni_chassis.feedforward_current[0];  
+        motor_input[0] = pid_chassis_0.pid.Output + omni_chassis.feedforward_current[0];
         motor_input[1] = pid_chassis_1.pid.Output + omni_chassis.feedforward_current[1];
         motor_input[2] = pid_chassis_2.pid.Output + omni_chassis.feedforward_current[2];
         motor_input[3] = pid_chassis_3.pid.Output + omni_chassis.feedforward_current[3];

@@ -15,17 +15,19 @@
 ROUTE_TASK route_t;
 extern float yaw_target;
 extern PID pid_yaw;
+extern Block_Vision block_vision_middle[10];
+extern Block_Vision block_vision_climb[10];
 // x:0.80 y:-0.32 yaw:0.00
 // f:291.8 l:357
 namespace
 {
     MeilingTarget_t first_relocation = {
         .preset_id   = 0,
-        .L_ref       = 2670.0f,
+        .L_ref       = 2655.0f,
         .R_ref       = 0.0f,
-        .F_ref       = 300.0f,
-        .tol_lat     = 8.0f,
-        .tol_lon     = 8.0f,
+        .F_ref       = 266.0f,
+        .tol_lat     = 12.0f,
+        .tol_lon     = 12.0f,
         .timeout_ms  = 500000U,
         .sensor_mask = SENSOR_FRONT | SENSOR_LEFT,
     };
@@ -80,10 +82,19 @@ void ROUTE_TASK::vision_choice()
     flag_vision = vision_command_has_pending();
 
     switch (cmd) {
-        case 9:
+        case 3: {
             // 视觉指令 9：执行上台阶动作。
+            // 从方块队列取编号，查表设置雷达目标坐标
+            int block_num = 0;
+            vision_block_pop(&block_num);
+            lift_auto.setBlockNum(block_num);
+            lift_auto.setRadarTarget(
+                block_vision_middle[block_num].x,
+                block_vision_climb[block_num].x,
+                block_vision_middle[block_num].y);
             state = PHASE_STEP_UP;
             break;
+        }
 
         case 1:
             // 视觉指令 1：左转 90 度。
@@ -133,7 +144,7 @@ void ROUTE_TASK::meiling_route()
                 uint8_t relocation_result = meiling.update();
 
                 if (relocation_result == MeilingLocator::SUCCESS) {
-                    send_position_to_pc(1, 1, 0.80, -0.32, 0.0);
+                    send_position_to_pc(1, 1,2.26, 1.56, 0.0);
                     relocation_number = 2;
                     // First relocation is done; wait for a vision command.
                     state = PHASE_VISION;
@@ -171,7 +182,7 @@ void ROUTE_TASK::meiling_route()
                 // send_position_to_pc(1, 1, 0.80, -0.32, 0.0);
                 relocation_number = 4;
                 // Second relocation is done; ask the vision PC for the next action.
-                send_position_to_pc(1, 0, 0, 0, 0);
+
                 state = PHASE_VISION;
             } else if (relocation_result == MeilingLocator::TIMEOUT) {
                 meiling.start(second_relocation);
@@ -180,13 +191,11 @@ void ROUTE_TASK::meiling_route()
         }
 
         case PHASE_STEP_UP:
-            // lift_auto.start() is idempotent; update() advances the lift state machine.
+            // setRadarTarget 和 setBlockNum 已在 vision_choice() 中配置
             lift_auto.start();
 
             if (lift_auto.isFinished()) {
                 lift_auto.stop();
-                // Lift action is done; ask the vision PC for the next action.
-                send_position_to_pc(1, 0, 0, 0, 0);
                 state = PHASE_VISION;
             }
             break;
@@ -203,7 +212,7 @@ void ROUTE_TASK::meiling_route()
             // Hold yaw error inside tolerance for 200 cycles before finishing.
             if (yaw_stable_count >= 200) {
                 yaw_stable_count = 0;
-                send_position_to_pc(1, 0, 0, 0, 0);
+
                 state = PHASE_VISION;
             }
             break;
@@ -220,7 +229,7 @@ void ROUTE_TASK::meiling_route()
             // Hold yaw error inside tolerance for 200 cycles before finishing.
             if (yaw_stable_count >= 200) {
                 yaw_stable_count = 0;
-                send_position_to_pc(1, 0, 0, 0, 0);
+
                 state = PHASE_VISION;
             }
             break;

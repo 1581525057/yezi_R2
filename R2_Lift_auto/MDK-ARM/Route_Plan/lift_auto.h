@@ -32,6 +32,7 @@ public:
     float getChassisVyTarget(float manual_target) const;
     float getChassisVxTarget(float manual_target) const;
     void setRadarTarget(float x_ref, float x_ref_climb, float y_ref_middle);
+    void setBlockNum(int num);
 
 private:
     void reset(void);
@@ -58,6 +59,7 @@ private:
 
     // 雷达/激光模式选择
     uint8_t use_radar_; // 1=雷达模式, 0=激光模式
+    int block_num_;     // 当前方块编号
 
     // 雷达目标坐标
     float radar_x_ref_;        // 雷达目标X
