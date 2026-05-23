@@ -82,7 +82,7 @@ public:
 
     void start()
     {
-        wuqiqu.reset();
+        wuqiqu.resetRoute();
         clearOutput();
         active_ = 1U;
     }
@@ -109,7 +109,6 @@ public:
 
         if (finished != 0)
         {
-            stop();
             return 1U;
         }
 
@@ -119,6 +118,16 @@ public:
     uint8_t isActive() const
     {
         return active_;
+    }
+
+    void advanceToNext()
+    {
+        wuqiqu.advanceToNext();
+    }
+
+    uint8_t isAllFinished() const
+    {
+        return wuqiqu.isAllFinished() ? 1U : 0U;
     }
 
     float getChassisVxTarget(float manual) const
@@ -239,4 +248,14 @@ extern "C" float WuqiquTask_GetChassisVyTarget(float manual)
 extern "C" float WuqiquTask_GetChassisVzTarget(float manual)
 {
     return wuqiqu_task.getChassisVzTarget(manual);
+}
+
+extern "C" void WuqiquTask_AdvanceToNext(void)
+{
+    wuqiqu_task.advanceToNext();
+}
+
+extern "C" uint8_t WuqiquTask_IsAllFinished(void)
+{
+    return wuqiqu_task.isAllFinished();
 }

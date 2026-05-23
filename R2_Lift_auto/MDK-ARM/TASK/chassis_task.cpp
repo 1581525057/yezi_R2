@@ -98,6 +98,7 @@ extern "C" void chassis_task(void *argument)
             target_vx = WuqiquTask_GetChassisVxTarget(target_vx);
             target_vy = WuqiquTask_GetChassisVyTarget(target_vy);
             target_vz = WuqiquTask_GetChassisVzTarget(target_vz);
+            yaw_target = vision.angle_x; 
             break;
         case CHASSIS_AUTO_MEILING:
             target_vx = meiling.getChassisVxTarget(target_vx);
@@ -170,5 +171,5 @@ static void chassis_pid_init(void)
     // 底盘角度 PID：用于姿态或转角闭环控制，当前文件中暂未直接参与主循环计算。
     pid_F_chassis_angle.Init(OUTPUT_CHASSIS_ANGLE, INTERLIMIT_CHASSIS_ANGLE, DEBAND_CHASSIS_ANGLE, KP_CHASSIS_ANGLE, KI_CHASSIS_ANGLE, KD_CHASSIS_ANGLE, 0, 0x00);
     // 航向角保持 PID：根据 IMU yaw 偏差输出底盘自转控制量。
-    pid_yaw.Init(2.5, 0.2, 0.1, 0.5, 0.02, 0, 0, 0x00);
+    pid_yaw.Init(1.5, 0.2, 0.1, 0.2, 0.02, 0, 0, 0x00);
 }

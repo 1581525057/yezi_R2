@@ -1,43 +1,19 @@
 #include "wuqiqu.h"
 #include <math.h>
+
 namespace
 {
     static const float WUQIQU_PI = 3.14159265358979323846f;
     static const float kDegToRad = WUQIQU_PI / 180.0f;
 
-    /* PD控制参数 */
-    float kPosKp = 5.0f;   // 位置P增益
-    float kPosKd = 0.0f;   // 位置D增益
-    float kYawKp = 0.5f;   // 角度P增益
-    float kYawKd = 0.0f;   // 角度D增益
-
-    /* 速度限幅 */
-    static const float kMaxAngularSpeedRadps = 0.8f;
-    /* 平移阶段 yaw 并行修正角速度限幅（较小，避免旋转干扰平移精度） */
-    static const float kMovingYawMaxRadps = 0.3f;
-
-    /* 到达判定阈值 */
-    static const float kPosToleranceM = 0.010f;      // 位置容差 10mm
-    static const float kYawToleranceDeg = 1.0f;      // 角度容差 1度
-    static const uint16_t kStableCount = 80U;        // 稳定计数
-
-    /* 默认目标点（视觉坐标系，单位：m, m, 度）
-     * kDefaultVisionTargetX  对应 vision.x_diff 的期望值
-     * kDefaultVisionTargetY  对应 vision.y_diff 的期望值
-     * kDefaultVisionTargetYawDeg 对应 vision.angle_x 的期望值
-     * 内部会自动转换为规划坐标，中间映射链不变。 */
-    static const float kDefaultVisionTargetX = 1.0f;         // 期望 vision.x_diff
-    static const float kDefaultVisionTargetY = 0.0f;         // 期望 vision.y_diff
-    static const float kDefaultVisionTargetYawDeg = 0.0f;    // 期望 vision.angle_x，度
-
-    /* wuqiqu_task.cpp 中的映射常量（保持一致）：
-     * plannerX = -1.0 * vision.y_diff    (kVisionYToPlannerX = -1)
-     * plannerY = +1.0 * vision.x_diff    (kVisionXToPlannerY = +1)
-     * 因此反推：
-     * targetPlannerX = -1.0 * kDefaultVisionTargetY
-     * targetPlannerY = +1.0 * kDefaultVisionTargetX */
     constexpr float kVisionYToPlannerX = -1.0f;
     constexpr float kVisionXToPlannerY =  1.0f;
+
+    // 目标点列表（视觉坐标系：x_diff期望, y_diff期望, angle_x期望）
+    static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
+        { 0.77f, 0.62f, 0.0f },
+    };
+    static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 }
 
 WuqiquPathPlanner wuqiqu;
@@ -45,17 +21,55 @@ WuqiquPathPlanner wuqiqu;
 WuqiquPathPlanner::WuqiquPathPlanner()
 {
     reset();
-    // 设置默认目标点（视觉坐标 → 规划坐标）
-    target_.x_m = kVisionYToPlannerX * kDefaultVisionTargetY;
-    target_.y_m = kVisionXToPlannerY * kDefaultVisionTargetX;
-    target_.yaw_deg = kDefaultVisionTargetYawDeg;
+
+    pos_kp_ = 5.0f;
+    pos_kd_ = 0.0f;
+    yaw_kp_ = 0.5f;
+    yaw_kd_ = 0.0f;
+    pos_tolerance_m_ = 0.010f;
+    yaw_tolerance_deg_ = 1.0f;
+    stable_count_ = 80U;
+    max_angular_speed_radps_ = 0.8f;
+    moving_yaw_max_radps_ = 0.3f;
+
+    waypoint_count_ = kWaypointCount;
+    if (waypoint_count_ > MAX_WAYPOINTS)
+        waypoint_count_ = MAX_WAYPOINTS;
+
+    for (uint8_t i = 0U; i < waypoint_count_; ++i)
+        waypoints_[i] = kWaypoints[i];
+
+    current_index_ = 0U;
+    loadCurrentWaypoint();
 }
 
-void WuqiquPathPlanner::setTarget(float x_m, float y_m, float yaw_deg)
+void WuqiquPathPlanner::loadCurrentWaypoint(void)
 {
-    target_.x_m = x_m;
-    target_.y_m = y_m;
-    target_.yaw_deg = yaw_deg;
+    if (current_index_ < waypoint_count_)
+    {
+        const TargetPoint &wp = waypoints_[current_index_];
+        target_.x_m = kVisionYToPlannerX * wp.y_m;
+        target_.y_m = kVisionXToPlannerY * wp.x_m;
+        target_.yaw_deg = wp.yaw_deg;
+    }
+}
+
+void WuqiquPathPlanner::setParams(float pos_kp, float pos_kd,
+                                   float yaw_kp, float yaw_kd,
+                                   float pos_tolerance_m, float yaw_tolerance_deg,
+                                   uint16_t stable_count,
+                                   float max_angular_speed_radps,
+                                   float moving_yaw_max_radps)
+{
+    pos_kp_ = pos_kp;
+    pos_kd_ = pos_kd;
+    yaw_kp_ = yaw_kp;
+    yaw_kd_ = yaw_kd;
+    pos_tolerance_m_ = pos_tolerance_m;
+    yaw_tolerance_deg_ = yaw_tolerance_deg;
+    stable_count_ = stable_count;
+    max_angular_speed_radps_ = max_angular_speed_radps;
+    moving_yaw_max_radps_ = moving_yaw_max_radps;
 }
 
 void WuqiquPathPlanner::reset(void)
@@ -72,18 +86,47 @@ void WuqiquPathPlanner::reset(void)
     output_.world_vx_mps = 0.0f;
     output_.world_vy_mps = 0.0f;
     output_.wz_radps = 0.0f;
+}
 
+void WuqiquPathPlanner::resetRoute(void)
+{
+    current_index_ = 0U;
+    loadCurrentWaypoint();
+    reset();
+}
+
+void WuqiquPathPlanner::advanceToNext(void)
+{
+    ++current_index_;
+    if (current_index_ < waypoint_count_)
+    {
+        loadCurrentWaypoint();
+        reset();
+    }
+}
+
+bool WuqiquPathPlanner::isAllFinished(void) const
+{
+    return (current_index_ >= waypoint_count_);
+}
+
+uint8_t WuqiquPathPlanner::getCurrentIndex(void) const
+{
+    return current_index_;
+}
+
+uint8_t WuqiquPathPlanner::getWaypointCount(void) const
+{
+    return waypoint_count_;
 }
 
 int WuqiquPathPlanner::follow(const Pose &current_pose)
 {
-    /* 计算位置误差 */
     const float err_x_m = target_.x_m - current_pose.x;
     const float err_y_m = target_.y_m - current_pose.y;
     const float distance_m = safeSqrt(err_x_m * err_x_m + err_y_m * err_y_m);
-    const uint8_t xy_reached = (distance_m < kPosToleranceM) ? 1U : 0U;
+    const uint8_t xy_reached = (distance_m < pos_tolerance_m_) ? 1U : 0U;
 
-    /* 计算角度误差 */
     const float err_yaw_deg = normalizeAngleDeg(target_.yaw_deg - current_pose.yaw_360);
     const float err_yaw_rad = err_yaw_deg * kDegToRad;
 
@@ -95,7 +138,6 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         last_err_yaw_rad_ = err_yaw_rad;
     }
 
-    /* 状态机 */
     switch (state_)
     {
     case STATE_IDLE:
@@ -105,14 +147,13 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         break;
 
     case STATE_MOVING:
-        /* 位置到达判定 */
         if (xy_reached != 0U)
         {
             ++xy_stable_count_;
             output_.world_vx_mps = 0.0f;
             output_.world_vy_mps = 0.0f;
 
-            if (xy_stable_count_ >= kStableCount)
+            if (xy_stable_count_ >= stable_count_)
             {
                 on_target_flag_ = 1U;
                 xy_stable_count_ = 0U;
@@ -124,11 +165,9 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         {
             xy_stable_count_ = 0U;
 
-            /* 位置环控制（规划X/Y对齐底盘Vx/Vy） */
-            float world_vx_mps = kPosKp * err_x_m + kPosKd * (err_x_m - last_err_x_);
-            float world_vy_mps = kPosKp * err_y_m + kPosKd * (err_y_m - last_err_y_);
+            float world_vx_mps = pos_kp_ * err_x_m + pos_kd_ * (err_x_m - last_err_x_);
+            float world_vy_mps = pos_kp_ * err_y_m + pos_kd_ * (err_y_m - last_err_y_);
 
-            /* 更新历史误差 */
             last_err_x_ = err_x_m;
             last_err_y_ = err_y_m;
 
@@ -136,48 +175,44 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
             output_.world_vy_mps = world_vy_mps;
         }
 
-        /* 平移阶段并行修正 yaw：PD 控制，角速度限幅较小以减少对平移的干扰 */
         {
-            float wz_cmd = -(kYawKp * err_yaw_rad + kYawKd * (err_yaw_rad - last_err_yaw_rad_));
+            float wz_cmd = -(yaw_kp_ * err_yaw_rad + yaw_kd_ * (err_yaw_rad - last_err_yaw_rad_));
             last_err_yaw_rad_ = err_yaw_rad;
 
-            if (wz_cmd > kMovingYawMaxRadps)
-                wz_cmd = kMovingYawMaxRadps;
-            else if (wz_cmd < -kMovingYawMaxRadps)
-                wz_cmd = -kMovingYawMaxRadps;
+            if (wz_cmd > moving_yaw_max_radps_)
+                wz_cmd = moving_yaw_max_radps_;
+            else if (wz_cmd < -moving_yaw_max_radps_)
+                wz_cmd = -moving_yaw_max_radps_;
 
             output_.wz_radps = wz_cmd;
         }
         break;
 
     case STATE_YAW_CORRECTING:
-        /* 角度到达判定 */
-        if (fabsf(err_yaw_deg) < kYawToleranceDeg)
+        if (fabsf(err_yaw_deg) < yaw_tolerance_deg_)
         {
             output_.world_vx_mps = 0.0f;
             output_.world_vy_mps = 0.0f;
             output_.wz_radps = 0.0f;
 
             ++theta_stable_count_;
-            if (theta_stable_count_ >= kStableCount)
+            if (theta_stable_count_ >= stable_count_)
             {
                 reset();
                 state_ = STATE_FINISHED;
-                return 1;  // 完成
+                return 1;
             }
         }
         else
         {
             theta_stable_count_ = 0U;
 
-            /* 角度环PD控制 */
-            output_.wz_radps = -(kYawKp * err_yaw_rad + kYawKd * (err_yaw_rad - last_err_yaw_rad_));
+            output_.wz_radps = -(yaw_kp_ * err_yaw_rad + yaw_kd_ * (err_yaw_rad - last_err_yaw_rad_));
             last_err_yaw_rad_ = err_yaw_rad;
 
-            /* 角速度限幅 */
-            if (fabsf(output_.wz_radps) > kMaxAngularSpeedRadps)
+            if (fabsf(output_.wz_radps) > max_angular_speed_radps_)
             {
-                output_.wz_radps = (output_.wz_radps > 0.0f) ? kMaxAngularSpeedRadps : -kMaxAngularSpeedRadps;
+                output_.wz_radps = (output_.wz_radps > 0.0f) ? max_angular_speed_radps_ : -max_angular_speed_radps_;
             }
         }
 
