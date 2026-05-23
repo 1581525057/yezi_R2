@@ -24,12 +24,9 @@ enum FTMState
     FTM_STATE_MOVE = 1,                 // 跟随移动状态
     FTM_STATE_GRIP = 2,                 // 抓取状态
     FTM_STATE_RELEASE = 3,              // 释放状态
-    FTM_STATE_PLATFORM_FORWARD = 4,     // 推杆伸出状态（平台前进）
-    FTM_STATE_PLATFORM_BACKWARD = 5,    // 推杆缩回状态（平台后退）
     FTM_STATE_CLAW_OPEN = 6,            // 夹爪打开状态
     FTM_STATE_CLAW_CLOSE = 7,           // 夹爪关闭状态
     FTM_STATE_RELEASE_TO_ZERO = 8,      // 释放回零状态
-    FTM_STATE_PLATFORM_STOP = 9,        // 推杆停止状态
     FTM_STATE_WUQIQU_ROUTE = 10,        // 武器区路径状态
     FTM_STATE_WUQIQU_ZERO = 11,         // 武器区路径前发送视觉置零
     FTM_STATE_RS05_ZERO = 12             // RS05回零状态
@@ -48,12 +45,9 @@ constexpr uint32_t kRs05CommandSettleMs = 200U;    // RS05 指令稳定时间，
 constexpr uint32_t kRs05MoveTimeoutMs = 2000U;     // RS05 动作超时时间，单位：ms
 constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;
 constexpr uint32_t kWuqiquZeroSettleMs = 200U;
-constexpr uint32_t kPlatformMotionDurationMs = 3750U;
 
 /* 释放阶段的 RS05 参数 */
 constexpr uint32_t kRs05ReinforceIntervalMs = 100U;
-
-/* 抓取翻转阶段的 RS05 参数 */
 
 uint8_t g_m2006_nonpositive_cycles = kM2006StopDebounceCycles; // M2006 非正向运动周期计数
 
@@ -144,34 +138,11 @@ struct WuqiquZeroContext
 
 WuqiquZeroContext g_wuqiqu_zero = {0U, 0U, 0U};
 
-enum PlatformMotionDirection
-{
-    PLATFORM_MOTION_NONE = 0,
-    PLATFORM_MOTION_FORWARD,
-    PLATFORM_MOTION_BACKWARD
-};
-
-struct PlatformMotionContext
-{
-    uint8_t active;
-    uint8_t direction;
-    uint32_t start_tick;
-};
-
-PlatformMotionContext g_platform_motion = {0U, PLATFORM_MOTION_NONE, 0U};
-
 void ResetWuqiquZeroContext(void)
 {
     g_wuqiqu_zero.active = 0U;
     g_wuqiqu_zero.start_tick = 0U;
     g_wuqiqu_zero.last_send_tick = 0U;
-}
-
-void ResetPlatformMotionContext(void)
-{
-    g_platform_motion.active = 0U;
-    g_platform_motion.direction = PLATFORM_MOTION_NONE;
-    g_platform_motion.start_tick = 0U;
 }
 
 /**
@@ -242,37 +213,6 @@ void ResetRs05PositionStep(void)
 bool HasElapsed(uint32_t start_tick, uint32_t duration_ms)
 {
     return static_cast<uint32_t>(HAL_GetTick() - start_tick) >= duration_ms;
-}
-
-bool RunPlatformMotionLoop(uint8_t direction)
-{
-    if (g_platform_motion.active == 0U || g_platform_motion.direction != direction)
-    {
-        ResetReleaseStateMachine();
-
-        if (direction == PLATFORM_MOTION_FORWARD)
-        {
-            platform_forward();
-        }
-        else
-        {
-            platform_backward();
-        }
-
-        g_platform_motion.active = 1U;
-        g_platform_motion.direction = direction;
-        g_platform_motion.start_tick = HAL_GetTick();
-        return false;
-    }
-
-    if (HasElapsed(g_platform_motion.start_tick, kPlatformMotionDurationMs) == false)
-    {
-        return false;
-    }
-
-    platform_stop();
-    ResetPlatformMotionContext();
-    return true;
 }
 
 /**
@@ -394,6 +334,9 @@ bool RunReleaseLoop(void)
         (void)StepMotorCommandDelayTimeout(20U);
         g_release.release_target_mm =
             (g_grip_distance_mm > kReleaseDropDistanceMm) ? (g_grip_distance_mm - kReleaseDropDistanceMm) : 0.0f;
+
+        // 限速并限流，降低带载释放时的翻转冲击。
+        g_rs05_motor.Set_RobStride_Motor_parameter(0x7017, kReleaseRs05LimitSpd, Set_parameter);
         StartRs05PositionStep(kGripClawPreOpenAngleRad);
         g_release.phase = RELEASE_PHASE_WAIT_RELEASE_ANGLE;
         return false;
@@ -404,12 +347,20 @@ bool RunReleaseLoop(void)
             return false;
         }
 
-        ReturnLiftToPosition(g_release.release_target_mm, kReleaseDropDistanceMm);
+        // 翻转过程中周期性补发指令，避免中途扰动导致角度偏离。
+        if (HasElapsed(g_release.last_rs05_cmd_tick, kRs05ReinforceIntervalMs))
+        {
+            ReturnLiftToPosition(g_release.release_target_mm, kReleaseDropDistanceMm);
+        }
         g_release.phase = RELEASE_PHASE_DROP_PARTIAL;
         return false;
 
     case RELEASE_PHASE_DROP_PARTIAL:
-        ServiceRs05HoldCommand();
+        // 下降过程中继续维持 RS05 的释放姿态。
+        if (HasElapsed(g_release.last_rs05_cmd_tick, kRs05ReinforceIntervalMs))
+        {
+            ServiceRs05HoldCommand();
+        }
 
         if (StepMotor_IsRecoveryActive() != false)
         {
@@ -476,12 +427,6 @@ bool RunReleaseToZeroLoop(void)
     }
 }
 
-/**
- * @brief 在指定时长内持续维护步进电机恢复动作
- *
- * @param duration_ms 持续时间，单位：ms
- * @return 无
- */
 /**
  * @brief 执行 MOVE 状态入口的一次性 RS05 回零动作
  *
@@ -677,17 +622,6 @@ void AdjustGripClawPosition(float angle_rad)
     SendRs05PositionCommand(angle_rad);
 }
 
-/**
- * @brief 以限速限流方式调整夹爪角度
- *
- * @param angle_rad 目标角度，单位：rad
- * @return 无
- */
-void AdjustGripClawPositionDamped(float angle_rad)
-{
-    SendRs05PositionCommand(angle_rad);
-}
-
 }
 
 extern "C" volatile uint8_t g_ftm_state = FTM_STATE_INIT;
@@ -723,14 +657,6 @@ extern "C" void ftm_task(void *argument)
         if (g_ftm_state != FTM_STATE_WUQIQU_ZERO && g_wuqiqu_zero.active != 0U)
         {
             ResetWuqiquZeroContext();
-        }
-
-        if (g_ftm_state != FTM_STATE_PLATFORM_FORWARD &&
-            g_ftm_state != FTM_STATE_PLATFORM_BACKWARD &&
-            g_platform_motion.active != 0U)
-        {
-            platform_stop();
-            ResetPlatformMotionContext();
         }
 
         switch (g_ftm_state)
@@ -769,26 +695,6 @@ extern "C" void ftm_task(void *argument)
             {
                 g_ftm_state = FTM_STATE_MOVE;
             }
-            break;
-        /* 推杆伸出状态 */
-        case FTM_STATE_PLATFORM_FORWARD:
-            if (RunPlatformMotionLoop(PLATFORM_MOTION_FORWARD) != false)
-            {
-                g_ftm_state = FTM_STATE_PLATFORM_STOP;
-            }
-            break;
-        /* 推杆缩回状态 */
-        case FTM_STATE_PLATFORM_BACKWARD:
-            if (RunPlatformMotionLoop(PLATFORM_MOTION_BACKWARD) != false)
-            {
-                g_ftm_state = FTM_STATE_PLATFORM_STOP;
-            }
-            break;
-        /* 推杆停止状态 */
-        case FTM_STATE_PLATFORM_STOP:
-            ResetReleaseStateMachine();
-            ResetPlatformMotionContext();
-            platform_stop();
             break;
         /* 夹爪打开状态 */
         case FTM_STATE_CLAW_OPEN:
