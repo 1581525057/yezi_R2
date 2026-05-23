@@ -9,8 +9,7 @@
  * 负责把全局 vision 当前位姿转换为规划器 Pose，
  * 再把规划器输出的规划坐标速度下发成底盘车体系速度目标。
  */
-namespace
-{
+
 constexpr float kPi = 3.14159265358979323846f;
 constexpr float kDegToRad = kPi / 180.0f;
 
@@ -213,7 +212,6 @@ private:
 };
 
 WuqiquTask wuqiqu_task;
-}
 
 extern "C" void WuqiquTask_Start(void)
 {

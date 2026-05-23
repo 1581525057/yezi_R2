@@ -20,8 +20,6 @@
 #define T_MIN -17.0f     // 转矩最小值，单位：Nm
 #define T_MAX 17.0f      // 转矩最大值，单位：Nm
 
-namespace
-{
 void RobStride_Send(FDCAN_HandleTypeDef *can_handle, FTM_CanTxHeaderTypeDef *tx_header, uint8_t *tx_data)
 {
 	FDCAN_TxHeaderTypeDef fdcan_header = {0};
@@ -42,7 +40,6 @@ void RobStride_Send(FDCAN_HandleTypeDef *can_handle, FTM_CanTxHeaderTypeDef *tx_
 	fdcan_header.MessageMarker = 0U;
 
 	(void)HAL_FDCAN_AddMessageToTxFifoQ(can_handle, &fdcan_header, tx_data);
-}
 }
 
 /**

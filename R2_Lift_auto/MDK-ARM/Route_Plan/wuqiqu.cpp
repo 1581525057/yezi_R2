@@ -1,9 +1,7 @@
 #include "wuqiqu.h"
 #include <math.h>
 
-namespace
-{
-    static const float WUQIQU_PI = 3.14159265358979323846f;
+static const float WUQIQU_PI = 3.14159265358979323846f;
     static const float kDegToRad = WUQIQU_PI / 180.0f;
 
     constexpr float kVisionYToPlannerX = -1.0f;
@@ -13,8 +11,7 @@ namespace
     static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
         { 0.77f, 0.62f, 0.0f },
     };
-    static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
-}
+static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 
 WuqiquPathPlanner wuqiqu;
 

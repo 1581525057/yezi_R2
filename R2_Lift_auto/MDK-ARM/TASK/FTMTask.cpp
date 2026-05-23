@@ -15,8 +15,6 @@ extern "C" uint8_t WuqiquTask_IsActive(void);
 extern "C" void WuqiquTask_AdvanceToNext(void);
 extern "C" uint8_t WuqiquTask_IsAllFinished(void);
 
-namespace
-{
 /* 微调机构状态枚举 */
 enum FTMState
 {
@@ -24,12 +22,12 @@ enum FTMState
     FTM_STATE_MOVE = 1,                 // 跟随移动状态
     FTM_STATE_GRIP = 2,                 // 抓取状态
     FTM_STATE_RELEASE = 3,              // 释放状态
-    FTM_STATE_CLAW_OPEN = 6,            // 夹爪打开状态
-    FTM_STATE_CLAW_CLOSE = 7,           // 夹爪关闭状态
-    FTM_STATE_RELEASE_TO_ZERO = 8,      // 释放回零状态
-    FTM_STATE_WUQIQU_ROUTE = 10,        // 武器区路径状态
-    FTM_STATE_WUQIQU_ZERO = 11,         // 武器区路径前发送视觉置零
-    FTM_STATE_RS05_ZERO = 12             // RS05回零状态
+    FTM_STATE_CLAW_OPEN = 4,            // 夹爪打开状态
+    FTM_STATE_CLAW_CLOSE = 5,           // 夹爪关闭状态
+    FTM_STATE_RELEASE_TO_ZERO = 6,      // 释放回零状态
+    FTM_STATE_WUQIQU_ROUTE = 7,         // 武器区路径状态
+    FTM_STATE_WUQIQU_ZERO = 8,          // 武器区路径前发送视觉置零
+    FTM_STATE_RS05_ZERO = 9             // RS05回零状态
 };
 
 constexpr uint8_t kM2006StopDebounceCycles = 2U;   // M2006 停止去抖周期数
@@ -620,8 +618,6 @@ void FTM_RunMoveLoop(void)
 void AdjustGripClawPosition(float angle_rad)
 {
     SendRs05PositionCommand(angle_rad);
-}
-
 }
 
 extern "C" volatile uint8_t g_ftm_state = FTM_STATE_INIT;

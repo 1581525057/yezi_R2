@@ -1,8 +1,6 @@
 #include "StepMotorTask.h"
 #include "cmsis_os.h"
 
-namespace
-{
 constexpr uint8_t kGripDirection = static_cast<uint8_t>(!Z_MOTOR_DIR); // 抓取抬升方向
 constexpr uint16_t kGripVelocityRpm = 50U;                             // 抓取抬升速度，单位：RPM
 constexpr uint16_t kReleaseVelocityRpm = 60U;                          // 释放下降速度，单位：RPM
@@ -66,7 +64,6 @@ void ConfigureZAxisDriverProtection(void)
     Emm_V5_Modify_Motor_Conf_Params(Z_MOTOR_ADDR, false, &kZAxisNoDropClogConfig);
     StepMotorCommandDelay();
     osDelay(20);
-}
 }
 
 volatile float g_grip_distance_mm = 322.0f;

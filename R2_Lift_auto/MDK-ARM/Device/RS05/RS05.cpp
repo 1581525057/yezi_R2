@@ -1,12 +1,9 @@
 #include "RS05.h"
 #include "cmsis_os.h"
 
-namespace
-{
 constexpr float kRs05DegreesToRadians = 0.01745329251994329577f;  // 角度转弧度比例系数
 
 uint8_t g_rs05_initialized = 0U;  // 电机初始化标志，0 表示未初始化
-}
 
 RobStride_Motor g_rs05_motor(&hfdcan3, RS05_CANID, false);
 float Angle = 1.575f;
