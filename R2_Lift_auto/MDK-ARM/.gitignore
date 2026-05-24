@@ -29,3 +29,5 @@ My_Princess_cpp/*.crf
 My_Princess_cpp/*.build_log.htm
 My_Princess_cpp/*.uvproj
 *.uvguix.*
+AGENTS.md
+.claude/
