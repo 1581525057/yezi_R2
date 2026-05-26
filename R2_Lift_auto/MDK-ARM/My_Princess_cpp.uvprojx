@@ -2095,16 +2095,6 @@
               <FilePath>.\Route_Plan\plan_route.cpp</FilePath>
             </File>
             <File>
-              <FileName>mieling.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\Route_Plan\mieling.h</FilePath>
-            </File>
-            <File>
-              <FileName>plan_route.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\Route_Plan\plan_route.h</FilePath>
-            </File>
-            <File>
               <FileName>lift_auto.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\Route_Plan\lift_auto.cpp</FilePath>
@@ -2113,6 +2103,11 @@
               <FileName>wuqiqu.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\Route_Plan\wuqiqu.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>arm_comm.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Route_Plan\arm_comm.cpp</FilePath>
             </File>
           </Files>
         </Group>

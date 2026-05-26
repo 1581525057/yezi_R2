@@ -47,7 +47,7 @@ FDCAN_TxFrame_TypeDef BSP_CAN::FDCAN2_TxFrame =
             .BitRateSwitch       = FDCAN_BRS_OFF,
             .FDFormat            = FDCAN_CLASSIC_CAN,
             .TxEventFifoControl  = FDCAN_NO_TX_EVENTS,
-            .MessageMarker       = 0,
+            .MessageMarker       = 0,         
         },
         .Data = {0},
 };
@@ -123,8 +123,9 @@ void BSP_CAN::AddMessageToTxFifoQ(FDCAN_TxFrame_TypeDef *FDCAN_TxFrame)
 void BSP_CAN::FDCAN1_RxFifo0RxHandler(uint32_t *Identifier, uint8_t Data[8])
 {
     // Yun_J60 接收分发（原有逻辑保留）
-    Yun_J60_Class::RxHandler(&FDCAN_RxFIFO0Frame, Data);
-    DJI_Motor_Class::RxHandler(Identifier, Data);
+      Yun_J60_Class::RxHandler(&FDCAN_RxFIFO0Frame, Data);
+	
+   
 }
 
 void BSP_CAN::FDCAN2_RxFifo1RxHandler(uint32_t *Identifier, uint8_t Data[8])
@@ -136,10 +137,11 @@ void BSP_CAN::FDCAN2_RxFifo1RxHandler(uint32_t *Identifier, uint8_t Data[8])
     for (auto &motor : VescMotors) {
         motor.canRxHandler(&FDCAN_RxFIFO1Frame);
     }
-}
+	
+}   
 
 void BSP_CAN::FDCAN3_RxFifo0RxHandler(uint32_t *Identifier, uint8_t Data[8])
-{
+{  
     DJI_Motor_Class::RxHandler(Identifier, Data);
 }
 
@@ -181,13 +183,15 @@ void BSP_CAN::RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
                                 FDCAN_RxFIFO1Frame.Data);
     }
 }
-
+float a_ben = 0;
 extern "C" void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
-    BSP_CAN::RxFifo0Callback(hfdcan, RxFifo0ITs);
+	
+       BSP_CAN::RxFifo0Callback(hfdcan, RxFifo0ITs);
 }
 
 extern "C" void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
 {
+	a_ben++;
     BSP_CAN::RxFifo1Callback(hfdcan, RxFifo1ITs);
 }

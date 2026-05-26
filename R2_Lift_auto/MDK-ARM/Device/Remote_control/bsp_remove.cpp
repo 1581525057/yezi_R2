@@ -25,13 +25,13 @@ void Remote::reset()
 
     // 清空鼠标数据。
     // 注意：原代码此处使用 sizeof(rc_)，看起来是拷贝时留下的问题，逻辑上应为 sizeof(mouse_)。
-    memset(&mouse_, 0, sizeof(rc_));
+    memset(&mouse_, 0, sizeof(mouse_));
 
     // 清空键盘数据（同上，逻辑上应为 sizeof(key_)）。
-    memset(&key_, 0, sizeof(rc_));
+    memset(&key_, 0, sizeof(key_));
 
     // 清空底盘控制指令（逻辑上应为 sizeof(chassis_)）。
-    memset(&chassis_, 0, sizeof(rc_));
+    memset(&chassis_, 0, sizeof(chassis_));
 
     // 复位后在线计数归零。
     online_cnt_ = 0;

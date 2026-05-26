@@ -12,6 +12,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "timers.h"
+#include "bsp_usart.h"
 
 /* 步进电机 UART 发送接口 */
 #define MotorHuart huart10
@@ -309,6 +310,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
+  BSP_USART::ErrorDispatch(huart);
   StepMotorTx_OnError(huart);
 }
 

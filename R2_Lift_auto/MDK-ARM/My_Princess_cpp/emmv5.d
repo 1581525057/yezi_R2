@@ -43,4 +43,5 @@ my_princess_cpp/emmv5.o: Device\StepMotor\EmmV5.cpp \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\mpu_wrappers.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\task.h \
   ..\Middlewares\Third_Party\FreeRTOS\Source\include\list.h \
-  ..\Middlewares\Third_Party\FreeRTOS\Source\include\timers.h
+  ..\Middlewares\Third_Party\FreeRTOS\Source\include\timers.h \
+  Bsp\bsp_usart.h

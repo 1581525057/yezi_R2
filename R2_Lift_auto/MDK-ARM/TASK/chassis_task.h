@@ -9,50 +9,37 @@ extern "C" {
 #include "stdint.h"
 
 // 抬升角度环
-#define OUTPUT_LIFT 3
+#define OUTPUT_LIFT     3
 #define INTERLIMIT_LIFT 0
-#define DEBAND_LIFT 0
-#define KP_LIFT 0.5
-#define KI_LIFT 0
-#define KD_LIFT 0
+#define DEBAND_LIFT     0
+#define KP_LIFT         0.5
+#define KI_LIFT         0
+#define KD_LIFT         0
 
-//抬升前进
-#define OUTPUT_LIFT_MOVE 10000
+// 抬升前进
+#define OUTPUT_LIFT_MOVE     10000
 #define INTERLIMIT_LIFT_MOVE 0
-#define DEBAND_LIFT_MOVE 1
-#define KP_LIFT_MOVE 12
-#define KI_LIFT_MOVE 0.8
-#define KD_LIFT_MOVE 0
-
-// 底盘pid
-
+#define DEBAND_LIFT_MOVE     1
+#define KP_LIFT_MOVE         12
+#define KI_LIFT_MOVE         0.8
+#define KD_LIFT_MOVE         0
 
 // 底盘整体
-#define OUTPUT_CHASSIS_LINEAR 6
+#define OUTPUT_CHASSIS_LINEAR     4
 #define INTERLIMIT_CHASSIS_LINEAR 0
-#define DEBAND_CHASSIS_LINEAR 0
-#define KP_CHASSIS_LINEAR 20
-#define KI_CHASSIS_LINEAR 0
-#define KD_CHASSIS_LINEAR 0
+#define DEBAND_CHASSIS_LINEAR     0
+#define KP_CHASSIS_LINEAR         20
+#define KI_CHASSIS_LINEAR         0
+#define KD_CHASSIS_LINEAR         0
 
-#define OUTPUT_CHASSIS_ANGLE 16384
-#define INTERLIMIT_CHASSIS_ANGLE 500000
-#define DEBAND_CHASSIS_ANGLE 500
-#define KP_CHASSIS_ANGLE 10
-#define KI_CHASSIS_ANGLE 0
-#define KD_CHASSIS_ANGLE 1
+#define OUTPUT_CHASSIS_3508       450
+#define INTERLIMIT_CHASSIS_3508   0
+#define DEBAND_CHASSIS_3508       0.5
+#define KP_CHASSIS_3508           1
+#define KI_CHASSIS_3508           0
+#define KD_CHASSIS_3508           0
 
-//对接角度环
-#define OUTPUT_CHASSIS_TRACK 0.05
-#define INTERLIMIT_CHASSIS_TRACK 0
-#define DEBAND_CHASSIS_TRACK 0
-#define KP_CHASSIS_TRACK 0.04
-#define KI_CHASSIS_TRACK 0
-#define KD_CHASSIS_TRACK 0
-
-
-struct chassis_pid
-{
+struct chassis_pid {
     /* data */
     float kp;
     float ki;
@@ -60,7 +47,6 @@ struct chassis_pid
     float output_max;
     float limit;
 };
-
 
 #ifdef __cplusplus
 }

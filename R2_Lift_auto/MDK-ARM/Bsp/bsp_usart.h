@@ -35,6 +35,9 @@ public:
     // 重新使能 DMA / 空闲中断
     void ReEnable();
 
+    // 串口错误后重新拉起 DMA 接收
+    void RecoverFromError();
+
     // 判断传进来的 huart 是否就是当前对象绑定的 huart
     uint8_t IsThisUart(UART_HandleTypeDef *huart_);
 
@@ -59,6 +62,8 @@ public:
     static void Init(void);
 
     static void RxEventDispatch(UART_HandleTypeDef *huart, uint16_t Size);
+
+    static void ErrorDispatch(UART_HandleTypeDef *huart);
 };
 
 #endif

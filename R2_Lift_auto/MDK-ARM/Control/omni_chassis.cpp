@@ -26,13 +26,10 @@ void OmniChassis::inverseKinematics()
     float legacy_vy = 0.0f;
     OmniChassis::currentToLegacy(target.Vx, target.Vy, &legacy_vx, &legacy_vy);
 
-    if (flag == 0) {
-        target.rpm[0] = -(-a * legacy_vx + a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
-        target.rpm[1] = -(-a * legacy_vx - a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
-        target.rpm[2] = -(a * legacy_vx - a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
-        target.rpm[3] = -(a * legacy_vx + a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
-    } else if (flag == 1) {
-    }
+    target.rpm[0] = -(-a * legacy_vx + a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
+    target.rpm[1] = -(-a * legacy_vx - a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
+    target.rpm[2] = -(a * legacy_vx - a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
+    target.rpm[3] = -(a * legacy_vx + a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
 
     for (int i = 0; i < 4; i++) {
         if (target.rpm[i] >= max_rpm) {
@@ -60,17 +57,14 @@ void OmniChassis::forwardKinematics()
 
     now.Vz = Vz_body;
 
-    if (flag == 1) {
-    } else {
-        OmniChassis::legacyToCurrent(Vx_body, Vy_body, &now.Vx, &now.Vy);
-    }
+    OmniChassis::legacyToCurrent(Vx_body, Vy_body, &now.Vx, &now.Vy);
 }
 
 // 动力学逆解算
 void OmniChassis::dynamicsInverse(float Fx, float Fy, float T)
 {
     float motor_out[4];
-    float k = 1.41421356f / 4.0f;
+    float k         = 1.41421356f / 4.0f;
     float legacy_fx = 0.0f;
     float legacy_fy = 0.0f;
     OmniChassis::currentToLegacy(Fx, Fy, &legacy_fx, &legacy_fy);
@@ -85,26 +79,42 @@ void OmniChassis::dynamicsInverse(float Fx, float Fy, float T)
     }
 }
 
-// 扭矩 -> 电流原始值
-float OmniChassis::torqueToCurrent(float T)
+// 轮上扭矩 -> VESC电流指令，单位 mA
+int32_t OmniChassis::torqueToCurrent(float wheel_T)
 {
-    if (T > 6.0f)
-        T = 6.0f;
-    if (T < -6.0f)
-        T = -6.0f;
+    // 20A 对应的最大轮上扭矩
+    float max_wheel_torque = WHEEL_KT_NM_PER_A * VESC_MAX_CURRENT_A;
 
-    return T * 2730.67f;
+    if (wheel_T > max_wheel_torque)
+        wheel_T = max_wheel_torque;
+    if (wheel_T < -max_wheel_torque)
+        wheel_T = -max_wheel_torque;
+
+    // wheel_T = Kt_motor * I * 减速比 * 效率
+    float current_A = wheel_T / WHEEL_KT_NM_PER_A;
+
+    int32_t current_mA = (int32_t)(current_A * 1000.0f);
+
+    if (current_mA > VESC_MAX_CURRENT_MA)
+        current_mA = VESC_MAX_CURRENT_MA;
+    if (current_mA < -VESC_MAX_CURRENT_MA)
+        current_mA = -VESC_MAX_CURRENT_MA;
+
+    return current_mA;
 }
 
-// 电流原始值 -> 扭矩
-float OmniChassis::currentToTorque(int current)
+// VESC电流指令 mA -> 轮上扭矩
+float OmniChassis::currentToTorque(int32_t current_mA)
 {
-    if (current > 16384)
-        current = 16384;
-    if (current < -16384)
-        current = -16384;
+    if (current_mA > VESC_MAX_CURRENT_MA)
+        current_mA = VESC_MAX_CURRENT_MA;
+    if (current_mA < -VESC_MAX_CURRENT_MA)
+        current_mA = -VESC_MAX_CURRENT_MA;
 
-    float T_A = (float)current / 16384.0f * 20.0f;
-    float T   = 0.3f * T_A;
-    return T;
+    float current_A = (float)current_mA / 1000.0f;
+
+    // 轮上扭矩
+    float wheel_T = WHEEL_KT_NM_PER_A * current_A;
+
+    return wheel_T;
 }

@@ -102,7 +102,7 @@ extern "C" void lift_task(void *argument)
                 lift_debug.flag          = 1.0f;
             } else if (now_sw == 2U) {
                 // 2 档对应目标高度
-                lift_debug.height_target = -225.0f;
+                lift_debug.height_target = -230.0f;
                 lift_debug.flag          = 1.0f;
             }
 
@@ -126,8 +126,8 @@ extern "C" void lift_task(void *argument)
         lift_class_pid_calculate();
 
         // 左右两侧云深电机按目标角度与 PID 力矩输出控制
-        yun_j60_motor.SendControl(0x02, -lift_debug.posi, 0, 15, 0.5f, -pid_lift_left.pid.Output);
-        yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 15, 0.5f, pid_lift_right.pid.Output);
+        yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 15, 0.5f, -pid_lift_left.pid.Output);
+        yun_j60_motor.SendControl(0x02, lift_debug.posi, 0, 15, 0.5f, pid_lift_right.pid.Output);
 
         // 2006 电机电流控制发送口目前保留
         lift_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame,
@@ -196,12 +196,12 @@ static void lift_class_pid_calculate(void)
 static void lift_cauclate_height(void)
 {
     // 左侧电机角度方向与机械正方向相反，因此这里取负号
-    lift_class.left.angle = -yun_j60_motor.motor[1].position;
+    lift_class.left.angle = yun_j60_motor.motor[2].position;
     // 由卷轮直径换算左侧当前高度
     lift_class.left.height = lift_class.left.angle * HEIGHT_DIAMETER / 2.0f;
 
     // 右侧电机角度直接使用正方向
-    lift_class.right.angle = yun_j60_motor.motor[2].position;
+    lift_class.right.angle = yun_j60_motor.motor[1].position;
     // 由卷轮直径换算右侧当前高度
     lift_class.right.height = lift_class.right.angle * HEIGHT_DIAMETER / 2.0f;
 }
@@ -209,10 +209,10 @@ static void lift_cauclate_height(void)
 static float lift_position_input(float height)
 {
     // 对目标高度做限幅，避免超出机构行程
-    if (height > 120.0f) {
-        height = 120.0f;
-    } else if (height < -220.0f) {
-        height = -220.0f;
+    if (height > 220.0f) {
+        height = 220.0f;
+    } else if (height < -250.0f) {
+        height = -250.0f;
     }
 
     // 将线高度换算为卷轮需要转过的弧度

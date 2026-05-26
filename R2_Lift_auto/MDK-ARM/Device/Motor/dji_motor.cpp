@@ -95,7 +95,7 @@ void DJI_Motor_Class::RxHandler(uint32_t *Identifier, uint8_t Data[8])
         Info_Update(Identifier, Data, &Chassis_Motor[i]);
     }
 
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 2; i++)
     {
         Info_Update(Identifier, Data, &Lift_2006[i]);
     }

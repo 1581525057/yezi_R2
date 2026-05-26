@@ -87,8 +87,8 @@ void ROUTE_TASK::vision_choice()
             // 从方块队列取编号，查表设置雷达目标坐标
             int block_num = 0;
             vision_block_pop(&block_num);
-            lift_auto.setBlockNum(block_num);
-            lift_auto.setRadarTarget(
+            lift_auto.setStepUpBlockNum(block_num);
+            lift_auto.setStepUpRadarTarget(
                 block_vision_middle[block_num].x,
                 block_vision_climb[block_num].x,
                 block_vision_middle[block_num].y);
@@ -191,11 +191,11 @@ void ROUTE_TASK::meiling_route()
         }
 
         case PHASE_STEP_UP:
-            // setRadarTarget 和 setBlockNum 已在 vision_choice() 中配置
-            lift_auto.start();
+            // 上台阶目标参数已在 vision_choice() 中配置。
+            lift_auto.startStepUp();
 
-            if (lift_auto.isFinished()) {
-                lift_auto.stop();
+            if (lift_auto.isStepUpFinished()) {
+                lift_auto.stopStepUp();
                 state = PHASE_VISION;
             }
             break;
