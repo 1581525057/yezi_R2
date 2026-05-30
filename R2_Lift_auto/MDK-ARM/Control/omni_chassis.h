@@ -5,8 +5,20 @@
 #include <math.h>
 #include "arm_math.h" // CMSIS-DSP
 
-#define wheel_r             (0.15252f / 2.0f)
-#define wheel_circumference (wheel_r * 2 * PI)
+#define wheel_r                 (0.149f / 2.0f)
+#define wheel_circumference     (wheel_r * 2 * PI)
+#define MN705_KV225_KT_NM_PER_A 0.04244f
+#define VESC_MAX_CURRENT_A      20.0f
+#define VESC_MAX_CURRENT_MA     20000
+
+// 36:82 减速比
+#define GEAR_RATIO (82.0f / 36.0f)
+
+// 减速箱效率，先估算 85%
+#define GEAR_EFFICIENCY 0.85f
+
+// 轮上等效力矩系数
+#define WHEEL_KT_NM_PER_A (MN705_KV225_KT_NM_PER_A * GEAR_RATIO * GEAR_EFFICIENCY)
 
 typedef struct
 {
@@ -42,8 +54,22 @@ public:
     void dynamicsInverse(float Fx, float Fy, float T);
 
     // 工具函数
-    float torqueToCurrent(float T);
+    int32_t torqueToCurrent(float T);
     float currentToTorque(int current);
+
+    // 旧坐标系 ↔ 新坐标系转换
+    // 旧系: +X=右, +Y=前  →  新系: +X=前, +Y=左
+    static inline void legacyToCurrent(float legacy_x, float legacy_y, float *current_x, float *current_y)
+    {
+        *current_x = legacy_y;
+        *current_y = -legacy_x;
+    }
+
+    static inline void currentToLegacy(float current_x, float current_y, float *legacy_x, float *legacy_y)
+    {
+        *legacy_x = -current_y;
+        *legacy_y = current_x;
+    }
 
 public:
     Speed_t target; // 目标速度
@@ -54,8 +80,8 @@ public:
 
 private:
     static constexpr float a       = 0.7071f;
-    static constexpr float b       = 0.3684f;
-    static constexpr float max_rpm = 450.0f;
+    static constexpr float b       = 0.29212f;
+    static constexpr float max_rpm = 700.0f;
 };
 
 extern OmniChassis omni_chassis;

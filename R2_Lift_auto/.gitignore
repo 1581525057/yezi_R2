@@ -1,1 +1,40 @@
-**/CLAUDE.md
+# EIDE 工程与本地配置不上传
+EIDE_Project/
+**/.eide/
+**/.cmsis/
+**/.pack/
+*.code-workspace
+.eide.usr.ctx.json
+*eide*
+*EIDE*
+*.ept
+*.eide-template
+
+# VS Code 本地配置不上传
+.vscode/
+**/.vscode/
+
+# 其他本地工具配置不上传
+.claude/
+**/.claude/
+**/.clang-format
+
+# Keil/MDK 编译输出不上传，仅保留源码和工程配置
+MDK-ARM/My_Princess_cpp/
+MDK-ARM/Listings/
+MDK-ARM/Objects/
+*.axf
+*.elf
+*.hex
+*.bin
+*.map
+*.o
+*.d
+*.dep
+*.crf
+*.lst
+*.lnp
+*.htm
+*.build_log.htm
+*.uvguix.*
+*.uvgui.*

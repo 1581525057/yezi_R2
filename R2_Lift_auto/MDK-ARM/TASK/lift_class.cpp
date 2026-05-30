@@ -9,7 +9,11 @@
 #include "PID.h"
 #include "yun_j60.h"
 #include "lift_auto.h"
+#include <math.h>
+/*
+上200 高度为-230
 
+*/
 // 根据 2006 电机反馈转速，换算当前升降轮的线速度
 static void calc_linear_speed_from_motor_rpm(void);
 // 初始化升降机构相关 PID
@@ -31,6 +35,27 @@ static void calc_motor_rpm_from_linear_speed_target(float linear_speed_target);
 PID pid_lift_left, pid_lift_right;
 // 升降轮速度控制 PID
 PID pid_2006_r, pid_2006_l;
+// 抬升动作实际到位允许误差，单位 mm。
+static const float LIFT_HEIGHT_FINISH_TOLERANCE_MM = 5.0f;
+
+static inline uint8_t LiftHeight_IsMoveFinished(float elapsed_time,
+                                                float total_time,
+                                                float target_height,
+                                                float left_height,
+                                                float right_height,
+                                                float tolerance)
+{
+    if (elapsed_time >= total_time) {
+        return 1U;
+    }
+
+    if (fabsf(left_height - target_height) <= tolerance &&
+        fabsf(right_height - target_height) <= tolerance) {
+        return 1U;
+    }
+
+    return 0U;
+}
 
 // 升降机构实时状态
 Lift_Class lift_class;
@@ -38,6 +63,8 @@ Lift_Class lift_class;
 LiftHeight_t lift_calulate = {0};
 // 调试数据缓存
 debug_lift lift_debug = {0};
+
+float left_sensor, right_sensor;
 
 extern "C" void lift_task(void *argument)
 {
@@ -52,6 +79,10 @@ extern "C" void lift_task(void *argument)
     lift_height_set_target(&lift_calulate, 0.0f, 2.0f);
 
     for (;;) {
+
+        left_sensor  = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_15);
+        right_sensor = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3);
+
         // 读取当前机械位置并换算为左右两侧高度
         lift_cauclate_height();
 
@@ -68,11 +99,11 @@ extern "C" void lift_task(void *argument)
         // 如果半自动接管，则这里返回自动档位；否则返回手动拨杆档位
         uint8_t now_sw = lift_auto.getLiftSwitch(remove_dji.rc_.s[1]);
 
-        // 只有档位变化时，才重新设置目标高度
+        //只有档位变化时，才重新设置目标高度
         if (now_sw != last_sw) {
             if (now_sw == 3U) {
                 // 3 档对应目标高度
-                lift_debug.height_target = 100.0f;
+                lift_debug.height_target = 220.0f;
                 lift_debug.flag          = 1.0f;
             } else if (now_sw == 1U) {
                 // 1 档对应目标高度
@@ -80,7 +111,7 @@ extern "C" void lift_task(void *argument)
                 lift_debug.flag          = 1.0f;
             } else if (now_sw == 2U) {
                 // 2 档对应目标高度
-                lift_debug.height_target = -225.0f;
+                lift_debug.height_target = -230.0f;
                 lift_debug.flag          = 1.0f;
             }
 
@@ -104,14 +135,14 @@ extern "C" void lift_task(void *argument)
         lift_class_pid_calculate();
 
         // 左右两侧云深电机按目标角度与 PID 力矩输出控制
-        yun_j60_motor.SendControl(0x02, -lift_debug.posi, 0, 15, 0.5f, -pid_lift_left.pid.Output);
-        yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 15, 0.5f, pid_lift_right.pid.Output);
+        yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 15, 0.5f, -pid_lift_left.pid.Output);
+        yun_j60_motor.SendControl(0x02, lift_debug.posi, 0, 15, 0.5f, pid_lift_right.pid.Output);
 
         // 2006 电机电流控制发送口目前保留
         lift_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame,
                                        0x1FF,
-                                       pid_2006_r.pid.Output,
-                                       -pid_2006_l.pid.Output,
+                                       -pid_2006_r.pid.Output,
+                                       pid_2006_l.pid.Output,
                                        0,
                                        0);
 
@@ -174,12 +205,12 @@ static void lift_class_pid_calculate(void)
 static void lift_cauclate_height(void)
 {
     // 左侧电机角度方向与机械正方向相反，因此这里取负号
-    lift_class.left.angle = -yun_j60_motor.motor[1].position;
+    lift_class.left.angle = yun_j60_motor.motor[2].position;
     // 由卷轮直径换算左侧当前高度
     lift_class.left.height = lift_class.left.angle * HEIGHT_DIAMETER / 2.0f;
 
     // 右侧电机角度直接使用正方向
-    lift_class.right.angle = yun_j60_motor.motor[2].position;
+    lift_class.right.angle = yun_j60_motor.motor[1].position;
     // 由卷轮直径换算右侧当前高度
     lift_class.right.height = lift_class.right.angle * HEIGHT_DIAMETER / 2.0f;
 }
@@ -187,10 +218,10 @@ static void lift_cauclate_height(void)
 static float lift_position_input(float height)
 {
     // 对目标高度做限幅，避免超出机构行程
-    if (height > 120.0f) {
-        height = 120.0f;
-    } else if (height < -220.0f) {
-        height = -220.0f;
+    if (height > 220.0f) {
+        height = 220.0f;
+    } else if (height < -250.0f) {
+        height = -250.0f;
     }
 
     // 将线高度换算为卷轮需要转过的弧度
@@ -211,6 +242,7 @@ static void lift_height_set_target(LiftHeight_t *lift, float target, float T)
     lift->start_time    = DWT_.getTimeline_s();
     lift->started       = 1;
     lift->finished      = 0;
+    lift->command_seq++;
 
     // 如果给出的轨迹时间小于等于 0，则直接瞬时到目标值
     if (T <= 0.0f) {
@@ -244,8 +276,13 @@ static float lift_height_input(LiftHeight_t *lift)
     if (t <= 0.0f) {
         // 时间未正式开始时，保持起点高度
         lift->current_height = lift->start_height;
-    } else if (t >= lift->total_time) {
-        // 超过总时间后，直接到终点并标记完成
+    } else if (LiftHeight_IsMoveFinished(t,
+                                         lift->total_time,
+                                         lift->target_height,
+                                         lift_class.left.height,
+                                         lift_class.right.height,
+                                         LIFT_HEIGHT_FINISH_TOLERANCE_MM) != 0U) {
+        // 时间到达，或者左右实际高度已经到位，都直接切到目标高度并标记完成。
         lift->current_height = lift->target_height;
         lift->finished       = 1U;
     } else {
