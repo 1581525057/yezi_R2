@@ -81,7 +81,7 @@ public:
 private:
     static constexpr float a       = 0.7071f;
     static constexpr float b       = 0.29212f;
-    static constexpr float max_rpm = 450.0f;
+    static constexpr float max_rpm = 700.0f;
 };
 
 extern OmniChassis omni_chassis;

@@ -141,7 +141,7 @@ extern "C" void chassis_task(void *argument)
         target_vx = lift_auto.getChassisVxTarget(target_vx);
 
         // 当前自转输出仍使用航向 PID 结果，target_vz 只保留自动任务仲裁值。
-        omni_chassis.setRemote(target_vx, target_vy, remove_dji.chassis_.Vz);
+        omni_chassis.setRemote(target_vx, target_vy, VZ_OUT);
 
         // 速度环：根据当前速度和目标速度的误差计算 x/y 方向驱动力。
         float Fx = pid_F_chassis_linear_x.PID_Calculate(omni_chassis.now.Vx, omni_chassis.target.Vx);
@@ -160,20 +160,12 @@ extern "C" void chassis_task(void *argument)
         pid_chassis_3.PID_Calculate(VescMotors[3].rxData_.rpm, omni_chassis.target.rpm[3]);
 
         float motor_input[4];
-        float motor_current[4];
-
-        motor_input[0] = omni_chassis.target.rpm[0];
-        motor_input[1] = omni_chassis.target.rpm[1];
-        motor_input[2] = omni_chassis.target.rpm[2];
-        motor_input[3] = omni_chassis.target.rpm[3];
-
-        motor_current[0] = omni_chassis.feedforward_current[0];
 
         // 通过 CAN 分别发送前馈电流和转速闭环输出。
         for (uint8_t i = 0; i < 4; i++) {
 
-            VescMotors[i].setRpm(200);
-            // VescMotors[i].setCurrent();
+            motor_input[i] = omni_chassis.target.rpm[i];
+            VescMotors[i].setRpm(motor_input[i]);
         }
 
         // 控制周期约 1 ms。
@@ -194,5 +186,5 @@ static void chassis_pid_init(void)
     pid_F_chassis_linear_y.Init(OUTPUT_CHASSIS_LINEAR, INTERLIMIT_CHASSIS_LINEAR, DEBAND_CHASSIS_LINEAR, KP_CHASSIS_LINEAR, KI_CHASSIS_LINEAR, KD_CHASSIS_LINEAR, 0, 0x00);
 
     // 航向保持 PID。
-    pid_yaw.Init(2.5, 0.2, 0.1, 0.4, 0.02, 0, 0, 0x00);
+    pid_yaw.Init(2.5, 0.2, 0.1, 0.1, 0.02, 0, 0, 0x00);
 }

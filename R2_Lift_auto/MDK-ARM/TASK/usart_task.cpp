@@ -523,7 +523,7 @@ extern "C" void usart_task(void *argument)
         }
 
         if (Flag1 == 1) {
-            send_position_to_pc(0, 1, 0, 0, 90.0f);
+            send_position_to_pc(0, 1, 0, 0, 0.0f);
             Flag1 = 0;
         }
 

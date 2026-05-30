@@ -183,7 +183,7 @@ void BSP_CAN::RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
                                 FDCAN_RxFIFO1Frame.Data);
     }
 }
-float a_ben = 0;
+
 extern "C" void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
 	
@@ -192,6 +192,6 @@ extern "C" void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t 
 
 extern "C" void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
 {
-	a_ben++;
-    BSP_CAN::RxFifo1Callback(hfdcan, RxFifo1ITs);
+
+       BSP_CAN::RxFifo1Callback(hfdcan, RxFifo1ITs);
 }

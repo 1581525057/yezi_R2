@@ -8,13 +8,13 @@
 #define HEIGHT_DIAMETER (40.59f)
 
 // 从动轮直径（单位：mm）
-#define WHEEL_DIAMETERr_MM (30.0f)
+#define WHEEL_DIAMETERr_MM (60.0f)
 
 // 直驱轮齿数
-#define Z_MOTOR (24.0f)
+#define Z_MOTOR (27.0f)
 
 // 从动轮齿数
-#define Z_WHEEL (32.0f)
+#define Z_WHEEL (35.0f)
 
 typedef struct
 {
@@ -63,8 +63,5 @@ typedef struct debug_lift {
 extern Lift_Class lift_class;
 extern LiftHeight_t lift_calulate;
 extern debug_lift lift_debug;
-
-
-
 
 #endif

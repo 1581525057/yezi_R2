@@ -23,11 +23,11 @@ namespace
 {
     MeilingTarget_t first_relocation = {
         .preset_id   = 0,
-        .L_ref       = 2655.0f,
+        .L_ref       = 2700.0f,
         .R_ref       = 0.0f,
-        .F_ref       = 266.0f,
-        .tol_lat     = 12.0f,
-        .tol_lon     = 12.0f,
+        .F_ref       = 280.0f,
+        .tol_lat     = 10.0f,
+        .tol_lon     = 10.0f,
         .timeout_ms  = 500000U,
         .sensor_mask = SENSOR_FRONT | SENSOR_LEFT,
     };
@@ -144,7 +144,7 @@ void ROUTE_TASK::meiling_route()
                 uint8_t relocation_result = meiling.update();
 
                 if (relocation_result == MeilingLocator::SUCCESS) {
-                    send_position_to_pc(1, 1,2.26, 1.56, 0.0);
+                    send_position_to_pc(1, 1, 2.26, 1.56, 0.0);
                     relocation_number = 2;
                     // First relocation is done; wait for a vision command.
                     state = PHASE_VISION;

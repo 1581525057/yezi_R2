@@ -120,8 +120,8 @@ void LiftAuto::resetStepUp(void)
 void LiftAuto::update(void)
 {
     // 读取DT35激光测距
-    const uint32_t laser_mm   = (uint32_t)dt35.ch0.distance_filtered;
-    const uint8_t laser_valid = dt35.ch0.valid;
+    const uint32_t laser_mm   = (uint32_t)dt35.ch2.distance_filtered;
+    const uint8_t laser_valid = dt35.ch2.valid;
 
     // 未启动则持续复位
     if (step_up_started_ == 0U) {
@@ -233,7 +233,7 @@ void LiftAuto::update(void)
                 }
             } else {
                 // ========== 激光模式 ==========
-                // Vx: 前激光 ch0 控制（前为正）
+                // Vx: 前激光 ch2 控制（前为正）
                 if (step_up_middle_lift_finished_ == 0U &&
                     lift_calulate.command_seq != step_up_middle_lift_command_seq_ &&
                     lift_calulate.finished == 1U) {
@@ -249,14 +249,14 @@ void LiftAuto::update(void)
                     float lat_err      = 0.0f;
                     uint8_t lateral_ok = 0U;
 
-                    // 优先左激光 ch1
-                    if (dt35.ch1.valid != 0U && dt35.ch1.distance_filtered < (float)step_up_laser_max_mm_) {
-                        lat_err    = (dt35.ch1.distance_filtered - step_up_lateral_ref_mm_) * 0.001f;
+                    // 优先左激光 ch0
+                    if (dt35.ch0.valid != 0U && dt35.ch0.distance_filtered < (float)step_up_laser_max_mm_) {
+                        lat_err    = (dt35.ch0.distance_filtered - step_up_lateral_ref_mm_) * 0.001f;
                         lateral_ok = 1U;
                     }
-                    // 左激光超限，尝试右激光 ch2
-                    else if (dt35.ch2.valid != 0U && dt35.ch2.distance_filtered < (float)step_up_laser_max_mm_) {
-                        lat_err    = (step_up_lateral_ref_mm_ - dt35.ch2.distance_filtered) * 0.001f;
+                    // 左激光超限，尝试右激光 ch1
+                    else if (dt35.ch1.valid != 0U && dt35.ch1.distance_filtered < (float)step_up_laser_max_mm_) {
+                        lat_err    = (step_up_lateral_ref_mm_ - dt35.ch1.distance_filtered) * 0.001f;
                         lateral_ok = 1U;
                     }
 

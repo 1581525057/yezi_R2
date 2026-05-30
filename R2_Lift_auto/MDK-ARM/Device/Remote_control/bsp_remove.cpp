@@ -15,7 +15,7 @@ Remote::Remote()
 
     // 初始状态下仍标记为"遥控器丢失"，
     // 直到真正收到一帧有效 SBUS 数据后才会清除该标志。
-    rc_lost_    = true;
+    rc_lost_ = true;
 }
 
 void Remote::reset()
@@ -37,7 +37,7 @@ void Remote::reset()
     online_cnt_ = 0;
 
     // 复位后默认判定为遥控器丢失，避免系统误动作。
-    rc_lost_    = true;
+    rc_lost_ = true;
 }
 
 int16_t Remote::normalizeChannel(uint16_t raw_value) const
@@ -59,11 +59,11 @@ void Remote::parseSBUS(const uint8_t *sbus_buf)
 
     // -------------------- 解析 5 个遥控通道 --------------------
     // 每个通道 11 bit，按照 SBUS 格式从字节流中提取，掩码 0x07FF 保留低 11 位。
-    rc_.ch[0] = (sbus_buf[0] | (sbus_buf[1] << 8)) & 0x07FF;                            // 通道 0
-    rc_.ch[1] = ((sbus_buf[1] >> 3) | (sbus_buf[2] << 5)) & 0x07FF;                     // 通道 1
+    rc_.ch[0] = (sbus_buf[0] | (sbus_buf[1] << 8)) & 0x07FF;                              // 通道 0
+    rc_.ch[1] = ((sbus_buf[1] >> 3) | (sbus_buf[2] << 5)) & 0x07FF;                       // 通道 1
     rc_.ch[2] = ((sbus_buf[2] >> 6) | (sbus_buf[3] << 2) | (sbus_buf[4] << 10)) & 0x07FF; // 通道 2
-    rc_.ch[3] = ((sbus_buf[4] >> 1) | (sbus_buf[5] << 7)) & 0x07FF;                     // 通道 3
-    rc_.ch[4] = (sbus_buf[16] | (sbus_buf[17] << 8)) & 0x07FF;                           // 通道 4（扩展通道）
+    rc_.ch[3] = ((sbus_buf[4] >> 1) | (sbus_buf[5] << 7)) & 0x07FF;                       // 通道 3
+    rc_.ch[4] = (sbus_buf[16] | (sbus_buf[17] << 8)) & 0x07FF;                            // 通道 4（扩展通道）
 
     // -------------------- 解析左右拨杆开关状态 --------------------
     // 每个开关占 2 bit，取值范围 0~3，分别对应上/中/下三档。
@@ -93,7 +93,7 @@ void Remote::parseSBUS(const uint8_t *sbus_buf)
 
     // -------------------- 收到有效数据，刷新在线状态 --------------------
     online_cnt_ = 0xFAU; // 重置倒计时计数器（250 次）
-    rc_lost_    = false;  // 清除丢失标志
+    rc_lost_    = false; // 清除丢失标志
 }
 
 // 遥控器掉线监测函数。
@@ -121,8 +121,7 @@ void Remote::monitor()
 // 遥控器丢失时输出全零，防止底盘失控运动。
 void Remote::updateChassosCommand()
 {
-    if(rc_lost_)
-    {
+    if (rc_lost_) {
         // 遥控器丢失，所有速度指令清零。
         chassis_.Vx = 0.0f;
         chassis_.Vy = 0.0f;
@@ -136,36 +135,36 @@ void Remote::updateChassosCommand()
     // 后面的系数为各方向速度上限缩放比例：
     //   ch[2] -> Vx（前后平移），最大 2.0
     //   ch[3] -> Vy（左右平移），最大 2.0
-    //   ch[0] -> Vz（旋转），最大 3.0
+    //   ch[0] -> Vz（旋转），最大 2.0
     //   ch[1] -> Vl（升降/附加轴），最大 0.5
-    chassis_.Vx = static_cast<float>(rc_.ch[3]) / 660.0f * 2.5f;
-    chassis_.Vy = static_cast<float>(rc_.ch[2]) / 660.0f * -2.5f;
-    chassis_.Vz = static_cast<float>(rc_.ch[0]) / 660.0f * 3.0f;
+    chassis_.Vx = static_cast<float>(rc_.ch[3]) / 660.0f * 2.0f;
+    chassis_.Vy = static_cast<float>(rc_.ch[2]) / 660.0f * -2.0f;
+    chassis_.Vz = static_cast<float>(rc_.ch[0]) / 660.0f * 2.0f;
     chassis_.Vl = static_cast<float>(rc_.ch[1]) / 660.0f * 0.5f;
 }
 
 // ===================== Getter 访问接口 =====================
 
 // 返回遥控通道原始数据（归一化后）。
-const RC_Info_t& Remote::getRC() const
+const RC_Info_t &Remote::getRC() const
 {
     return rc_;
 }
 
 // 返回鼠标数据。
-const Mouse_Info_t& Remote::getMouse() const
+const Mouse_Info_t &Remote::getMouse() const
 {
     return mouse_;
 }
 
 // 返回键盘数据。
-const Key_Info_t& Remote::getKey() const
+const Key_Info_t &Remote::getKey() const
 {
     return key_;
 }
 
 // 返回底盘速度指令。
-const Chassis_Cmd_t& Remote::getChassosCmd() const
+const Chassis_Cmd_t &Remote::getChassosCmd() const
 {
     return chassis_;
 }

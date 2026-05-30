@@ -255,16 +255,16 @@ void MeilingLocator::calcErrors(void)
          * 第一次进入定位时直接用当前DT35原始值初始化滤波器。
          * 如果从0开始滤波，第一次误差会被人为放大，速度规划会出现不必要的启动冲击。
          */
-        m_plan.F_filtered = dt35.ch0.distance_mm;
-        m_plan.L_filtered = dt35.ch1.distance_mm;
-        m_plan.R_filtered = dt35.ch2.distance_mm;
+        m_plan.F_filtered = dt35.ch2.distance_mm;
+        m_plan.L_filtered = dt35.ch0.distance_mm;
+        m_plan.R_filtered = dt35.ch1.distance_mm;
         m_plan.filter_ready = 1U;
     }
     else
     {
-        m_plan.F_filtered = lowPass(m_plan.F_filtered, dt35.ch0.distance_mm);
-        m_plan.L_filtered = lowPass(m_plan.L_filtered, dt35.ch1.distance_mm);
-        m_plan.R_filtered = lowPass(m_plan.R_filtered, dt35.ch2.distance_mm);
+        m_plan.F_filtered = lowPass(m_plan.F_filtered, dt35.ch2.distance_mm);
+        m_plan.L_filtered = lowPass(m_plan.L_filtered, dt35.ch0.distance_mm);
+        m_plan.R_filtered = lowPass(m_plan.R_filtered, dt35.ch1.distance_mm);
     }
 
     if (has_front)

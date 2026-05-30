@@ -26,10 +26,10 @@ void OmniChassis::inverseKinematics()
     float legacy_vy = 0.0f;
     OmniChassis::currentToLegacy(target.Vx, target.Vy, &legacy_vx, &legacy_vy);
 
-    target.rpm[0] = -(-a * legacy_vx + a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
-    target.rpm[1] = -(-a * legacy_vx - a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
-    target.rpm[2] = -(a * legacy_vx - a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
-    target.rpm[3] = -(a * legacy_vx + a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference;
+    target.rpm[0] = -(-a * legacy_vx + a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference * GEAR_RATIO;
+    target.rpm[1] = -(-a * legacy_vx - a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference * GEAR_RATIO;
+    target.rpm[2] = -(a * legacy_vx - a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference * GEAR_RATIO;
+    target.rpm[3] = -(a * legacy_vx + a * legacy_vy - target.Vz * b) * 60.0f / wheel_circumference * GEAR_RATIO;
 
     for (int i = 0; i < 4; i++) {
         if (target.rpm[i] >= max_rpm) {

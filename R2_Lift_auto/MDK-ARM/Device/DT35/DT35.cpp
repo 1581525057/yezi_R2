@@ -142,14 +142,14 @@ static void convert_channel(uint16_t raw, DT35_Data_t &out, uint8_t channel)
         v = DT35_VOLTAGE_MAX_V;
 
     switch (channel) {
-        case 0:
-            out.distance_mm = 162.34842f * v + 17.81856f;
+        case 0: // 左边激光
+            out.distance_mm = 487.77696f * v + 26.55159f;
             break;
-        case 1:
-            out.distance_mm = 296.76123f * v + 40.242f;
+        case 1: // 右边激光
+            out.distance_mm = 340.47226f * v + 26.15079f;
             break;
-        case 2:
-            out.distance_mm = 488.73101f * v + 41.85081f;
+        case 2: // 前面激光
+            out.distance_mm = 128.29523f * v + 40.25934f;
             break;
         default:
             out.distance_mm = 0;
