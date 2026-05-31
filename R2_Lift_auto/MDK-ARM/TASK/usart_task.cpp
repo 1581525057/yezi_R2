@@ -41,12 +41,12 @@ uint8_t vision_block_head = 0U;
 uint8_t vision_block_tail = 0U;
 // 每个方块的中心坐标
 Block_Vision block_vision_middle[10];
-float block_middle_x = 3.47f;
-float block_middle_y = 1.56f;
+float block_middle_x = 1.0f;
+float block_middle_y = -1.49f;
 // 每个方块的爬升坐标
 Block_Vision block_vision_climb[10];
-float block_climb_x = 3.16f;
-float block_climb_y = 1.57f;
+float block_climb_x = 0.63f;
+float block_climb_y = -1.52f;
 
 // 通过第2个方块来计算得到其他8个的坐标位置
 static void Block_claulate_Middle(void)
