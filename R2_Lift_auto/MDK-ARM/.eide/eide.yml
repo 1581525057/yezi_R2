@@ -151,10 +151,9 @@ virtualFolder:
       files:
         - path: Route_Plan/meiling.cpp
         - path: Route_Plan/plan_route.cpp
-        - path: Route_Plan/mieling.h
-        - path: Route_Plan/plan_route.h
         - path: Route_Plan/lift_auto.cpp
         - path: Route_Plan/wuqiqu.cpp
+        - path: Route_Plan/arm_comm.cpp
       folders: []
     - name: ::CMSIS
       files: []
@@ -162,7 +161,7 @@ virtualFolder:
 dependenceList: []
 outDir: build
 miscInfo:
-  uid: ae7f3de30f2ed9f7306f7c2ec66a8f4b
+  uid: 0a927050a601d1c7f3957ba4f557e605
 targets:
   My_Princess_cpp:
     cppPreprocessAttrs:
@@ -215,7 +214,15 @@ targets:
         floatingPointHardware: double
         options:
           version: 3
-          afterBuildTasks: []
+          afterBuildTasks:
+            - name: "[Copy linker output for Keil User Commands]"
+              abortAfterFailed: true
+              command: mkdir ${KEIL_OUTPUT_DIR} & copy "${OutDir}\${ProjectName}.axf" "${KEIL_OUTPUT_DIR}\${ProjectName}.axf"
+              disable: false
+            - name: "D:\\Keil5\\Postbuild\\postbuild.bat #L"
+              abortAfterFailed: true
+              command: D:\Keil5\Postbuild\postbuild.bat ${KEIL_OUTPUT_DIR}\${ProjectName}.axf
+              disable: false
           asm-compiler:
             $use: asm-auto
             defines: []

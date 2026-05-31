@@ -11,10 +11,10 @@ public:
     enum PlannerState
     {
         STATE_IDLE = 0,
-        STATE_MOVING,
-        STATE_YAW_CORRECTING,
-        STATE_FINISHED,
-        STATE_DEVIATED
+        STATE_APPROACH,
+        STATE_SLOW_APPROACH,
+        STATE_SOFT_CONTACT,
+        STATE_FINISHED
     };
 
     class TargetPoint
@@ -53,13 +53,6 @@ public:
     void reset(void);
     void resetRoute(void);
 
-    void setParams(float pos_kp, float pos_kd,
-                   float yaw_kp, float yaw_kd,
-                   float pos_tolerance_m, float yaw_tolerance_deg,
-                   uint16_t stable_count,
-                   float max_angular_speed_radps,
-                   float moving_yaw_max_radps);
-
     void advanceToNext(void);
     bool isAllFinished(void) const;
     uint8_t getCurrentIndex(void) const;
@@ -78,25 +71,40 @@ private:
     Output output_;
     PlannerState state_;
 
-    float pos_kp_;
-    float pos_kd_;
+    float approach_v_max_;
+    float slow_v_max_;
+    float contact_v_max_;
+    float finish_v_max_;
+
+    float slow_dist_;
+    float contact_dist_;
+    float finish_dist_;
+    float decel_;
+
+    float kp_approach_;
+    float kd_approach_;
+    float kp_slow_;
+    float kd_slow_;
+    float kp_contact_;
+    float kd_contact_;
+
+    float yaw_sign_;
     float yaw_kp_;
-    float yaw_kd_;
-    float pos_tolerance_m_;
+    float moving_wz_max_;
+    float settle_wz_max_;
     float yaw_tolerance_deg_;
-    uint16_t stable_count_;
-    float max_angular_speed_radps_;
-    float moving_yaw_max_radps_;
 
-    float last_err_x_;
-    float last_err_y_;
-    float last_err_yaw_rad_;
-
-    uint8_t on_target_flag_;
-    uint16_t xy_stable_count_;
-    uint16_t theta_stable_count_;
+    uint16_t stable_cycles_;
+    uint32_t contact_hold_ms_;
+    uint32_t contact_timeout_ms_;
+    uint32_t soft_contact_start_tick_;
+    uint16_t soft_contact_stable_count_;
 
     void loadCurrentWaypoint(void);
+    void setZeroOutput(void);
+    void updateState(float distance_m, uint32_t now_tick);
+    void limitVector(float &vx, float &vy, float max_speed) const;
+    float limitFloat(float value, float min_value, float max_value) const;
     float normalizeAngleDeg(float angle) const;
     float safeSqrt(float value) const;
 };

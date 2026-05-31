@@ -24,13 +24,12 @@ constexpr float kAngularAccStepRadps = 0.006f;
 constexpr float kAngularDecStepRadps = 0.010f;
 
 /*
- * 规划坐标系对齐底盘速度轴：
- * planner X -> 底盘 +Vx，planner Y -> 底盘 +Vy。
- * 已确认视觉轴关系：vision.x_diff 正方向对应底盘 +Vy，
- * vision.y_diff 负方向对应底盘 +Vx。
+ * 当前约定雷达 X/Y 与车体 X/Y 对齐：
+ * vision.x_diff -> planner X -> 底盘 Vx，
+ * vision.y_diff -> planner Y -> 底盘 Vy。
  */
-constexpr float kVisionXToPlannerY = 1.0f;
-constexpr float kVisionYToPlannerX = -1.0f;
+constexpr float kVisionXToPlannerX = 1.0f;
+constexpr float kVisionYToPlannerY = 1.0f;
 
 /* 普通数值限幅。 */
 float limitFloat(float value, float min_value, float max_value)
@@ -165,13 +164,8 @@ private:
     {
         WuqiquPathPlanner::Pose pose = {};
 
-        /*
-         * vision.x_diff 正方向对应底盘 +Vy；
-         * vision.y_diff 负方向对应底盘 +Vx。
-         * 因此规划坐标 X/Y 分别使用底盘 Vx/Vy 对应的方向。
-         */
-        pose.x = kVisionYToPlannerX * vision.y_diff;      // m, planner X / chassis Vx
-        pose.y = kVisionXToPlannerY * vision.x_diff;      // m, planner Y / chassis Vy
+        pose.x = kVisionXToPlannerX * vision.x_diff;      // m, planner X / chassis Vx
+        pose.y = kVisionYToPlannerY * vision.y_diff;      // m, planner Y / chassis Vy
         pose.yaw = vision.angle_x * kDegToRad;            // rad
         pose.yaw_360 = vision.angle_x;                    // deg
 

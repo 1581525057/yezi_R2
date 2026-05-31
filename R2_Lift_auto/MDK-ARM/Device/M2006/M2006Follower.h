@@ -16,6 +16,10 @@ extern "C" {
 class M2006FollowerMotor
 {
 public:
+    volatile float kp;
+    volatile float ki;
+    volatile float kd;
+
     M2006FollowerMotor(FDCAN_HandleTypeDef *hfdcan, uint16_t rx_id, uint8_t tx_slot);
 
     void Init();
@@ -35,6 +39,7 @@ public:
     void SetCommandSign(int8_t sign);
     void SetFeedbackSign(int8_t sign);
     void SetDescendDirection(uint8_t dir);
+    void SetPidGains(float kp, float ki, float kd);
 
 private:
     void UpdateTargetSpeed(void);
@@ -50,9 +55,8 @@ private:
     int8_t cmd_sign_;
     int8_t feedback_sign_;
     float step_to_rotor_ratio_;
-    float kff_;
-    float kp_;
-    float ki_;
+    float speed_deadband_rpm_;
+    float max_control_dt_sec_;
     int16_t i_start_min_;
     int16_t i_max_assist_;
 
@@ -62,9 +66,12 @@ private:
     uint8_t step_dir_;
     float step_speed_rpm_;
     float target_speed_rpm_;
-    float integral_;
+    float integral_current_;
+    float last_error_;
+    uint32_t last_control_tick_ms_;
     int16_t current_cmd_;
     uint8_t descend_active_;
+    uint8_t has_last_error_;
 };
 
 extern M2006FollowerMotor g_m2006;
