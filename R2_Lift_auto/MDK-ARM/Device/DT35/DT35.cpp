@@ -149,7 +149,7 @@ static void convert_channel(uint16_t raw, DT35_Data_t &out, uint8_t channel)
             out.distance_mm = 340.47226f * v + 26.15079f;
             break;
         case 2: // 前面激光
-            out.distance_mm = 128.29523f * v + 40.25934f;
+            out.distance_mm = 134.72766f * v + 45.00009f;
             break;
         default:
             out.distance_mm = 0;

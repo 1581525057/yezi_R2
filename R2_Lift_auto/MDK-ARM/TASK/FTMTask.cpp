@@ -546,7 +546,6 @@ bool RunGripLoop(void)
 
 void FTM_InitModules(void)
 {
-    vis_init();
     cmd_init();
     RS05_Init();
     RequestMoveEntryZero();

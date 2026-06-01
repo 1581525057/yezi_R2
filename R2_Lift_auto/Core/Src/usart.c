@@ -139,7 +139,7 @@ void MX_UART8_Init(void)
 
   /* USER CODE END UART8_Init 1 */
   huart8.Instance = UART8;
-  huart8.Init.BaudRate = 9600;
+  huart8.Init.BaudRate = 115200;
   huart8.Init.WordLength = UART_WORDLENGTH_8B;
   huart8.Init.StopBits = UART_STOPBITS_1;
   huart8.Init.Parity = UART_PARITY_NONE;
@@ -606,7 +606,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     hdma_uart9_rx.Init.MemInc = DMA_MINC_ENABLE;
     hdma_uart9_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
     hdma_uart9_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-    hdma_uart9_rx.Init.Mode = DMA_NORMAL;
+    hdma_uart9_rx.Init.Mode = DMA_CIRCULAR;
     hdma_uart9_rx.Init.Priority = DMA_PRIORITY_LOW;
     hdma_uart9_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     if (HAL_DMA_Init(&hdma_uart9_rx) != HAL_OK)

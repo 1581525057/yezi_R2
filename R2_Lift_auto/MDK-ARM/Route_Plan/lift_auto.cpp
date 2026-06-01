@@ -1,5 +1,6 @@
 #include "lift_auto.h"
 #include "DT35.h"
+#include "laser_distance.h"
 #include "mieling.h"
 #include "usart_task.h"
 #include "lift_class.h"
@@ -18,13 +19,13 @@ float STEP_UP_LIFT_ACC_SPEED = 0.4f;
 float STEP_UP_CHASSIS_ACC_SPEED = 0.8f;
 
 // 靠近目标距离 (mm)，到达后停止前进
-uint32_t STEP_UP_AUTO_PREPARE_MM = 50U;
+uint32_t STEP_UP_AUTO_PREPARE_MM = 56U;
 // 爬升完成判定高度 (mm)，低于此值说明已过台阶
-uint32_t STEP_UP_AUTO_FINISH_MM = 700U;
+uint32_t STEP_UP_AUTO_FINISH_MM = 655U;
 // 到达中间台阶距离
-uint16_t STEP_UP_AUTO_MIDDLE_MM = 300U;
+uint16_t STEP_UP_AUTO_MIDDLE_MM = 266U;
 // 横向目标参考值 (mm)
-float STEP_UP_AUTO_LATERAL_REF = 285.0f;
+float STEP_UP_AUTO_LATERAL_REF = 259.0f;
 // 激光有效阈值 (mm)，超过此距离认为激光不可用
 uint32_t STEP_UP_AUTO_LASER_MAX_MM = 1700U;
 // 高度稳定所需连续确认次数，防抖用
@@ -116,12 +117,12 @@ void LiftAuto::resetStepUp(void)
     step_up_lateral_ref_mm_          = STEP_UP_AUTO_LATERAL_REF;
     step_up_laser_max_mm_            = STEP_UP_AUTO_LASER_MAX_MM;
     step_up_middle_lift_command_seq_ = 0U;
-    step_up_middle_lift_finished_    = 0U;
 }
+
 
 void LiftAuto::update(void)
 {
-    // 读取DT35激光测距
+    // 读取前向DT35激光测距
     const uint32_t laser_mm   = (uint32_t)dt35.ch2.distance_filtered;
     const uint8_t laser_valid = dt35.ch2.valid;
 
@@ -183,8 +184,7 @@ void LiftAuto::update(void)
                     lift_linear_speed_target_        = 0.0f;
                     step_up_stable_count_            = 0U;
                     step_up_middle_lift_command_seq_ = lift_calulate.command_seq;
-                    step_up_middle_lift_finished_    = 0U;
-                    step_up_state_                   = STEP_UP_APPROACH_MIDDLE;
+                    step_up_state_                   = STEP_UP_WAIT_NEW_HEIGHT;
                 }
             } else {
                 // 激光模式：原有逻辑不变
@@ -205,9 +205,22 @@ void LiftAuto::update(void)
                     lift_linear_speed_target_        = 0.0f;
                     step_up_stable_count_            = 0U;
                     step_up_middle_lift_command_seq_ = lift_calulate.command_seq;
-                    step_up_middle_lift_finished_    = 0U;
-                    step_up_state_                   = STEP_UP_APPROACH_MIDDLE;
+                    step_up_state_                   = STEP_UP_WAIT_NEW_HEIGHT;
                 }
+            }
+            break;
+
+        case STEP_UP_WAIT_NEW_HEIGHT:
+            // 等待新的1档收回轨迹生成并完成，期间底盘保持不动。
+            chassis_vy_override_      = 1U;
+            chassis_vx_target_        = 0.0f;
+            chassis_vy_target_        = 0.0f;
+            lift_switch_target_       = 1U;
+            lift_linear_speed_target_ = 0.0f;
+
+            if (lift_calulate.command_seq != step_up_middle_lift_command_seq_ &&
+                lift_calulate.finished == 1U) {
+                step_up_state_ = STEP_UP_APPROACH_MIDDLE;
             }
             break;
 
@@ -236,14 +249,7 @@ void LiftAuto::update(void)
             } else {
                 // ========== 激光模式 ==========
                 // Vx: 前激光 ch2 控制（前为正）
-                if (step_up_middle_lift_finished_ == 0U &&
-                    lift_calulate.command_seq != step_up_middle_lift_command_seq_ &&
-                    lift_calulate.finished == 1U) {
-                    // 确认升降任务已经切到新的收回动作，并且该动作已经完成后，才放行底盘。
-                    step_up_middle_lift_finished_ = 1U;
-                }
-
-                if (laser_valid != 0U && step_up_middle_lift_finished_ != 0U) {
+                if (laser_valid != 0U) {
                     float err          = ((float)laser_mm - (float)STEP_UP_AUTO_MIDDLE_MM) * 0.001f;
                     chassis_vx_target_ = trapezoid_speed(err, STEP_UP_CHASSIS_ACC_SPEED, STEP_UP_AUTO_APPROACH_MPS);
 
@@ -251,14 +257,14 @@ void LiftAuto::update(void)
                     float lat_err      = 0.0f;
                     uint8_t lateral_ok = 0U;
 
-                    // 优先左激光 ch0
-                    if (dt35.ch0.valid != 0U && dt35.ch0.distance_filtered < (float)step_up_laser_max_mm_) {
-                        lat_err    = (dt35.ch0.distance_filtered - step_up_lateral_ref_mm_) * 0.001f;
+                    // 优先使用左侧串口激光
+                    if (laser_left.data.valid != 0U && laser_left.data.distance_mm < step_up_laser_max_mm_) {
+                        lat_err    = ((float)laser_left.data.distance_mm - step_up_lateral_ref_mm_) * 0.001f;
                         lateral_ok = 1U;
                     }
-                    // 左激光超限，尝试右激光 ch1
-                    else if (dt35.ch1.valid != 0U && dt35.ch1.distance_filtered < (float)step_up_laser_max_mm_) {
-                        lat_err    = (step_up_lateral_ref_mm_ - dt35.ch1.distance_filtered) * 0.001f;
+                    // 左侧激光不可用时，尝试右侧串口激光
+                    else if (laser_right.data.valid != 0U && laser_right.data.distance_mm < step_up_laser_max_mm_) {
+                        lat_err    = (step_up_lateral_ref_mm_ - (float)laser_right.data.distance_mm) * 0.001f;
                         lateral_ok = 1U;
                     }
 
@@ -276,7 +282,7 @@ void LiftAuto::update(void)
                         step_up_state_        = STEP_UP_FINISHED;
                     }
                 } else {
-                    // 等待升降动作完成期间，底盘保持不动。
+                    // 前向激光不可用期间，底盘保持不动。
                     chassis_vx_target_ = 0.0f;
                     chassis_vy_target_ = 0.0f;
                 }

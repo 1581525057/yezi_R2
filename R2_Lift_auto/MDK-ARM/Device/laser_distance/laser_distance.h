@@ -23,4 +23,5 @@ public:
     void laser_parse_dma_data(uint8_t *data, uint16_t len);
 };
 
-extern LaserDistance laser;
+extern LaserDistance laser_left;
+extern LaserDistance laser_right;

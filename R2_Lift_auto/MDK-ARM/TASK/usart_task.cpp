@@ -11,7 +11,6 @@
 #include "bsp_dwt.h"
 #include "chassis_task.h"
 #include "PID.h"
-#include "omni_chassis.h"
 #include "route_task.h"
 /* ========================== 全局变量 ========================== */
 
@@ -20,13 +19,8 @@ uint8_t data_usb[USB_RX_BUFFER_SIZE];
 static uint8_t posi_conputer[40]; // usb单片机发送给电脑
 /* 视觉数据，由 parse_vision_frame_computer() 写入 */
 VisionData_t vision;
-pid_data yaw_data;
 
 /* ========================== 静态变量 ========================== */
-
-/* LoRa 发送缓冲区：float 数据区 + 4 字节帧结束标志 */
-static uint8_t lora_tx_buf[CURVE_TX_MAX_FLOATS * 4 + 4];
-static uint8_t lora_rx_buf[40];
 
 /* 动作指令环形队列：缓存视觉帧中 C 后面的不定长动作 */
 #define VISION_COMMAND_QUEUE_SIZE 16U
@@ -41,12 +35,12 @@ uint8_t vision_block_head = 0U;
 uint8_t vision_block_tail = 0U;
 // 每个方块的中心坐标
 Block_Vision block_vision_middle[10];
-float block_middle_x = 1.0f;
-float block_middle_y = -1.49f;
+float block_middle_x = 1.03f;
+float block_middle_y = -1.47f;
 // 每个方块的爬升坐标
 Block_Vision block_vision_climb[10];
-float block_climb_x = 0.63f;
-float block_climb_y = -1.52f;
+float block_climb_x = 0.65f;
+float block_climb_y = -1.48f;
 
 // 通过第2个方块来计算得到其他8个的坐标位置
 static void Block_claulate_Middle(void)
@@ -98,15 +92,6 @@ static void Block_claulate_Climb(void)
     block_vision_climb[8] = {x + Block_Size * 2.0f, y};
 
     block_vision_climb[9] = {x + Block_Size * 2.0f, y + Block_Size};
-}
-
-static void lora_rx_dma_init(void)
-{
-    memset(lora_rx_buf, 0, sizeof(lora_rx_buf));
-    HAL_UART_Receive_DMA(&huart8, lora_rx_buf, sizeof(lora_rx_buf));
-    if (huart8.hdmarx != nullptr) {
-        __HAL_DMA_DISABLE_IT(huart8.hdmarx, DMA_IT_HT);
-    }
 }
 
 /* ===================== 内部工具函数 ===================== */
@@ -365,73 +350,6 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
     return 1;
 }
 
-int parse_vision_frame_pid(uint8_t *data, uint16_t len, pid_data *out)
-{
-    if (data == nullptr || out == nullptr || len == 0)
-        return -1;
-
-    pid_data parsed = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-
-    const uint8_t *s = nullptr;
-    for (uint16_t i = 0; i < len; ++i) {
-        if (data[i] == 'S') {
-            s = &data[i];
-            break;
-        }
-    }
-    if (!s)
-        return -1;
-
-    const uint8_t *e = nullptr;
-    for (const uint8_t *p = s + 1; p < data + len; ++p) {
-        if (*p == 'E') {
-            e = p;
-            break;
-        }
-    }
-    if (!e)
-        return -1;
-
-    const uint8_t *p = s + 1;
-    if (p < e && *p == ',')
-        ++p;
-    else
-        return -1;
-
-    parsed.kp = fast_atof(&p, e);
-    if (p < e && *p == ',')
-        ++p;
-    else
-        return -1;
-
-    parsed.ki = fast_atof(&p, e);
-    if (p < e && *p == ',')
-        ++p;
-    else
-        return -1;
-
-    parsed.kd = fast_atof(&p, e);
-    if (p < e && *p == ',')
-        ++p;
-    else
-        return -1;
-
-    parsed.limit_inter = fast_atof(&p, e);
-    if (p < e && *p == ',')
-        ++p;
-    else
-        return -1;
-
-    parsed.outputmax = fast_atof(&p, e);
-    if (p != e)
-        return -1;
-
-    *out = parsed;
-    return 0;
-}
-
-/* ===================== LoRa 发送 ===================== */
-
 /**
  * @brief  通过 USB 向上位机发送位置信息
  *
@@ -451,33 +369,6 @@ void send_position_to_pc(int16_t behaivor, uint8_t p_diff, float X_diff, float Y
         MiniPC_Transmit_Info(posi_conputer, static_cast<uint16_t>(n));
 }
 
-/**
- * @brief  通过 LoRa（huart10）以 DMA 方式发送 float 数组
- *
- * 帧格式：[float 原始字节 × len] [END_0][END_1][END_2][END_3]
- * 使用静态缓冲区 lora_tx_buf，非阻塞 DMA 发送。
- *
- * @param  data  float 数组指针
- * @param  len   float 个数（不超过 CURVE_TX_MAX_FLOATS）
- */
-static void send_curve_lora(const float *data, uint16_t len)
-{
-    if (data == nullptr || len == 0 || len > CURVE_TX_MAX_FLOATS)
-        return;
-
-    /* 将 float 数组的原始字节拷贝到静态缓冲区 */
-    memcpy(lora_tx_buf, data, len * 4);
-
-    /* 追加 4 字节帧结束标志 */
-    const uint16_t offset   = len * 4;
-    lora_tx_buf[offset + 0] = CURVE_END_0;
-    lora_tx_buf[offset + 1] = CURVE_END_1;
-    lora_tx_buf[offset + 2] = CURVE_END_2;
-    lora_tx_buf[offset + 3] = CURVE_END_3;
-
-    HAL_UART_Transmit_DMA(&huart8, lora_tx_buf, offset + 4);
-}
-
 /* ===================== FreeRTOS 任务入口 ===================== */
 int Flag1 = 0;
 
@@ -486,28 +377,19 @@ int Flag1 = 0;
  *
  * 职责：
  *   1. 更新 AS5047 磁编码器和 DT35 激光传感器
- *   2. 将 DT35 调试数据通过 LoRa 发送给上位机
- *   3. 解析 USB 串口收到的视觉帧
+ *   2. 解析 USB 串口收到的视觉帧
  */
 
 extern "C" void usart_task(void *argument)
 {
     // as5047.init(&hspi1);
     dt35.init(&hspi3);
-    lora_rx_dma_init();
     Block_claulate_Middle();
     Block_claulate_Climb();
     for (;;) {
         /* 更新传感器数据 */
         // as5047.updata();
         dt35.update();
-
-        /* 组装调试数据并通过 LoRa 发送 */
-        float debug_data[4] = {
-            0, omni_chassis.now.rpm[1], omni_chassis.now.rpm[2], omni_chassis.now.rpm[3]};
-        send_curve_lora(debug_data, 4);
-
-        parse_vision_frame_pid(lora_rx_buf, sizeof(lora_rx_buf), &yaw_data);
 
         /* USB 视觉帧处理：每轮主循环只处理一次，处理完立即清零缓冲区 */
         /* 第一步：快速扫描缓冲区是否包含帧头 'S'，没有则跳过解析 */

@@ -7,7 +7,6 @@
 #include "bsp_usart.h"
 #include "lift_auto.h"
 #include "mieling.h"
-#include "plan_route.h"
 #include "usart_task.h"
 #include "PID.h"
 #include <math.h>
@@ -23,9 +22,9 @@ namespace
 {
     MeilingTarget_t first_relocation = {
         .preset_id   = 0,
-        .L_ref       = 2740.0f,
+        .L_ref       = 2692.0f,
         .R_ref       = 0.0f,
-        .F_ref       = 320.0f,
+        .F_ref       = 217.0f,
         .tol_lat     = 10.0f,
         .tol_lon     = 10.0f,
         .timeout_ms  = 500000U,
@@ -144,7 +143,7 @@ void ROUTE_TASK::meiling_route()
                 uint8_t relocation_result = meiling.update();
 
                 if (relocation_result == MeilingLocator::SUCCESS) {
-                    send_position_to_pc(1, 1, -0.21, -1.52, 0.0);
+                    send_position_to_pc(1, 1, -0.12, -1.47, 0.0);
                     relocation_number = 2;
                     // First relocation is done; wait for a vision command.
                     state = PHASE_VISION;

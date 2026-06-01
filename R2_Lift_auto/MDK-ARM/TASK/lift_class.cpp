@@ -125,7 +125,7 @@ extern "C" void lift_task(void *argument)
 
         // 当标志位置位时，重新生成一条 0.7s 的线性轨迹
         if (lift_debug.flag == 1.0f) {
-            lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.7f);
+            lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.4f);
             lift_debug.flag = 0.0f;
         }
 

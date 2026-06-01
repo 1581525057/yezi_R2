@@ -124,7 +124,6 @@ extern "C" void chassis_task(void *argument)
                 target_vx = meiling.getChassisVxTarget(target_vx);
                 target_vy = meiling.getChassisVyTarget(target_vy);
                 target_vz = meiling.getChassisVzTarget(target_vz);
-
                 break;
             case CHASSIS_AUTO_CONFLICT:
                 // 两个自动任务同时生效时停车，避免底盘控制权冲突。
