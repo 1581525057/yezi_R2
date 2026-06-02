@@ -9,7 +9,8 @@
 #include "PID.h"
 #include "yun_j60.h"
 #include "dm_imu.h"
-#include "lift_auto.h"
+#include "lift_step_up.h"
+#include "lift_step_down.h"
 #include "VescMotor.h"
 #include "mieling.h"
 #include "usart_task.h"
@@ -138,6 +139,8 @@ extern "C" void chassis_task(void *argument)
         // 抬升机构根据自身状态继续限制底盘平移速度。
         target_vy = lift_auto.getChassisVyTarget(target_vy);
         target_vx = lift_auto.getChassisVxTarget(target_vx);
+        target_vy = lift_step_down.getChassisVyTarget(target_vy);
+        target_vx = lift_step_down.getChassisVxTarget(target_vx);
 
         // 当前自转输出仍使用航向 PID 结果，target_vz 只保留自动任务仲裁值。
         omni_chassis.setRemote(target_vx, target_vy, VZ_OUT);

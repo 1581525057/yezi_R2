@@ -1424,18 +1424,6 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>.\Route_Plan\lift_auto.cpp</PathWithFileName>
-      <FilenameWithoutPath>lift_auto.cpp</FilenameWithoutPath>
-      <RteFlg>0</RteFlg>
-      <bShared>0</bShared>
-    </File>
-    <File>
-      <GroupNumber>14</GroupNumber>
-      <FileNumber>88</FileNumber>
-      <FileType>8</FileType>
-      <tvExp>0</tvExp>
-      <tvExpOptDlg>0</tvExpOptDlg>
-      <bDave2>0</bDave2>
       <PathWithFileName>.\Route_Plan\wuqiqu.cpp</PathWithFileName>
       <FilenameWithoutPath>wuqiqu.cpp</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
@@ -1443,7 +1431,7 @@
     </File>
     <File>
       <GroupNumber>14</GroupNumber>
-      <FileNumber>89</FileNumber>
+      <FileNumber>88</FileNumber>
       <FileType>8</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -1455,13 +1443,37 @@
     </File>
     <File>
       <GroupNumber>14</GroupNumber>
-      <FileNumber>90</FileNumber>
+      <FileNumber>89</FileNumber>
       <FileType>8</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
       <PathWithFileName>.\Route_Plan\path_follow.cpp</PathWithFileName>
       <FilenameWithoutPath>path_follow.cpp</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>14</GroupNumber>
+      <FileNumber>90</FileNumber>
+      <FileType>8</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>.\Route_Plan\lift_step_down.cpp</PathWithFileName>
+      <FilenameWithoutPath>lift_step_down.cpp</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>14</GroupNumber>
+      <FileNumber>91</FileNumber>
+      <FileType>8</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>.\Route_Plan\lift_step_up.cpp</PathWithFileName>
+      <FilenameWithoutPath>lift_step_up.cpp</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

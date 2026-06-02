@@ -2090,11 +2090,6 @@
               <FilePath>.\Route_Plan\meiling.cpp</FilePath>
             </File>
             <File>
-              <FileName>lift_auto.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\Route_Plan\lift_auto.cpp</FilePath>
-            </File>
-            <File>
               <FileName>wuqiqu.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\Route_Plan\wuqiqu.cpp</FilePath>
@@ -2108,6 +2103,16 @@
               <FileName>path_follow.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\Route_Plan\path_follow.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>lift_step_down.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Route_Plan\lift_step_down.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>lift_step_up.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Route_Plan\lift_step_up.cpp</FilePath>
             </File>
           </Files>
         </Group>

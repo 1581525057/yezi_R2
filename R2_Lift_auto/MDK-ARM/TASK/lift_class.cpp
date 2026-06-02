@@ -8,7 +8,8 @@
 #include "bsp_usart.h"
 #include "PID.h"
 #include "yun_j60.h"
-#include "lift_auto.h"
+#include "lift_step_up.h"
+#include "lift_step_down.h"
 #include <math.h>
 #include "usart_task.h"
 /*
@@ -95,19 +96,21 @@ extern "C" void lift_task(void *argument)
 
         // 根据手动或半自动给出的目标线速度，换算升降轮目标转速
         calc_motor_rpm_from_linear_speed_target(
-            lift_auto.getLiftLinearSpeedTarget(remove_dji.chassis_.Vl));
+            lift_step_down.getLiftLinearSpeedTarget(
+                lift_auto.getLiftLinearSpeedTarget(remove_dji.chassis_.Vl)));
 
         // 记录上一拍的档位，只在档位变化时重新生成高度目标
         static uint8_t last_sw = 0;
 
         // 如果半自动接管，则这里返回自动档位；否则返回手动拨杆档位
-        uint8_t now_sw = lift_auto.getLiftSwitch(remove_dji.rc_.s[1]);
+        uint8_t now_sw = lift_step_down.getLiftSwitch(
+            lift_auto.getLiftSwitch(remove_dji.rc_.s[1]));
 
         // 只有档位变化时，才重新设置目标高度
         if (now_sw != last_sw) {
             if (now_sw == 3U) {
                 // 3 档对应目标高度
-                lift_debug.height_target = 220.0f;
+                lift_debug.height_target = 100.0f;
                 lift_debug.flag          = 1.0f;
             } else if (now_sw == 1U) {
                 // 1 档对应目标高度
@@ -125,7 +128,7 @@ extern "C" void lift_task(void *argument)
 
         // 当标志位置位时，重新生成一条 0.7s 的线性轨迹
         if (lift_debug.flag == 1.0f) {
-            lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.4f);
+            lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.2f);
             lift_debug.flag = 0.0f;
         }
 

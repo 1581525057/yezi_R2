@@ -1,4 +1,4 @@
-#include "lift_auto.h"
+#include "lift_step_up.h"
 #include "DT35.h"
 #include "laser_distance.h"
 #include "mieling.h"
@@ -11,7 +11,7 @@ extern uint8_t vision_block_pop(int *out);
 // 靠近阶段最大底盘速度 (m/s)
 float STEP_UP_AUTO_APPROACH_MPS = 0.8f;
 // 爬升阶段升降最大线速度 (m/s)
-float STEP_UP_AUTO_CLIMB_SPEED_MPS = 0.65f;
+float STEP_UP_AUTO_CLIMB_SPEED_MPS = 0.85f;
 
 // 爬升阶段升降最大加速度 (m/s)
 float STEP_UP_LIFT_ACC_SPEED = 0.4f;
@@ -118,7 +118,6 @@ void LiftAuto::resetStepUp(void)
     step_up_laser_max_mm_            = STEP_UP_AUTO_LASER_MAX_MM;
     step_up_middle_lift_command_seq_ = 0U;
 }
-
 
 void LiftAuto::update(void)
 {

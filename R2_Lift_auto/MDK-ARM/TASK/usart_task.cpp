@@ -33,14 +33,26 @@ uint8_t vision_command_tail = 0U;
 int vision_block_queue[VISION_BLOCK_QUEUE_SIZE];
 uint8_t vision_block_head = 0U;
 uint8_t vision_block_tail = 0U;
+
 // 每个方块的中心坐标
 Block_Vision block_vision_middle[10];
 float block_middle_x = 1.03f;
 float block_middle_y = -1.47f;
+
 // 每个方块的爬升坐标
 Block_Vision block_vision_climb[10];
 float block_climb_x = 0.65f;
 float block_climb_y = -1.48f;
+
+// 每个方块的下落坐标
+Block_Vision block_vision_down_pre[13];
+float block_down_pre_x;
+float block_down_pre_y;
+
+// 每个方块的下落坐标
+Block_Vision block_vision_down[13];
+float block_down_x;
+float block_down_y;
 
 // 通过第2个方块来计算得到其他8个的坐标位置
 static void Block_claulate_Middle(void)
@@ -94,6 +106,15 @@ static void Block_claulate_Climb(void)
     block_vision_climb[9] = {x + Block_Size * 2.0f, y + Block_Size};
 }
 
+static void Block_claulate_Pre(void)
+{
+    float Block_Size = 1.2f;
+
+    float x = block_down_pre_x;
+    float y = block_down_pre_y;
+
+    block_vision_down_pre[0] = {0.0, 0.0};
+}
 /* ===================== 内部工具函数 ===================== */
 
 /**

@@ -5,33 +5,25 @@
 #include "omni_chassis.h"
 #include "bsp_dwt.h"
 #include "bsp_usart.h"
-#include "lift_auto.h"
+#include "lift_step_up.h"
 #include "mieling.h"
 #include "usart_task.h"
 #include "PID.h"
 #include <math.h>
+#include "lift_step_down.h"
 
 ROUTE_TASK route_t;
 extern float yaw_target;
 extern PID pid_yaw;
 extern Block_Vision block_vision_middle[10];
 extern Block_Vision block_vision_climb[10];
-// x:0.80 y:-0.32 yaw:0.00
-// f:291.8 l:357
+
+extern Block_Vision block_vision_down_pre[13];
+extern Block_Vision block_vision_down[10];
+
 namespace
 {
     MeilingTarget_t first_relocation = {
-        .preset_id   = 0,
-        .L_ref       = 2692.0f,
-        .R_ref       = 0.0f,
-        .F_ref       = 217.0f,
-        .tol_lat     = 10.0f,
-        .tol_lon     = 10.0f,
-        .timeout_ms  = 500000U,
-        .sensor_mask = SENSOR_FRONT | SENSOR_LEFT,
-    };
-
-    MeilingTarget_t second_relocation = {
         .preset_id   = 0,
         .L_ref       = 343.0f,
         .R_ref       = 0.0f,
@@ -40,6 +32,18 @@ namespace
         .tol_lon     = 6.0f,
         .timeout_ms  = 500000U,
         .sensor_mask = SENSOR_FRONT | SENSOR_LEFT,
+    };
+
+    MeilingTarget_t second_relocation = {
+        .preset_id   = 0,
+        .L_ref       = 2692.0f,
+        .R_ref       = 0.0f,
+        .F_ref       = 217.0f,
+        .tol_lat     = 10.0f,
+        .tol_lon     = 10.0f,
+        .timeout_ms  = 500000U,
+        .sensor_mask = SENSOR_FRONT | SENSOR_LEFT,
+
     };
 
     MeilingTarget_t third_relocation = {
@@ -81,8 +85,20 @@ void ROUTE_TASK::vision_choice()
     flag_vision = vision_command_has_pending();
 
     switch (cmd) {
+
+        case 0:
+
+            state = FIRST_RELOCATION;
+            break;
+        case 1:
+            state = SECOND_RELOCATION;
+            break;
+        case 2:
+            state = THIRD_RELOCATION;
+            break;
+
         case 3: {
-            // 视觉指令 9：执行上台阶动作。
+            // 视觉指令 3：执行上台阶动作。
             // 从方块队列取编号，查表设置雷达目标坐标
             int block_num = 0;
             vision_block_pop(&block_num);
@@ -95,29 +111,28 @@ void ROUTE_TASK::vision_choice()
             break;
         }
 
-        case 1:
-            // 视觉指令 1：左转 90 度。
+        case 5: {
+            // 从方块队列取编号，查表设置雷达目标坐标
+            int block_num = 0;
+            vision_block_pop(&block_num);
+            lift_step_down.setStepDownBlockNum(block_num);
+            lift_step_down.setStepDownRadarTarget(
+                block_vision_down_pre[block_num].x,
+                block_vision_down[block_num].x,
+                block_vision_middle[block_num].x,
+                block_vision_middle[block_num].y);
+        }
+
+        case 7:
+            // 视觉指令 7：左转 90 度。
             yaw_stable_count = 0;
             state            = PHASE_TURN_LEFT90;
             break;
 
-        case 2:
-            // 视觉指令 2：右转 90 度。
+        case 8:
+            // 视觉指令 8：右转 90 度。
             yaw_stable_count = 0;
             state            = PHASE_TURN_RIGHT90;
-            break;
-
-        case 7:
-            // 视觉指令 7：按当前重定位次数启动下一段重定位。
-            if (relocation_number == 2) {
-                meiling.start(second_relocation);
-                state = SECOND_RELOCATION;
-            }
-
-            if (relocation_number == 3) {
-                meiling.start(third_relocation);
-                state = THIRD_RELOCATION;
-            }
             break;
 
         default:
@@ -131,7 +146,7 @@ void ROUTE_TASK::meiling_route()
         return;
 
     if (state == PHASE_IDLE)
-        state = FIRST_RELOCATION;
+        state = PHASE_VISION;
 
     switch (state) {
         case FIRST_RELOCATION:
@@ -257,15 +272,24 @@ extern "C" uint8_t RouteTask_IsMeilingAreaActive(void)
     }
 }
 
-uint16_t flag_meiling = 0;
+uint16_t flag_meiling   = 0;
+uint16_t flag_step_down = 0;
 extern "C" void plan_route(void *argument)
 {
+    lift_step_down.setStepDownRadarTarget(0.64, 0.05, -0.19, -1.43);
     for (;;) {
 
         if (flag_meiling == 1) {
             route_t.route_reset();
             flag_meiling = 0;
         }
+        if (flag_step_down == 1) {
+            lift_step_down.update();
+        }
+        if (flag_step_down == 2) {
+            lift_step_down.stopStepDown();
+        }
+
         route_t.vision_choice();
         route_t.meiling_route();
         lift_auto.update();
