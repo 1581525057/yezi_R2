@@ -42,17 +42,12 @@ PID pid_2006_angle;
 // 抬升动作实际到位允许误差，单位 mm。
 static const float LIFT_HEIGHT_FINISH_TOLERANCE_MM = 5.0f;
 
-static inline uint8_t LiftHeight_IsMoveFinished(float elapsed_time,
-                                                float total_time,
-                                                float target_height,
+static inline uint8_t LiftHeight_IsMoveFinished(float target_height,
                                                 float left_height,
                                                 float right_height,
                                                 float tolerance)
 {
-    if (elapsed_time >= total_time) {
-        return 1U;
-    }
-
+    // 只有左右两侧实际高度都进入目标容差，才认为抬升机构动作完成。
     if (fabsf(left_height - target_height) <= tolerance &&
         fabsf(right_height - target_height) <= tolerance) {
         return 1U;
@@ -128,7 +123,7 @@ extern "C" void lift_task(void *argument)
 
         // 当标志位置位时，重新生成一条 0.7s 的线性轨迹
         if (lift_debug.flag == 1.0f) {
-            lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.2f);
+            lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.6f);
             lift_debug.flag = 0.0f;
         }
 
@@ -288,15 +283,16 @@ static float lift_height_input(LiftHeight_t *lift)
     if (t <= 0.0f) {
         // 时间未正式开始时，保持起点高度
         lift->current_height = lift->start_height;
-    } else if (LiftHeight_IsMoveFinished(t,
-                                         lift->total_time,
-                                         lift->target_height,
+    } else if (LiftHeight_IsMoveFinished(lift->target_height,
                                          lift_class.left.height,
                                          lift_class.right.height,
                                          LIFT_HEIGHT_FINISH_TOLERANCE_MM) != 0U) {
-        // 时间到达，或者左右实际高度已经到位，都直接切到目标高度并标记完成。
+        // 左右实际高度已经到位，才标记动作完成。
         lift->current_height = lift->target_height;
         lift->finished       = 1U;
+    } else if (t >= lift->total_time) {
+        // 轨迹时间结束后保持目标高度，但等待实际机构到位。
+        lift->current_height = lift->target_height;
     } else {
         // 在总时间内按线性插值平滑推进高度轨迹
         lift->current_height = lift->start_height +

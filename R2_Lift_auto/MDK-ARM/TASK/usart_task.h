@@ -27,8 +27,7 @@ extern uint8_t data_usb[USB_RX_BUFFER_SIZE];
 /* 全局视觉数据实例 */
 extern VisionData_t vision;
 extern Block_Vision block_vision[10];
-extern Block_Vision block_vision_middle[10];
-extern Block_Vision block_vision_climb[10];
+extern Block_Vision block_vision_middle[13];
 /*
  * 解析视觉帧，提取坐标偏差和角度，并把不定长 B 指令压入队列。
  * 帧格式：S,<x_diff>,<y_diff>,<yaw>E 或 S,<x_diff>,<y_diff>,<yaw>,<B>[,<B>...]E

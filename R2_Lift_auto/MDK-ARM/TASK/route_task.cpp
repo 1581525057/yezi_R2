@@ -15,17 +15,13 @@
 ROUTE_TASK route_t;
 extern float yaw_target;
 extern PID pid_yaw;
-extern Block_Vision block_vision_middle[10];
-extern Block_Vision block_vision_climb[10];
-
-extern Block_Vision block_vision_down_pre[13];
-extern Block_Vision block_vision_down[10];
+extern Block_Vision block_vision_middle[13];
 
 namespace
 {
     MeilingTarget_t first_relocation = {
         .preset_id   = 0,
-        .L_ref       = 343.0f,
+        .L_ref       = 335.0f,
         .R_ref       = 0.0f,
         .F_ref       = 356.0f,
         .tol_lat     = 6.0f,
@@ -36,9 +32,9 @@ namespace
 
     MeilingTarget_t second_relocation = {
         .preset_id   = 0,
-        .L_ref       = 2692.0f,
+        .L_ref       = 2630.0f,
         .R_ref       = 0.0f,
-        .F_ref       = 217.0f,
+        .F_ref       = 300.0f,
         .tol_lat     = 10.0f,
         .tol_lon     = 10.0f,
         .timeout_ms  = 500000U,
@@ -60,12 +56,13 @@ namespace
 
 void ROUTE_TASK::route_reset()
 {
-    state             = PHASE_IDLE;
-    flag_start        = 0;
-    flag_relocation   = 0;
-    flag_vision       = 0;
-    relocation_number = 0;
-    yaw_stable_count  = 0;
+    state                   = PHASE_IDLE;
+    flag_start              = 0;
+    flag_relocation         = 0;
+    flag_vision             = 0;
+    relocation_number       = 0;
+    yaw_stable_count        = 0;
+    last_turn_90_direction_ = 0;
     vision_command_clear();
 }
 
@@ -103,24 +100,17 @@ void ROUTE_TASK::vision_choice()
             int block_num = 0;
             vision_block_pop(&block_num);
             lift_auto.setStepUpBlockNum(block_num);
+            lift_auto.setStepUpRadarClimbDirection(last_turn_90_direction_);
             lift_auto.setStepUpRadarTarget(
                 block_vision_middle[block_num].x,
-                block_vision_climb[block_num].x,
                 block_vision_middle[block_num].y);
-            state = PHASE_STEP_UP;
+            last_turn_90_direction_ = 0;
+            state                   = PHASE_STEP_UP;
             break;
         }
 
         case 5: {
             // 从方块队列取编号，查表设置雷达目标坐标
-            int block_num = 0;
-            vision_block_pop(&block_num);
-            lift_step_down.setStepDownBlockNum(block_num);
-            lift_step_down.setStepDownRadarTarget(
-                block_vision_down_pre[block_num].x,
-                block_vision_down[block_num].x,
-                block_vision_middle[block_num].x,
-                block_vision_middle[block_num].y);
         }
 
         case 7:
@@ -150,57 +140,28 @@ void ROUTE_TASK::meiling_route()
 
     switch (state) {
         case FIRST_RELOCATION:
+
+            break;
+
+        case SECOND_RELOCATION: {
             if (relocation_number == 0) {
                 // 第一次重定位
-                meiling.start(first_relocation);
+                meiling.start(second_relocation);
                 relocation_number = 1;
             } else if (relocation_number == 1) {
                 uint8_t relocation_result = meiling.update();
 
                 if (relocation_result == MeilingLocator::SUCCESS) {
-                    send_position_to_pc(1, 1, -0.12, -1.47, 0.0);
                     relocation_number = 2;
                     // First relocation is done; wait for a vision command.
                     state = PHASE_VISION;
                 } else if (relocation_result == MeilingLocator::TIMEOUT) {
-                    meiling.start(first_relocation);
+                    meiling.start(second_relocation);
                 }
             }
-            break;
-
-        case SECOND_RELOCATION: {
-            uint8_t relocation_result = 0;
-            if (relocation_number == 2) {
-                relocation_result = meiling.update();
-            }
-
-            if (relocation_result == MeilingLocator::SUCCESS) {
-                send_position_to_pc(1, 1, 0.80, -0.32, 0.0);
-                relocation_number = 3;
-                // Second relocation is done; ask the vision PC for the next action.
-                send_position_to_pc(1, 0, 0, 0, 0);
-                state = PHASE_VISION;
-            } else if (relocation_result == MeilingLocator::TIMEOUT) {
-                meiling.start(second_relocation);
-            }
-            break;
         }
 
         case THIRD_RELOCATION: {
-            uint8_t relocation_result = 0;
-            if (relocation_number == 3) {
-                relocation_result = meiling.update();
-            }
-
-            if (relocation_result == MeilingLocator::SUCCESS) {
-                // send_position_to_pc(1, 1, 0.80, -0.32, 0.0);
-                relocation_number = 4;
-                // Second relocation is done; ask the vision PC for the next action.
-
-                state = PHASE_VISION;
-            } else if (relocation_result == MeilingLocator::TIMEOUT) {
-                meiling.start(second_relocation);
-            }
             break;
         }
 
@@ -225,7 +186,8 @@ void ROUTE_TASK::meiling_route()
 
             // Hold yaw error inside tolerance for 200 cycles before finishing.
             if (yaw_stable_count >= 200) {
-                yaw_stable_count = 0;
+                yaw_stable_count        = 0;
+                last_turn_90_direction_ = 1;
 
                 state = PHASE_VISION;
             }
@@ -242,7 +204,8 @@ void ROUTE_TASK::meiling_route()
 
             // Hold yaw error inside tolerance for 200 cycles before finishing.
             if (yaw_stable_count >= 200) {
-                yaw_stable_count = 0;
+                yaw_stable_count        = 0;
+                last_turn_90_direction_ = -1;
 
                 state = PHASE_VISION;
             }
@@ -272,22 +235,17 @@ extern "C" uint8_t RouteTask_IsMeilingAreaActive(void)
     }
 }
 
-uint16_t flag_meiling   = 0;
-uint16_t flag_step_down = 0;
+uint16_t flag_meiling = 0;
+
 extern "C" void plan_route(void *argument)
 {
     lift_step_down.setStepDownRadarTarget(0.64, 0.05, -0.19, -1.43);
+    lift_auto.setStepUpRadarClimbDistance(0.87);
     for (;;) {
 
         if (flag_meiling == 1) {
             route_t.route_reset();
             flag_meiling = 0;
-        }
-        if (flag_step_down == 1) {
-            lift_step_down.update();
-        }
-        if (flag_step_down == 2) {
-            lift_step_down.stopStepDown();
         }
 
         route_t.vision_choice();

@@ -23,7 +23,7 @@ VisionData_t vision;
 /* ========================== 静态变量 ========================== */
 
 /* 动作指令环形队列：缓存视觉帧中 C 后面的不定长动作 */
-#define VISION_COMMAND_QUEUE_SIZE 16U
+#define VISION_COMMAND_QUEUE_SIZE 6U
 int vision_command_queue[VISION_COMMAND_QUEUE_SIZE];
 uint8_t vision_command_head = 0U;
 uint8_t vision_command_tail = 0U;
@@ -35,24 +35,9 @@ uint8_t vision_block_head = 0U;
 uint8_t vision_block_tail = 0U;
 
 // 每个方块的中心坐标
-Block_Vision block_vision_middle[10];
-float block_middle_x = 1.03f;
-float block_middle_y = -1.47f;
-
-// 每个方块的爬升坐标
-Block_Vision block_vision_climb[10];
-float block_climb_x = 0.65f;
-float block_climb_y = -1.48f;
-
-// 每个方块的下落坐标
-Block_Vision block_vision_down_pre[13];
-float block_down_pre_x;
-float block_down_pre_y;
-
-// 每个方块的下落坐标
-Block_Vision block_vision_down[13];
-float block_down_x;
-float block_down_y;
+Block_Vision block_vision_middle[13];
+float block_middle_x = 1.02f;
+float block_middle_y = -1.49f;
 
 // 通过第2个方块来计算得到其他8个的坐标位置
 static void Block_claulate_Middle(void)
@@ -72,49 +57,21 @@ static void Block_claulate_Middle(void)
 
     block_vision_middle[5] = {x + Block_Size, y};
 
-    block_vision_middle[6] = {x + Block_Size, y + Block_Size};
+    block_vision_middle[6] = {x + Block_Size, y - Block_Size};
 
     block_vision_middle[7] = {x + Block_Size * 2.0f, y - Block_Size};
 
     block_vision_middle[8] = {x + Block_Size * 2.0f, y};
 
     block_vision_middle[9] = {x + Block_Size * 2.0f, y + Block_Size};
-}
-static void Block_claulate_Climb(void)
-{
-    float Block_Size      = 1.2f;
-    float x               = block_climb_x;
-    float y               = block_climb_y;
-    block_vision_climb[0] = {0.0, 0.0};
 
-    block_vision_climb[1] = {x, y - Block_Size};
+    block_vision_middle[10] = {x + Block_Size * 2.0f, y + Block_Size};
 
-    block_vision_climb[2] = {x, y};
+    block_vision_middle[11] = {x + Block_Size * 2.0f, y + Block_Size};
 
-    block_vision_climb[3] = {x, y + Block_Size};
-
-    block_vision_climb[4] = {x + Block_Size, y - Block_Size};
-
-    block_vision_climb[5] = {x + Block_Size, y - Block_Size};
-
-    block_vision_climb[6] = {x + Block_Size, y + Block_Size};
-
-    block_vision_climb[7] = {x + Block_Size * 2.0f, y - Block_Size};
-
-    block_vision_climb[8] = {x + Block_Size * 2.0f, y};
-
-    block_vision_climb[9] = {x + Block_Size * 2.0f, y + Block_Size};
+    block_vision_middle[12] = {x + Block_Size * 2.0f, y + Block_Size};
 }
 
-static void Block_claulate_Pre(void)
-{
-    float Block_Size = 1.2f;
-
-    float x = block_down_pre_x;
-    float y = block_down_pre_y;
-
-    block_vision_down_pre[0] = {0.0, 0.0};
-}
 /* ===================== 内部工具函数 ===================== */
 
 /**
@@ -406,7 +363,6 @@ extern "C" void usart_task(void *argument)
     // as5047.init(&hspi1);
     dt35.init(&hspi3);
     Block_claulate_Middle();
-    Block_claulate_Climb();
     for (;;) {
         /* 更新传感器数据 */
         // as5047.updata();

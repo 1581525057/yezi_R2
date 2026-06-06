@@ -4,9 +4,22 @@
 #include "mieling.h"
 #include "usart_task.h"
 #include "lift_class.h"
+#include <math.h>
 
 extern VisionData_t vision;
 extern uint8_t vision_block_pop(int *out);
+
+static void step_up_world_error_to_body_error(float x_world, float y_world, float yaw_deg, float *x_body, float *y_body)
+{
+    const float deg_to_rad = 0.01745329251994329577f;
+    const float yaw_rad    = yaw_deg * deg_to_rad;
+    const float cos_yaw    = cosf(yaw_rad);
+    const float sin_yaw    = sinf(yaw_rad);
+
+    // 将世界系位置误差转换为车体系位置误差，yaw 左转为正、右转为负。
+    *x_body = cos_yaw * x_world + sin_yaw * y_world;
+    *y_body = -sin_yaw * x_world + cos_yaw * y_world;
+}
 
 // 靠近阶段最大底盘速度 (m/s)
 float STEP_UP_AUTO_APPROACH_MPS = 0.8f;
@@ -19,13 +32,13 @@ float STEP_UP_LIFT_ACC_SPEED = 0.4f;
 float STEP_UP_CHASSIS_ACC_SPEED = 0.8f;
 
 // 靠近目标距离 (mm)，到达后停止前进
-uint32_t STEP_UP_AUTO_PREPARE_MM = 56U;
+uint32_t STEP_UP_AUTO_PREPARE_MM = 60U;
 // 爬升完成判定高度 (mm)，低于此值说明已过台阶
-uint32_t STEP_UP_AUTO_FINISH_MM = 655U;
+uint32_t STEP_UP_AUTO_FINISH_MM = 685U;
 // 到达中间台阶距离
-uint16_t STEP_UP_AUTO_MIDDLE_MM = 266U;
+uint16_t STEP_UP_AUTO_MIDDLE_MM = 338U;
 // 横向目标参考值 (mm)
-float STEP_UP_AUTO_LATERAL_REF = 259.0f;
+float STEP_UP_AUTO_LATERAL_REF = 289.0f;
 // 激光有效阈值 (mm)，超过此距离认为激光不可用
 uint32_t STEP_UP_AUTO_LASER_MAX_MM = 1700U;
 // 高度稳定所需连续确认次数，防抖用
@@ -77,6 +90,10 @@ uint8_t LiftAuto::step_up_stable_confirm(uint8_t condition)
 
 LiftAuto::LiftAuto()
 {
+    step_up_radar_climb_distance_m_  = 0.0f;
+    step_up_radar_last_x_ref_middle_ = 0.0f;
+    step_up_radar_last_y_ref_middle_ = 0.0f;
+    step_up_radar_last_middle_valid_ = 0U;
     resetStepUp();
 }
 
@@ -100,23 +117,27 @@ uint8_t LiftAuto::isStepUpFinished(void) const
 // 清零上台阶流程状态，回到空闲
 void LiftAuto::resetStepUp(void)
 {
-    step_up_started_                 = 0U;
-    step_up_state_                   = STEP_UP_IDLE;
-    lift_switch_target_              = 0U;
-    lift_linear_speed_target_        = 0.0f;
-    chassis_vy_override_             = 0U;
-    chassis_vy_target_               = 0.0f;
-    step_up_stable_count_            = 0U;
-    step_up_crossed_finish_height_   = 0U;
-    chassis_vx_target_               = 0.0f;
-    step_up_use_radar_               = 0U;
-    step_up_block_num_               = 0;
-    step_up_radar_x_ref_middle_      = 0.0f;
-    step_up_radar_x_ref_climb_       = 0.0f;
-    step_up_radar_y_ref_middle_      = 0.0f;
-    step_up_lateral_ref_mm_          = STEP_UP_AUTO_LATERAL_REF;
-    step_up_laser_max_mm_            = STEP_UP_AUTO_LASER_MAX_MM;
-    step_up_middle_lift_command_seq_ = 0U;
+    step_up_started_                  = 0U;
+    step_up_state_                    = STEP_UP_IDLE;
+    lift_switch_target_               = 0U;
+    lift_linear_speed_target_         = 0.0f;
+    chassis_vy_override_              = 0U;
+    chassis_vy_target_                = 0.0f;
+    step_up_stable_count_             = 0U;
+    step_up_crossed_finish_height_    = 0U;
+    chassis_vx_target_                = 0.0f;
+    step_up_use_radar_                = 0U;
+    step_up_block_num_                = 0;
+    step_up_radar_x_ref_middle_       = 0.0f;
+    step_up_radar_y_ref_middle_       = 0.0f;
+    step_up_radar_x_ref_climb_base_   = 0.0f;
+    step_up_radar_y_ref_climb_base_   = 0.0f;
+    step_up_radar_climb_target_       = 0.0f;
+    step_up_radar_climb_target_valid_ = 0U;
+    step_up_radar_climb_y_direction_  = 0;
+    step_up_lateral_ref_mm_           = STEP_UP_AUTO_LATERAL_REF;
+    step_up_laser_max_mm_             = STEP_UP_AUTO_LASER_MAX_MM;
+    step_up_middle_lift_command_seq_  = 0U;
 }
 
 void LiftAuto::update(void)
@@ -173,12 +194,27 @@ void LiftAuto::update(void)
             lift_switch_target_  = 2U;
 
             if (step_up_use_radar_ != 0U) {
-                // 雷达模式：用 vision.x_diff 走到目标 x 点
-                float x_err               = step_up_radar_x_ref_climb_ - vision.x_diff;
-                lift_linear_speed_target_ = trapezoid_speed(x_err, STEP_UP_LIFT_ACC_SPEED, STEP_UP_AUTO_CLIMB_SPEED_MPS);
+                // 雷达模式：首次进入爬升阶段时锁存目标，避免每帧刷新当前坐标加 L。
+                if (step_up_radar_climb_target_valid_ == 0U) {
+                    if (step_up_radar_climb_y_direction_ > 0) {
+                        step_up_radar_climb_target_ = step_up_radar_y_ref_climb_base_ + step_up_radar_climb_distance_m_;
+                    } else if (step_up_radar_climb_y_direction_ < 0) {
+                        step_up_radar_climb_target_ = step_up_radar_y_ref_climb_base_ - step_up_radar_climb_distance_m_;
+                    } else {
+                        step_up_radar_climb_target_ = step_up_radar_x_ref_climb_base_ + step_up_radar_climb_distance_m_;
+                    }
+                    step_up_radar_climb_target_valid_ = 1U;
+                }
+
+                float climb_pos           = (step_up_radar_climb_y_direction_ != 0) ? vision.y_diff : vision.x_diff;
+                float climb_err           = step_up_radar_climb_target_ - climb_pos;
+                lift_linear_speed_target_ = trapezoid_speed(climb_err, STEP_UP_LIFT_ACC_SPEED, STEP_UP_AUTO_CLIMB_SPEED_MPS);
+                if (step_up_radar_climb_y_direction_ < 0) {
+                    lift_linear_speed_target_ = -lift_linear_speed_target_;
+                }
 
                 // 到位判定
-                if (step_up_stable_confirm((fabsf(x_err) < 0.050f) ? 1U : 0U) != 0U) {
+                if (step_up_stable_confirm((fabsf(climb_err) < 0.020f) ? 1U : 0U) != 0U) {
                     lift_switch_target_              = 1U;
                     lift_linear_speed_target_        = 0.0f;
                     step_up_stable_count_            = 0U;
@@ -230,16 +266,20 @@ void LiftAuto::update(void)
 
             if (step_up_use_radar_ != 0U) {
                 // ========== 雷达模式 ==========
-                // Vx: vision.x_diff 走到目标 x 点（前为正）
-                float x_err        = step_up_radar_x_ref_middle_ - vision.x_diff;
-                float y_err        = step_up_radar_y_ref_middle_ - vision.y_diff; // 15 - 10 = 5 误差为正
-                chassis_vx_target_ = trapezoid_speed(x_err, STEP_UP_CHASSIS_ACC_SPEED, STEP_UP_AUTO_APPROACH_MPS);
+                // 目标点是世界系坐标，底盘速度接口使用车体系坐标。
+                float x_err_world = step_up_radar_x_ref_middle_ - vision.x_diff;
+                float y_err_world = step_up_radar_y_ref_middle_ - vision.y_diff; // 15 - 10 = 5 误差为正
+                float x_err_body  = 0.0f;
+                float y_err_body  = 0.0f;
+                step_up_world_error_to_body_error(x_err_world, y_err_world, vision.angle_x, &x_err_body, &y_err_body);
+
+                chassis_vx_target_ = trapezoid_speed(x_err_body, STEP_UP_CHASSIS_ACC_SPEED, STEP_UP_AUTO_APPROACH_MPS);
 
                 // Vy: vision.y_diff 走到目标 y 点（左为正）
-                chassis_vy_target_ = trapezoid_speed(y_err, STEP_UP_CHASSIS_ACC_SPEED, STEP_UP_AUTO_APPROACH_MPS);
+                chassis_vy_target_ = trapezoid_speed(y_err_body, STEP_UP_CHASSIS_ACC_SPEED, STEP_UP_AUTO_APPROACH_MPS);
 
                 // 到位判定：x 和 y 误差都在容差内
-                if (step_up_stable_confirm((fabsf(x_err) < 0.050f && fabsf(y_err) < 0.050f && fabsf(chassis_vx_target_) < 0.2f && fabsf(chassis_vy_target_) < 0.2f) ? 1U : 0U) != 0U) {
+                if (step_up_stable_confirm((fabsf(x_err_world) < 0.020f && fabsf(y_err_world) < 0.020f && fabsf(chassis_vx_target_) < 0.2f && fabsf(chassis_vy_target_) < 0.2f) ? 1U : 0U) != 0U) {
                     chassis_vx_target_    = 0.0f;
                     chassis_vy_target_    = 0.0f;
                     step_up_stable_count_ = 0U;
@@ -348,12 +388,41 @@ float LiftAuto::getChassisVxTarget(float manual_target) const
     return chassis_vx_target_;
 }
 
-// 配置上台阶雷达模式的目标坐标
-void LiftAuto::setStepUpRadarTarget(float x_ref_middle, float x_ref_climb, float y_ref_middle)
+// 配置上台阶雷达模式的中间目标坐标，并用上一轮中心作为本次爬升基准。
+void LiftAuto::setStepUpRadarTarget(float x_ref_middle, float y_ref_middle)
 {
+    if (step_up_radar_last_middle_valid_ != 0U) {
+        step_up_radar_x_ref_climb_base_ = step_up_radar_last_x_ref_middle_;
+        step_up_radar_y_ref_climb_base_ = step_up_radar_last_y_ref_middle_;
+    } else {
+        step_up_radar_x_ref_climb_base_ = x_ref_middle;
+        step_up_radar_y_ref_climb_base_ = y_ref_middle;
+    }
+
     step_up_radar_x_ref_middle_ = x_ref_middle;
-    step_up_radar_x_ref_climb_  = x_ref_climb;
     step_up_radar_y_ref_middle_ = y_ref_middle;
+
+    step_up_radar_last_x_ref_middle_ = x_ref_middle;
+    step_up_radar_last_y_ref_middle_ = y_ref_middle;
+    step_up_radar_last_middle_valid_ = 1U;
+}
+
+// 配置雷达爬升阶段的前进距离 L，单位为 m。
+void LiftAuto::setStepUpRadarClimbDistance(float climb_distance_m)
+{
+    step_up_radar_climb_distance_m_ = climb_distance_m;
+}
+
+// 配置本次雷达爬升方向：0 为 X+L，1 为 Y+L，-1 为 Y-L。
+void LiftAuto::setStepUpRadarClimbDirection(int8_t y_direction)
+{
+    if (y_direction > 0) {
+        step_up_radar_climb_y_direction_ = 1;
+    } else if (y_direction < 0) {
+        step_up_radar_climb_y_direction_ = -1;
+    } else {
+        step_up_radar_climb_y_direction_ = 0;
+    }
 }
 
 void LiftAuto::setStepUpBlockNum(int num)

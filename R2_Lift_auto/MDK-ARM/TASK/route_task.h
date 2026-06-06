@@ -25,6 +25,7 @@ private:
     uint8_t flag_relocation;
     uint8_t relocation_number;
     uint16_t yaw_stable_count;
+    int8_t last_turn_90_direction_; // 下一次上台阶的雷达爬升方向：0 为 X+L，1 为 Y+L，-1 为 Y-L。
 
 public:
     Route_state state;
