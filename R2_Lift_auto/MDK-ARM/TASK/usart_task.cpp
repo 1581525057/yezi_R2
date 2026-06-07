@@ -23,7 +23,7 @@ VisionData_t vision;
 /* ========================== 静态变量 ========================== */
 
 /* 动作指令环形队列：缓存视觉帧中 C 后面的不定长动作 */
-#define VISION_COMMAND_QUEUE_SIZE 6U
+#define VISION_COMMAND_QUEUE_SIZE 16U
 int vision_command_queue[VISION_COMMAND_QUEUE_SIZE];
 uint8_t vision_command_head = 0U;
 uint8_t vision_command_tail = 0U;
@@ -57,7 +57,7 @@ static void Block_claulate_Middle(void)
 
     block_vision_middle[5] = {x + Block_Size, y};
 
-    block_vision_middle[6] = {x + Block_Size, y - Block_Size};
+    block_vision_middle[6] = {x + Block_Size, y + Block_Size};
 
     block_vision_middle[7] = {x + Block_Size * 2.0f, y - Block_Size};
 
@@ -65,9 +65,9 @@ static void Block_claulate_Middle(void)
 
     block_vision_middle[9] = {x + Block_Size * 2.0f, y + Block_Size};
 
-    block_vision_middle[10] = {x + Block_Size * 2.0f, y + Block_Size};
+    block_vision_middle[10] = {x + Block_Size * 2.0f, y - Block_Size};
 
-    block_vision_middle[11] = {x + Block_Size * 2.0f, y + Block_Size};
+    block_vision_middle[11] = {x + Block_Size * 2.0f, y};
 
     block_vision_middle[12] = {x + Block_Size * 2.0f, y + Block_Size};
 }

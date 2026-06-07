@@ -1,0 +1,3 @@
+#ifndef ROUTE_TEST_STUB_BSP_USART_H
+#define ROUTE_TEST_STUB_BSP_USART_H
+#endif

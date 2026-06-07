@@ -4,6 +4,17 @@
 
 extern VisionData_t vision;
 
+static void step_down_world_error_to_body_error(float x_world, float y_world, float yaw_deg, float *x_body, float *y_body)
+{
+    const float deg_to_rad = 0.01745329251994329577f;
+    const float yaw_rad    = yaw_deg * deg_to_rad;
+    const float cos_yaw    = cosf(yaw_rad);
+    const float sin_yaw    = sinf(yaw_rad);
+
+    *x_body = cos_yaw * x_world + sin_yaw * y_world;
+    *y_body = -sin_yaw * x_world + cos_yaw * y_world;
+}
+
 // x_finsh:-0.19 y_finsh:-1.43
 // pre:0.64  descend:0.05
 
@@ -19,6 +30,11 @@ float STEP_DOWN_LIFT_ACC_SPEED = 0.4f;
 
 // 雷达坐标必须连续满足目标条件 10 个周期，状态机才允许进入下一阶段。
 uint8_t STEP_DOWN_AUTO_STABLE_COUNT = 10U;
+
+// 下台阶前准备阶段离方块中心点的距离，单位为 m。
+float STEP_DOWN_PREPARE_DISTANCE_L = 0.39f;
+// 下台阶下降阶段离开当前坐标的距离，单位为 m。
+float STEP_DOWN_DESCEND_DISTANCE_D = 0.53f;
 
 // 全局实例由任务层调用，调用方式与现有上台阶自动流程保持一致。
 LiftStepDown lift_step_down;
@@ -87,18 +103,26 @@ void LiftStepDown::resetStepDown(void)
      * 复位后回到空闲状态。除了清零输出缓存，还要清空目标坐标和方块编号。
      * 因此每次重新启动流程前，外部接线层都需要重新调用坐标配置接口。
      */
-    step_down_started_             = 0U;
-    step_down_state_               = STEP_DOWN_IDLE;
-    lift_switch_target_            = 0U;
-    lift_linear_speed_target_      = 0.0f;
-    chassis_vx_target_             = 0.0f;
-    chassis_vy_target_             = 0.0f;
-    step_down_stable_count_        = 0U;
-    step_down_block_num_           = 0;
-    step_down_radar_x_ref_prepare_ = 0.0f;
-    step_down_radar_x_ref_descend_ = 0.0f;
-    step_down_radar_x_ref_finish_  = 0.0f;
-    step_down_radar_y_ref_finish_  = 0.0f;
+    step_down_started_                  = 0U;
+    step_down_state_                    = STEP_DOWN_IDLE;
+    lift_switch_target_                 = 0U;
+    lift_linear_speed_target_           = 0.0f;
+    chassis_vx_target_                  = 0.0f;
+    chassis_vy_target_                  = 0.0f;
+    step_down_stable_count_             = 0U;
+    step_down_block_num_                = 0;
+    step_down_radar_x_ref_prepare_base_ = 0.0f;
+    step_down_radar_y_ref_prepare_base_ = 0.0f;
+    step_down_radar_x_ref_prepare_      = 0.0f;
+    step_down_radar_y_ref_prepare_      = 0.0f;
+    step_down_radar_x_ref_descend_      = 0.0f;
+    step_down_radar_y_ref_descend_      = 0.0f;
+    step_down_radar_x_ref_finish_       = 0.0f;
+    step_down_radar_y_ref_finish_       = 0.0f;
+    step_down_turn_left_90_             = 0U;
+    step_down_turn_right_90_            = 0U;
+    step_down_turn_180_                 = 1U;
+    step_down_descend_target_valid_     = 0U;
 }
 
 void LiftStepDown::startStepDown(void)
@@ -139,24 +163,51 @@ void LiftStepDown::update(void)
             /*
              * 第 1 阶段：底盘移动到下台阶准备点。
              *
-             * 此时车辆仍由底盘支撑，因此使用底盘 Vx 沿雷达 X 轴远离台阶。
-             * 升降机构保持 1 档，升降轮不转动，Vy 固定为 0，避免横向偏移。
+             * 此时车辆仍由底盘支撑，先根据上一个转向动作推导准备点。
+             * 准备点误差是世界系坐标，输出底盘速度前需要转换到车体系。
              */
             lift_switch_target_       = 1U;
             lift_linear_speed_target_ = 0.0f;
-            chassis_vy_target_        = 0.0f;
 
-            // 雷达给出当前位置，目标值与当前位置之差决定底盘前后运动方向。
-            float x_err        = step_down_radar_x_ref_prepare_ - vision.x_diff;
-            chassis_vx_target_ = trapezoid_speed(x_err,
+            step_down_radar_x_ref_prepare_ = step_down_radar_x_ref_prepare_base_;
+            step_down_radar_y_ref_prepare_ = step_down_radar_y_ref_prepare_base_;
+            float x_err                    = 0.0f;
+            float y_err                    = 0.0f;
+            if (step_down_turn_180_ != 0U) {
+                step_down_radar_x_ref_prepare_ = step_down_radar_x_ref_prepare_base_ + STEP_DOWN_PREPARE_DISTANCE_L;
+                x_err                          = step_down_radar_x_ref_prepare_ - vision.x_diff;
+            } else if (step_down_turn_right_90_ != 0U) {
+                step_down_radar_y_ref_prepare_ = step_down_radar_y_ref_prepare_base_ + STEP_DOWN_PREPARE_DISTANCE_L;
+                y_err                          = step_down_radar_y_ref_prepare_ - vision.y_diff;
+            } else {
+                step_down_radar_y_ref_prepare_ = step_down_radar_y_ref_prepare_base_ - STEP_DOWN_PREPARE_DISTANCE_L;
+                y_err                          = step_down_radar_y_ref_prepare_ - vision.y_diff;
+            }
+
+            float x_err_body = 0.0f;
+            float y_err_body = 0.0f;
+            step_down_world_error_to_body_error(x_err, y_err, vision.angle_x, &x_err_body, &y_err_body);
+
+            chassis_vx_target_ = trapezoid_speed(x_err_body,
+                                                 STEP_DOWN_CHASSIS_ACC_SPEED,
+                                                 STEP_DOWN_AUTO_CHASSIS_SPEED_MPS);
+            chassis_vy_target_ = trapezoid_speed(y_err_body,
                                                  STEP_DOWN_CHASSIS_ACC_SPEED,
                                                  STEP_DOWN_AUTO_CHASSIS_SPEED_MPS);
 
-            // X 误差连续 10 个周期小于 5 cm 后，确认车辆已经稳定到达准备点。
-            if (step_down_stable_confirm((fabsf(x_err) < 0.020f) ? 1U : 0U) != 0U) {
-                chassis_vx_target_      = 0.0f;
-                step_down_stable_count_ = 0U;
-                step_down_state_        = STEP_DOWN_DESCEND;
+            uint8_t prepare_done = 0U;
+            if (step_down_turn_180_ != 0U) {
+                prepare_done = (fabsf(x_err) < 0.020f) ? 1U : 0U;
+            } else {
+                prepare_done = (fabsf(y_err) < 0.020f) ? 1U : 0U;
+            }
+
+            if (step_down_stable_confirm(prepare_done) != 0U) {
+                chassis_vx_target_              = 0.0f;
+                chassis_vy_target_              = 0.0f;
+                step_down_stable_count_         = 0U;
+                step_down_descend_target_valid_ = 0U;
+                step_down_state_                = STEP_DOWN_DESCEND;
             }
             break;
         }
@@ -166,24 +217,42 @@ void LiftStepDown::update(void)
              * 第 2 阶段：升降轮带动车辆离开当前台阶。
              *
              * 切换到 2 档后，底盘处于悬空状态，底盘轮无法可靠驱动车辆。
-             * 因此强制将底盘 Vx/Vy 置零，仅使用升降轮目标线速度沿 X 轴运动。
+             * 因此强制将底盘 Vx/Vy 置零，仅使用升降轮目标线速度离开台阶。
              */
             lift_switch_target_ = 2U;
             chassis_vx_target_  = 0.0f;
             chassis_vy_target_  = 0.0f;
 
-            // 根据离开台阶目标点与当前雷达 X 坐标的误差生成升降轮速度。
-            float x_err               = step_down_radar_x_ref_descend_ - vision.x_diff;
-            lift_linear_speed_target_ = trapezoid_speed(x_err,
-                                                        STEP_DOWN_LIFT_ACC_SPEED,
-                                                        STEP_DOWN_AUTO_LIFT_SPEED_MPS);
+            if (step_down_descend_target_valid_ == 0U) {
+                step_down_radar_x_ref_descend_ = vision.x_diff;
+                step_down_radar_y_ref_descend_ = vision.y_diff;
+                if (step_down_turn_180_ != 0U) {
+                    step_down_radar_x_ref_descend_ = vision.x_diff + STEP_DOWN_DESCEND_DISTANCE_D;
+                } else if (step_down_turn_left_90_ != 0U) {
+                    step_down_radar_y_ref_descend_ = vision.y_diff - STEP_DOWN_DESCEND_DISTANCE_D;
+                } else {
+                    step_down_radar_y_ref_descend_ = vision.y_diff + STEP_DOWN_DESCEND_DISTANCE_D;
+                }
+                step_down_descend_target_valid_ = 1U;
+            }
 
-            // X 误差连续稳定在 5 cm 内后，停止升降轮并立即切回 1 档。
-            if (step_down_stable_confirm((fabsf(x_err) < 0.030f) ? 1U : 0U) != 0U) {
-                lift_switch_target_       = 1U;
-                lift_linear_speed_target_ = 0.0f;
-                step_down_stable_count_   = 0U;
-                step_down_state_          = STEP_DOWN_MOVE_TO_FINISH;
+            float x_err      = step_down_radar_x_ref_descend_ - vision.x_diff;
+            float y_err      = step_down_radar_y_ref_descend_ - vision.y_diff;
+            float lift_err   = (step_down_turn_180_ != 0U) ? x_err : y_err;
+            float lift_speed = trapezoid_speed(lift_err,
+                                               STEP_DOWN_LIFT_ACC_SPEED,
+                                               STEP_DOWN_AUTO_LIFT_SPEED_MPS);
+            if (step_down_turn_180_ != 0U || step_down_turn_right_90_ != 0U) {
+                lift_speed = -lift_speed;
+            }
+            lift_linear_speed_target_ = lift_speed;
+
+            if (step_down_stable_confirm((fabsf(lift_err) < 0.030f) ? 1U : 0U) != 0U) {
+                lift_switch_target_             = 1U;
+                lift_linear_speed_target_       = 0.0f;
+                step_down_stable_count_         = 0U;
+                step_down_descend_target_valid_ = 0U;
+                step_down_state_                = STEP_DOWN_MOVE_TO_FINISH;
             }
             break;
         }
@@ -199,12 +268,16 @@ void LiftStepDown::update(void)
             lift_linear_speed_target_ = 0.0f;
 
             // X/Y 两个方向分别计算误差，使底盘能够同时完成纵向和横向收敛。
-            float x_err        = step_down_radar_x_ref_finish_ - vision.x_diff;
-            float y_err        = step_down_radar_y_ref_finish_ - vision.y_diff;
-            chassis_vx_target_ = trapezoid_speed(x_err,
+            float x_err      = step_down_radar_x_ref_finish_ - vision.x_diff;
+            float y_err      = step_down_radar_y_ref_finish_ - vision.y_diff;
+            float x_err_body = 0.0f;
+            float y_err_body = 0.0f;
+            step_down_world_error_to_body_error(x_err, y_err, vision.angle_x, &x_err_body, &y_err_body);
+
+            chassis_vx_target_ = trapezoid_speed(x_err_body,
                                                  STEP_DOWN_CHASSIS_ACC_SPEED,
                                                  STEP_DOWN_AUTO_CHASSIS_SPEED_MPS);
-            chassis_vy_target_ = trapezoid_speed(y_err,
+            chassis_vy_target_ = trapezoid_speed(y_err_body,
                                                  STEP_DOWN_CHASSIS_ACC_SPEED,
                                                  STEP_DOWN_AUTO_CHASSIS_SPEED_MPS);
 
@@ -281,19 +354,41 @@ float LiftStepDown::getChassisVyTarget(float manual_target) const
     return chassis_vy_target_;
 }
 
-void LiftStepDown::setStepDownRadarTarget(float x_ref_prepare,
-                                          float x_ref_descend,
+void LiftStepDown::setStepDownRadarTarget(float x_ref_prepare_base,
+                                          float y_ref_prepare_base,
                                           float x_ref_finish,
-                                          float y_ref_finish)
+                                          float y_ref_finish,
+                                          uint8_t turn_left_90,
+                                          uint8_t turn_right_90,
+                                          uint8_t turn_180)
 {
     /*
      * 坐标由外部接线层根据方块编号查表后写入。
      * 本类只保存目标值，不读取视觉队列，也不判断方块编号是否合法。
+     *
+     * 本函数只保存本次下台阶需要的基准点和终点。
+     * “上一次中心点”属于路线接线层的上下文，本类不再自行缓存推断，
+     * 避免连续动作变化时把上一轮下台阶终点误当成本次准备基准。
      */
-    step_down_radar_x_ref_prepare_ = x_ref_prepare;
-    step_down_radar_x_ref_descend_ = x_ref_descend;
-    step_down_radar_x_ref_finish_  = x_ref_finish;
-    step_down_radar_y_ref_finish_  = y_ref_finish;
+    step_down_radar_x_ref_prepare_base_ = x_ref_prepare_base;
+    step_down_radar_y_ref_prepare_base_ = y_ref_prepare_base;
+
+    // 保存本次下台阶最终要到达的中心点，STEP_DOWN_MOVE_TO_FINISH 阶段会用这组坐标收敛。
+    step_down_radar_x_ref_finish_ = x_ref_finish;
+    step_down_radar_y_ref_finish_ = y_ref_finish;
+
+    // 三个转向标志互斥：180 度优先，其次右转 90 度，最后左转 90 度。
+    step_down_turn_180_      = (turn_180 != 0U) ? 1U : 0U;
+    step_down_turn_right_90_ = (turn_right_90 != 0U && step_down_turn_180_ == 0U) ? 1U : 0U;
+    step_down_turn_left_90_  = (turn_left_90 != 0U && step_down_turn_180_ == 0U && step_down_turn_right_90_ == 0U) ? 1U : 0U;
+
+    // 如果外部没有给任何转向标志，默认按 180 度下台阶处理，保持状态机有明确分支。
+    if (step_down_turn_180_ == 0U && step_down_turn_right_90_ == 0U && step_down_turn_left_90_ == 0U) {
+        step_down_turn_180_ = 1U;
+    }
+
+    // 下一次进入 DESCEND 阶段时，需要重新按当时的 vision 坐标锁存 D 距离目标。
+    step_down_descend_target_valid_ = 0U;
 }
 
 void LiftStepDown::setStepDownBlockNum(int num)

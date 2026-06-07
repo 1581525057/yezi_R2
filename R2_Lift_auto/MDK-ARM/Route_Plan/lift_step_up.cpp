@@ -21,6 +21,9 @@ static void step_up_world_error_to_body_error(float x_world, float y_world, floa
     *y_body = -sin_yaw * x_world + cos_yaw * y_world;
 }
 
+
+
+
 // 靠近阶段最大底盘速度 (m/s)
 float STEP_UP_AUTO_APPROACH_MPS = 0.8f;
 // 爬升阶段升降最大线速度 (m/s)
@@ -155,7 +158,7 @@ void LiftAuto::update(void)
     // 首次进入自动流程
     if (step_up_state_ == STEP_UP_IDLE) {
         // 使用外部已设置的 step_up_block_num_ 决定传感器模式
-        if (step_up_block_num_ == 1 || step_up_block_num_ == 2) {
+        if ( step_up_block_num_ == 2) {
             step_up_use_radar_ = 0U;
         } else {
             step_up_use_radar_ = 1U;
@@ -200,7 +203,7 @@ void LiftAuto::update(void)
                         step_up_radar_climb_target_ = step_up_radar_y_ref_climb_base_ + step_up_radar_climb_distance_m_;
                     } else if (step_up_radar_climb_y_direction_ < 0) {
                         step_up_radar_climb_target_ = step_up_radar_y_ref_climb_base_ - step_up_radar_climb_distance_m_;
-                    } else {
+                    } else {   
                         step_up_radar_climb_target_ = step_up_radar_x_ref_climb_base_ + step_up_radar_climb_distance_m_;
                     }
                     step_up_radar_climb_target_valid_ = 1U;

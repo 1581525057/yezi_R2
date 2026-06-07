@@ -45,15 +45,21 @@ public:
 
     /**
      * @brief 配置下台阶流程使用的雷达目标坐标。
-     * @param x_ref_prepare 第 1 阶段底盘移动到的 X 坐标，单位为 m。
-     * @param x_ref_descend 第 2 阶段升降轮带动车辆移动到的 X 坐标，单位为 m。
-     * @param x_ref_finish  第 3 阶段底盘移动到的终点 X 坐标，单位为 m。
-     * @param y_ref_finish  第 3 阶段底盘移动到的终点 Y 坐标，单位为 m。
+     * @param x_ref_prepare_base 本次准备点计算使用的基准 X 坐标，单位为 m。
+     * @param y_ref_prepare_base 本次准备点计算使用的基准 Y 坐标，单位为 m。
+     * @param x_ref_finish       本次下台阶最终要到达的 X 坐标，单位为 m。
+     * @param y_ref_finish       本次下台阶最终要到达的 Y 坐标，单位为 m。
+     * @param turn_left_90   上一个动作是否左转 90 度。
+     * @param turn_right_90  上一个动作是否右转 90 度。
+     * @param turn_180       上一个动作是否转 180 度。
      */
-    void setStepDownRadarTarget(float x_ref_prepare,
-                                float x_ref_descend,
+    void setStepDownRadarTarget(float x_ref_prepare_base,
+                                float y_ref_prepare_base,
                                 float x_ref_finish,
-                                float y_ref_finish);
+                                float y_ref_finish,
+                                uint8_t turn_left_90,
+                                uint8_t turn_right_90,
+                                uint8_t turn_180);
     // 保存当前方块编号，供外部接线和调试使用。本类内部不负责查表。
     void setStepDownBlockNum(int num);
 
@@ -85,10 +91,18 @@ private:
 
     uint8_t step_down_stable_count_;      // 当前状态下连续满足到位条件的周期数。
     int step_down_block_num_;             // 当前方块编号，仅保存，不在本类内部查表。
+    float step_down_radar_x_ref_prepare_base_; // 第 1 阶段准备点计算使用的本次基准 X 坐标，单位为 m。
+    float step_down_radar_y_ref_prepare_base_; // 第 1 阶段准备点计算使用的本次基准 Y 坐标，单位为 m。
     float step_down_radar_x_ref_prepare_; // 第 1 阶段准备点 X 坐标，单位为 m。
+    float step_down_radar_y_ref_prepare_; // 第 1 阶段准备点 Y 坐标，单位为 m。
     float step_down_radar_x_ref_descend_; // 第 2 阶段离开台阶目标 X 坐标，单位为 m。
+    float step_down_radar_y_ref_descend_; // 第 2 阶段离开台阶目标 Y 坐标，单位为 m。
     float step_down_radar_x_ref_finish_;  // 第 3 阶段终点 X 坐标，单位为 m。
     float step_down_radar_y_ref_finish_;  // 第 3 阶段终点 Y 坐标，单位为 m。
+    uint8_t step_down_turn_left_90_;      // 下台阶前上一个动作是否左转 90 度。
+    uint8_t step_down_turn_right_90_;     // 下台阶前上一个动作是否右转 90 度。
+    uint8_t step_down_turn_180_;          // 下台阶前上一个动作是否转 180 度。
+    uint8_t step_down_descend_target_valid_; // 第 2 阶段目标是否已按进入时坐标锁存。
 };
 
 // 全局自动下台阶控制实例，供任务层接线使用。

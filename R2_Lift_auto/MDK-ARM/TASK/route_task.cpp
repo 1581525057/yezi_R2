@@ -52,6 +52,34 @@ namespace
         .timeout_ms  = 500000U,
         .sensor_mask = SENSOR_FRONT | SENSOR_LEFT,
     };
+
+    static float normalize_yaw_deg(float yaw_deg)
+    {
+        while (yaw_deg > 180.0f) {
+            yaw_deg -= 360.0f;
+        }
+        while (yaw_deg < -180.0f) {
+            yaw_deg += 360.0f;
+        }
+        return yaw_deg;
+    }
+
+    static void set_last_turn_flags_by_radar_yaw(float yaw_deg, int8_t *turn_90_direction, uint8_t *turn_180)
+    {
+        const float yaw = normalize_yaw_deg(yaw_deg);
+
+        *turn_90_direction = 0;
+        *turn_180          = 0U;
+
+        if (yaw >= 45.0f && yaw < 135.0f) {
+            *turn_90_direction = 1;
+        } else if (yaw <= -45.0f && yaw > -135.0f) {
+            *turn_90_direction = -1;
+        } else if (yaw >= 135.0f || yaw <= -135.0f) {
+            *turn_180 = 1U;
+        }
+    }
+
 }
 
 void ROUTE_TASK::route_reset()
@@ -62,7 +90,12 @@ void ROUTE_TASK::route_reset()
     flag_vision             = 0;
     relocation_number       = 0;
     yaw_stable_count        = 0;
+    yaw_target_valid_       = 0U;
     last_turn_90_direction_ = 0;
+    last_turn_180_          = 0U;
+    last_step_center_x_     = 0.0f;
+    last_step_center_y_     = 0.0f;
+    last_step_center_valid_ = 0U;
     vision_command_clear();
 }
 
@@ -99,30 +132,66 @@ void ROUTE_TASK::vision_choice()
             // 从方块队列取编号，查表设置雷达目标坐标
             int block_num = 0;
             vision_block_pop(&block_num);
+            float middle_x = block_vision_middle[block_num].x;
+            float middle_y = block_vision_middle[block_num].y;
             lift_auto.setStepUpBlockNum(block_num);
             lift_auto.setStepUpRadarClimbDirection(last_turn_90_direction_);
-            lift_auto.setStepUpRadarTarget(
-                block_vision_middle[block_num].x,
-                block_vision_middle[block_num].y);
-            last_turn_90_direction_ = 0;
+            lift_auto.setStepUpRadarTarget(middle_x, middle_y);
+            last_step_center_x_     = middle_x;
+            last_step_center_y_     = middle_y;
+            last_step_center_valid_ = 1U;
             state                   = PHASE_STEP_UP;
             break;
         }
 
         case 5: {
             // 从方块队列取编号，查表设置雷达目标坐标
+            int block_num = 0;
+            vision_block_pop(&block_num);
+            float finish_x = block_vision_middle[block_num].x;
+            float finish_y = block_vision_middle[block_num].y;
+            float prepare_base_x = finish_x;
+            float prepare_base_y = finish_y;
+            if (last_step_center_valid_ != 0U) {
+                // 下台阶准备点基准来自接线层记录的当前台阶中心，不能由 LiftStepDown 自己猜。
+                prepare_base_x = last_step_center_x_;
+                prepare_base_y = last_step_center_y_;
+            }
+            lift_step_down.setStepDownBlockNum(block_num);
+            lift_step_down.setStepDownRadarTarget(
+                prepare_base_x,
+                prepare_base_y,
+                finish_x,
+                finish_y,
+                (last_turn_90_direction_ > 0) ? 1U : 0U,
+                (last_turn_90_direction_ < 0) ? 1U : 0U,
+                last_turn_180_);
+            last_step_center_x_     = finish_x;
+            last_step_center_y_     = finish_y;
+            last_step_center_valid_ = 1U;
+            state                   = PHASE_STEP_DOWN;
+            break;
         }
 
         case 7:
             // 视觉指令 7：左转 90 度。
-            yaw_stable_count = 0;
-            state            = PHASE_TURN_LEFT90;
+            yaw_stable_count  = 0;
+            yaw_target_valid_ = 0U;
+            state             = PHASE_TURN_LEFT90;
             break;
 
         case 8:
             // 视觉指令 8：右转 90 度。
-            yaw_stable_count = 0;
-            state            = PHASE_TURN_RIGHT90;
+            yaw_stable_count  = 0;
+            yaw_target_valid_ = 0U;
+            state             = PHASE_TURN_RIGHT90;
+            break;
+
+        case 9:
+            // 视觉指令 9：转 180 度。
+            yaw_stable_count  = 0;
+            yaw_target_valid_ = 0U;
+            state             = PHASE_TURN180;
             break;
 
         default:
@@ -175,8 +244,22 @@ void ROUTE_TASK::meiling_route()
             }
             break;
 
+        case PHASE_STEP_DOWN:
+            // 下台阶目标参数已在 vision_choice() 中配置。
+            lift_step_down.startStepDown();
+
+            if (lift_step_down.isStepDownFinished()) {
+                lift_step_down.stopStepDown();
+                state = PHASE_VISION;
+            }
+            break;
+
         case PHASE_TURN_LEFT90:
-            yaw_target = 90;
+            if (yaw_target_valid_ == 0U) {
+                yaw_target        = normalize_yaw_deg(vision.angle_x + 90.0f);
+                yaw_stable_count  = 0;
+                yaw_target_valid_ = 1U;
+            }
 
             if (fabsf(pid_yaw.pid.Err) < 3.0f) {
                 yaw_stable_count++;
@@ -184,17 +267,23 @@ void ROUTE_TASK::meiling_route()
                 yaw_stable_count = 0;
             }
 
-            // Hold yaw error inside tolerance for 200 cycles before finishing.
+            // yaw 误差连续稳定 200 个周期后，认为本次左转 90 度完成。
             if (yaw_stable_count >= 200) {
                 yaw_stable_count        = 0;
-                last_turn_90_direction_ = 1;
+                yaw_target_valid_       = 0U;
+                // 上/下台阶使用雷达实际 yaw 分类，避免连续转向后把动作方向误当成当前朝向。
+                set_last_turn_flags_by_radar_yaw(vision.angle_x, &last_turn_90_direction_, &last_turn_180_);
 
                 state = PHASE_VISION;
             }
             break;
 
         case PHASE_TURN_RIGHT90:
-            yaw_target = -90;
+            if (yaw_target_valid_ == 0U) {
+                yaw_target        = normalize_yaw_deg(vision.angle_x - 90.0f);
+                yaw_stable_count  = 0;
+                yaw_target_valid_ = 1U;
+            }
 
             if (fabsf(pid_yaw.pid.Err) < 3.0f) {
                 yaw_stable_count++;
@@ -202,10 +291,35 @@ void ROUTE_TASK::meiling_route()
                 yaw_stable_count = 0;
             }
 
-            // Hold yaw error inside tolerance for 200 cycles before finishing.
+            // yaw 误差连续稳定 200 个周期后，认为本次右转 90 度完成。
             if (yaw_stable_count >= 200) {
                 yaw_stable_count        = 0;
-                last_turn_90_direction_ = -1;
+                yaw_target_valid_       = 0U;
+                // 上/下台阶使用雷达实际 yaw 分类，避免连续转向后把动作方向误当成当前朝向。
+                set_last_turn_flags_by_radar_yaw(vision.angle_x, &last_turn_90_direction_, &last_turn_180_);
+
+                state = PHASE_VISION;
+            }
+            break;
+
+        case PHASE_TURN180:
+            if (yaw_target_valid_ == 0U) {
+                yaw_target        = normalize_yaw_deg(vision.angle_x + 180.0f);
+                yaw_stable_count  = 0;
+                yaw_target_valid_ = 1U;
+            }
+
+            if (fabsf(pid_yaw.pid.Err) < 3.0f) {
+                yaw_stable_count++;
+            } else {
+                yaw_stable_count = 0;
+            }
+
+            if (yaw_stable_count >= 200) {
+                yaw_stable_count        = 0;
+                yaw_target_valid_       = 0U;
+                // 上/下台阶使用雷达实际 yaw 分类，避免连续转向后把动作方向误当成当前朝向。
+                set_last_turn_flags_by_radar_yaw(vision.angle_x, &last_turn_90_direction_, &last_turn_180_);
 
                 state = PHASE_VISION;
             }
@@ -227,8 +341,10 @@ extern "C" uint8_t RouteTask_IsMeilingAreaActive(void)
         case SECOND_RELOCATION:
         case THIRD_RELOCATION:
         case PHASE_STEP_UP:
+        case PHASE_STEP_DOWN:
         case PHASE_TURN_LEFT90:
         case PHASE_TURN_RIGHT90:
+        case PHASE_TURN180:
             return 1U;
         default:
             return 0U;
@@ -239,7 +355,6 @@ uint16_t flag_meiling = 0;
 
 extern "C" void plan_route(void *argument)
 {
-    lift_step_down.setStepDownRadarTarget(0.64, 0.05, -0.19, -1.43);
     lift_auto.setStepUpRadarClimbDistance(0.87);
     for (;;) {
 
@@ -251,6 +366,7 @@ extern "C" void plan_route(void *argument)
         route_t.vision_choice();
         route_t.meiling_route();
         lift_auto.update();
+        lift_step_down.update();
         osDelay(1);
     }
 }
