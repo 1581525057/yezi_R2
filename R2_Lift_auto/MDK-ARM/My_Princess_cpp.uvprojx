@@ -2100,6 +2100,11 @@
               <FilePath>.\Route_Plan\lift_auto.cpp</FilePath>
             </File>
             <File>
+              <FileName>lift_step_down.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Route_Plan\lift_step_down.cpp</FilePath>
+            </File>
+            <File>
               <FileName>wuqiqu.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\Route_Plan\wuqiqu.cpp</FilePath>

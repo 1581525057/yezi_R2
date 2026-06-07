@@ -26,6 +26,12 @@ private:
     uint8_t flag_relocation;
     uint8_t relocation_number;
     uint16_t yaw_stable_count;
+    uint8_t yaw_target_valid_;       // 当前转向阶段是否已经锁存相对 yaw 目标。
+    int8_t last_turn_90_direction_; // 根据雷达 yaw 分类的当前朝向：0 为 0 度方向，1 为 +90 度方向，-1 为 -90 度方向。
+    uint8_t last_turn_180_;         // 根据雷达 yaw 分类的当前朝向是否为 180 度方向。
+    float last_step_center_x_;      // 接线层记录的最近一次台阶中心 X 坐标。
+    float last_step_center_y_;      // 接线层记录的最近一次台阶中心 Y 坐标。
+    uint8_t last_step_center_valid_; // 最近一次台阶中心是否有效。
 
 public:
     Route_state state;

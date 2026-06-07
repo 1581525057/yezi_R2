@@ -27,7 +27,9 @@ public:
     float getChassisVyTarget(float manual_target) const;
     float getChassisVxTarget(float manual_target) const;
 
-    void setStepUpRadarTarget(float x_ref_middle, float x_ref_climb, float y_ref_middle);
+    void setStepUpRadarTarget(float x_ref_middle, float y_ref_middle);
+    void setStepUpRadarClimbDistance(float climb_distance_m);
+    void setStepUpRadarClimbDirection(int8_t y_direction);
     void setStepUpBlockNum(int num);
 
 private:
@@ -59,12 +61,19 @@ private:
     uint8_t step_up_use_radar_;
     int step_up_block_num_;
     float step_up_radar_x_ref_middle_;
-    float step_up_radar_x_ref_climb_;
     float step_up_radar_y_ref_middle_;
+    float step_up_radar_x_ref_climb_base_;
+    float step_up_radar_y_ref_climb_base_;
+    float step_up_radar_last_x_ref_middle_;
+    float step_up_radar_last_y_ref_middle_;
+    uint8_t step_up_radar_last_middle_valid_;
+    float step_up_radar_climb_distance_m_;
+    float step_up_radar_climb_target_;
+    uint8_t step_up_radar_climb_target_valid_;
+    int8_t step_up_radar_climb_y_direction_;
     float step_up_lateral_ref_mm_;
     uint32_t step_up_laser_max_mm_;
     uint32_t step_up_middle_lift_command_seq_;
-    uint8_t step_up_middle_lift_finished_;
 
     float speed_limit(float speed, float max);
     float trapezoid_speed(float error, float acc, float max);

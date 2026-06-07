@@ -13,14 +13,14 @@
 
 MeilingLocator meiling;
 
-float MeilingLocator::MEILING_V_MAX = 2.0f;          // 最大二维合速度，单位 m/s
-float MeilingLocator::MEILING_ACC_MAX = 2.0f;        // 最大加速度，限制速度指令突变，单位 m/s^2
-float MeilingLocator::MEILING_DEC_MAX = 1.2f;        // 最大减速度，按剩余距离计算刹车速度，单位 m/s^2
-float MeilingLocator::MEILING_FILTER_ALPHA = 0.25f;  // DT35一阶低通系数，越大响应越快、滤波越弱
-float MeilingLocator::MEILING_MIN_DT = 0.001f;       // 最小规划周期，防止同一节拍内重复调用
-float MeilingLocator::MEILING_MAX_DT = 0.05f;        // 最大规划周期，防止任务卡顿后步长过大
-float MeilingLocator::MEILING_DIST_EPS = 0.001f;     // 距离向量归一化阈值，避免除零
-float MeilingLocator::MEILING_DONE_SPEED = 0.1f;     // 到位判定允许的底盘残余速度，单位 m/s
+float MeilingLocator::MEILING_V_MAX        = 1.8f;   // 最大二维合速度，单位 m/s
+float MeilingLocator::MEILING_ACC_MAX      = 1.5f;   // 最大加速度，限制速度指令突变，单位 m/s^2
+float MeilingLocator::MEILING_DEC_MAX      = 0.5;    // 最大减速度，按剩余距离计算刹车速度，单位 m/s^2
+float MeilingLocator::MEILING_FILTER_ALPHA = 0.25f;  // 测距一阶低通系数，越大响应越快、滤波越弱
+float MeilingLocator::MEILING_MIN_DT       = 0.001f; // 最小规划周期，防止同一节拍内重复调用
+float MeilingLocator::MEILING_MAX_DT       = 0.05f;  // 最大规划周期，防止任务卡顿后步长过大
+float MeilingLocator::MEILING_DIST_EPS     = 0.001f; // 距离向量归一化阈值，避免除零
+float MeilingLocator::MEILING_DONE_SPEED   = 0.1f;   // 到位判定允许的底盘残余速度，单位 m/s
 
 /*
  * 绝对值限幅：将 x 限制在 [-max, -min] ∪ [min, max] 区间。
