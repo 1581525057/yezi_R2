@@ -2,6 +2,7 @@
 #include "cmsis_os.h"
 
 constexpr float kRs05DegreesToRadians = 0.01745329251994329577f;  // 角度转弧度比例系数
+constexpr float kRs05PositionLimitCurrent = 20.0f;                 // PP 位置模式电流限幅，单位：A
 
 uint8_t g_rs05_initialized = 0U;  // 电机初始化标志，0 表示未初始化
 
@@ -22,6 +23,8 @@ void RS05_Init(void)
     }
 
     g_rs05_motor.Set_RobStride_Motor_parameter(0x7005, Pos_control_mode, Set_mode);
+    osDelay(10);
+    g_rs05_motor.Set_RobStride_Motor_parameter(0x7018, kRs05PositionLimitCurrent, Set_parameter);
     osDelay(10);
     g_rs05_motor.Enable_Motor();
     osDelay(20);

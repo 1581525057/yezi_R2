@@ -11,6 +11,7 @@
 #include "lift_auto.h"
 #include <math.h>
 #include "usart_task.h"
+#include "FTMLiftAction.h"
 /*
 上200 高度为-230
 
@@ -103,8 +104,10 @@ extern "C" void lift_task(void *argument)
         // 如果半自动接管，则这里返回自动档位；否则返回手动拨杆档位
         uint8_t now_sw = lift_auto.getLiftSwitch(remove_dji.rc_.s[1]);
 
-        // 只有档位变化时，才重新设置目标高度
-        if (now_sw != last_sw) {
+        // FTM 接管抬升时，不允许遥控档位覆盖 FTM 写入的目标高度。
+        if (FTMLiftAction_IsTakeover() != 0U) {
+            last_sw = now_sw;
+        } else if (now_sw != last_sw) {
             if (now_sw == 3U) {
                 // 3 档对应目标高度
                 lift_debug.height_target = 220.0f;
