@@ -8,6 +8,8 @@ extern "C" {
 #endif
 
 extern volatile uint8_t g_ftm_state;
+extern volatile float g_ftm_lift_up_target_mm;
+extern volatile float g_ftm_lift_down_target_mm;
 
 void ftm_task(void *argument);
 uint8_t FTM_GetState(void);

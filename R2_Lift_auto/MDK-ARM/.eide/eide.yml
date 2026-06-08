@@ -126,12 +126,14 @@ virtualFolder:
         - path: TASK/usart_task.cpp
         - path: TASK/route_task.cpp
         - path: TASK/FTMTask.cpp
+        - path: TASK/FTMLiftAction.cpp
         - path: TASK/wuqiqu_task.cpp
       folders: []
     - name: DEVICE
       files:
         - path: Device/USB/MiniPC.cpp
         - path: Device/Communication/CommData.cpp
+        - path: Device/M2006/M2006AngleMotor.cpp
         - path: Device/StepMotor/EmmV5.cpp
         - path: Device/StepMotor/StepMotorTask.cpp
         - path: Device/M2006/M2006Follower.cpp
@@ -152,6 +154,7 @@ virtualFolder:
         - path: Route_Plan/meiling.cpp
         - path: Route_Plan/plan_route.cpp
         - path: Route_Plan/lift_auto.cpp
+        - path: Route_Plan/lift_step_down.cpp
         - path: Route_Plan/wuqiqu.cpp
         - path: Route_Plan/arm_comm.cpp
       folders: []

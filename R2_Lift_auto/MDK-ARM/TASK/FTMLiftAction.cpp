@@ -37,11 +37,6 @@ uint8_t FTMLiftAction_IsFinished(float tolerance_mm)
         return 0U;
     }
 
-    if (lift_calulate.finished != 0U)
-    {
-        return 1U;
-    }
-
     if (AbsFloat(lift_class.left.height - target) <= tolerance_mm &&
         AbsFloat(lift_class.right.height - target) <= tolerance_mm)
     {

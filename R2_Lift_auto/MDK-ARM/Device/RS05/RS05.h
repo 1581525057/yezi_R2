@@ -10,8 +10,8 @@
 
 /* RS05 电机实例及调试参数 */
 extern RobStride_Motor g_rs05_motor;
-extern float Angle;
-extern float Speed;
+extern float Angle;  // Keil Watch 可调目标角度，单位：degree
+extern float Speed;  // Keil Watch 可调目标速度，单位：rad/s
 
 void RS05_Init(void);
 void RS05_HandleCanMessage(uint32_t can_id, uint8_t *data_frame);

@@ -20,30 +20,29 @@ enum FTMState
     FTM_STATE_INIT = 0,               // 初始化/空闲准备状态。
     FTM_STATE_WUQIQU_ROUTE = 1,       // 武器区跑点状态，只负责底盘跑点。
     FTM_STATE_IDLE = 2,               // 手动调试等待状态；不执行动作，等待 Keil Watch 写入下一状态。
-    FTM_STATE_RS05_TO_90 = 3,         // RS05 转到 90 度。
-    FTM_STATE_LIFT_UP = 4,            // 抬升机构上升到 220mm。
+    FTM_STATE_RS05_TO_90 = 3,         // RS05 转到 Keil Watch 中 Angle 指定的角度。
+    FTM_STATE_LIFT_UP = 4,            // 抬升机构上升到 86mm。
     FTM_STATE_CLAW_OPEN = 5,          // 夹爪张开。
     FTM_STATE_CLAW_CLOSE = 6,         // 夹爪闭合。
-    FTM_STATE_RS05_TO_135 = 7,        // RS05 转到 135 度。
+    FTM_STATE_LIFT_UP_220 = 7,        // 抬升机构上升到 220mm。
     FTM_STATE_M2006_TURN_180 = 8,     // M2006 从当前角度相对翻转 180 度。
     FTM_STATE_RS05_TO_0 = 9,          // RS05 回到 0 度。
-    FTM_STATE_LIFT_DOWN = 10,         // 抬升机构下降到 100mm。
+    FTM_STATE_LIFT_DOWN = 10,         // 抬升机构下降到 70mm。
     FTM_STATE_DONE = 11,              // 全流程完成保持状态。
-
-    FTM_STATE_WUQIQU_ZERO = 12        // 武器区跑点前发送视觉置零。
+    FTM_STATE_WUQIQU_ZERO = 12,       // 武器区跑点前发送视觉置零。
+    FTM_STATE_M2006_TURN_BACK_180 = 13, // M2006 从当前角度反向翻转 180 度。
+    FTM_STATE_SEQUENCE_5_4_3 = 14,    // 组合执行：5 -> 4 -> 3。
+    FTM_STATE_SEQUENCE_7_3_13_9 = 15 // 组合执行：7 -> 3 -> 13 -> 9。
 };
 
 namespace
 {
 constexpr float kDegToRad = 0.01745329251994329577f;
-constexpr float kRs05Speed = 10.0f;
-constexpr float kRs05AngleToleranceRad = 0.05f;
+constexpr float kRs05AngleToleranceRad = 0.02f;
 constexpr uint32_t kRs05CommandIntervalMs = 20U;
-constexpr uint32_t kRs05SettleMs = 150U;
-constexpr uint32_t kRs05TimeoutMs = 2500U;
+constexpr uint32_t kRs05SettleMs = 300U;
+constexpr uint32_t kRs05TimeoutMs = 3500U;
 
-constexpr float kLiftMaxHeightMm = 220.0f;
-constexpr float kLiftDownHeightMm = 100.0f;
 constexpr float kLiftToleranceMm = 5.0f;
 constexpr float kLiftMoveTimeS = 0.7f;
 
@@ -65,9 +64,25 @@ struct TimedStep
 
 TimedStep g_step = {0U, 0U, 0U, 0U};
 uint8_t g_lift_commanded = 0U;
+float g_lift_last_target_height_mm = 0.0f;
 uint8_t g_wuqiqu_route_finished = 0U;
 uint8_t g_active_state = 0xFFU;
 uint8_t g_modules_initialized = 0U;
+uint8_t g_m2006_angle_lock_active = 1U;
+uint8_t g_sequence_step_index = 0U;
+
+const uint8_t kSequence543[] = {
+    FTM_STATE_CLAW_OPEN,
+    FTM_STATE_LIFT_UP,
+    FTM_STATE_RS05_TO_90
+};
+
+const uint8_t kSequence73139[] = {
+    FTM_STATE_LIFT_UP_220,
+    FTM_STATE_RS05_TO_90,
+    FTM_STATE_M2006_TURN_BACK_180,
+    FTM_STATE_RS05_TO_0
+};
 
 uint32_t g_wuqiqu_zero_start_tick = 0U;
 uint32_t g_wuqiqu_zero_last_send_tick = 0U;
@@ -93,15 +108,41 @@ void ResetWuqiquZero(void)
     g_wuqiqu_zero_last_send_tick = 0U;
 }
 
+void ResetMechanismStep(void)
+{
+    ResetTimedStep();
+    g_lift_commanded = 0U;
+    g_lift_last_target_height_mm = 0.0f;
+}
+
+void ServiceM2006AngleLock(uint8_t state)
+{
+    if (g_m2006_angle_lock_active == 0U)
+    {
+        return;
+    }
+
+    if ((state == FTM_STATE_M2006_TURN_180) ||
+        (state == FTM_STATE_M2006_TURN_BACK_180))
+    {
+        return;
+    }
+
+    M2006Angle_ControlTick();
+}
+
 uint8_t IsMechanismState(uint8_t state)
 {
-    return ((state >= FTM_STATE_RS05_TO_90) && (state <= FTM_STATE_DONE)) ? 1U : 0U;
+    return (((state >= FTM_STATE_RS05_TO_90) && (state <= FTM_STATE_DONE)) ||
+            (state == FTM_STATE_M2006_TURN_BACK_180) ||
+            (state == FTM_STATE_SEQUENCE_5_4_3) ||
+            (state == FTM_STATE_SEQUENCE_7_3_13_9)) ? 1U : 0U;
 }
 
 void PrepareState(uint8_t state)
 {
-    ResetTimedStep();
-    g_lift_commanded = 0U;
+    ResetMechanismStep();
+    g_sequence_step_index = 0U;
 
     if (state == FTM_STATE_WUQIQU_ROUTE)
     {
@@ -118,9 +159,20 @@ void PrepareState(uint8_t state)
         FTMLiftAction_SetTakeover(0U);
     }
 
-    if (state != FTM_STATE_M2006_TURN_180)
+    if (state == FTM_STATE_INIT)
     {
-        M2006Angle_Stop();
+        M2006Angle_SetTarget(0.0f);
+        g_m2006_angle_lock_active = 1U;
+    }
+    else if ((state == FTM_STATE_WUQIQU_ROUTE) ||
+             (state == FTM_STATE_WUQIQU_ZERO))
+    {
+        g_m2006_angle_lock_active = 1U;
+    }
+    else if ((state != FTM_STATE_M2006_TURN_180) &&
+             (state != FTM_STATE_M2006_TURN_BACK_180))
+    {
+        g_m2006_angle_lock_active = 1U;
     }
 }
 
@@ -153,9 +205,7 @@ bool IsRs05AtTarget(float target_rad)
 
 void SendRs05Target(float target_rad)
 {
-    Angle = target_rad;
-    Speed = kRs05Speed;
-    RS05_PositionControl(Speed, Angle);
+    RS05_PositionControl(Speed, target_rad);
 }
 
 bool RunRs05State(float target_degree)
@@ -208,10 +258,12 @@ bool RunLiftState(float target_height_mm)
         return true;
     }
 
-    if (g_lift_commanded == 0U)
+    if ((g_lift_commanded == 0U) ||
+        (fabsf(target_height_mm - g_lift_last_target_height_mm) > 0.001f))
     {
         FTMLiftAction_MoveTo(target_height_mm, kLiftMoveTimeS);
         g_lift_commanded = 1U;
+        g_lift_last_target_height_mm = target_height_mm;
         return false;
     }
 
@@ -248,18 +300,20 @@ bool RunClawDelay(void (*action)(void))
     return false;
 }
 
-bool RunM2006Turn180(void)
+bool RunM2006Turn(float relative_angle_degree)
 {
     if (g_step.finished != 0U)
     {
-        M2006Angle_Stop();
+        g_m2006_angle_lock_active = 1U;
+        M2006Angle_ControlTick();
         return true;
     }
 
     if (g_step.active == 0U)
     {
         const float start_angle = M2006Angle_GetAngleDegree();
-        M2006Angle_SetTarget(start_angle + kM2006TurnAngleDeg);
+        g_m2006_angle_lock_active = 0U;
+        M2006Angle_SetTarget(start_angle + relative_angle_degree);
         M2006Angle_ControlTick();
         g_step.active = 1U;
         g_step.start_tick = HAL_GetTick();
@@ -269,12 +323,66 @@ bool RunM2006Turn180(void)
     M2006Angle_ControlTick();
     if ((M2006Angle_IsAtTarget(kM2006ToleranceDeg) != 0U) || HasElapsed(g_step.start_tick, kM2006TimeoutMs))
     {
-        M2006Angle_Stop();
+        g_m2006_angle_lock_active = 1U;
         g_step.finished = 1U;
         return true;
     }
 
     return false;
+}
+
+bool RunMechanismStep(uint8_t state)
+{
+    switch (state)
+    {
+    case FTM_STATE_RS05_TO_90:
+        return RunRs05State(Angle);
+
+    case FTM_STATE_LIFT_UP:
+        return RunLiftState(g_ftm_lift_up_target_mm);
+
+    case FTM_STATE_CLAW_OPEN:
+        return RunClawDelay(claw_open);
+
+    case FTM_STATE_CLAW_CLOSE:
+        return RunClawDelay(claw_close);
+
+    case FTM_STATE_LIFT_UP_220:
+        return RunLiftState(220.0f);
+
+    case FTM_STATE_M2006_TURN_180:
+        return RunM2006Turn(kM2006TurnAngleDeg);
+
+    case FTM_STATE_RS05_TO_0:
+        return RunRs05State(0.0f);
+
+    case FTM_STATE_LIFT_DOWN:
+        return RunLiftState(g_ftm_lift_down_target_mm);
+
+    case FTM_STATE_M2006_TURN_BACK_180:
+        return RunM2006Turn(-kM2006TurnAngleDeg);
+
+    default:
+        return true;
+    }
+}
+
+bool RunMechanismSequence(const uint8_t *sequence, uint8_t sequence_count)
+{
+    if (g_sequence_step_index >= sequence_count)
+    {
+        return true;
+    }
+
+    if (RunMechanismStep(sequence[g_sequence_step_index]) == false)
+    {
+        return false;
+    }
+
+    g_sequence_step_index++;
+    ResetMechanismStep();
+
+    return (g_sequence_step_index >= sequence_count);
 }
 
 void ServiceWuqiquRoute(void)
@@ -342,6 +450,8 @@ void InitModules(void)
 }
 
 extern "C" volatile uint8_t g_ftm_state = FTM_STATE_INIT;
+extern "C" volatile float g_ftm_lift_up_target_mm = 86.0f;
+extern "C" volatile float g_ftm_lift_down_target_mm = 70.0f;
 
 extern "C" uint8_t FTM_GetState(void)
 {
@@ -373,6 +483,7 @@ extern "C" void ftm_task(void *argument)
         // 状态 0：初始化通信、电机和动作封装；初始化完成后保持空闲，等待外部写状态。
         case FTM_STATE_INIT:
             InitModules();
+            EnterState(FTM_STATE_IDLE);
             break;
 
         // 状态 1：执行武器区跑点；跑点完成后回到状态 0。
@@ -384,17 +495,17 @@ extern "C" void ftm_task(void *argument)
         case FTM_STATE_IDLE:
             break;
 
-        // 状态 3：RS05 转到 90 度；到位或超时后回到状态 2。
+        // 状态 3：RS05 转到 Keil Watch 中 Angle 指定的角度；到位或超时后回到状态 2。
         case FTM_STATE_RS05_TO_90:
-            if (RunRs05State(90.0f))
+            if (RunRs05State(Angle))
             {
                 EnterState(FTM_STATE_IDLE);
             }
             break;
 
-        // 状态 4：FTM 接管抬升机构，上升到 220mm；完成后回到状态 2。
+        // 状态 4：FTM 接管抬升机构，上升到 86mm；完成后回到状态 2。
         case FTM_STATE_LIFT_UP:
-            if (RunLiftState(kLiftMaxHeightMm))
+            if (RunLiftState(g_ftm_lift_up_target_mm))
             {
                 EnterState(FTM_STATE_IDLE);
             }
@@ -416,9 +527,9 @@ extern "C" void ftm_task(void *argument)
             }
             break;
 
-        // 状态 7：RS05 从 90 度继续转到 135 度；到位或超时后回到状态 2。
-        case FTM_STATE_RS05_TO_135:
-            if (RunRs05State(135.0f))
+        // 状态 7：FTM 接管抬升机构，上升到 220mm；完成后回到状态 2。
+        case FTM_STATE_LIFT_UP_220:
+            if (RunLiftState(220.0f))
             {
                 EnterState(FTM_STATE_IDLE);
             }
@@ -426,7 +537,7 @@ extern "C" void ftm_task(void *argument)
 
         // 状态 8：M2006 以当前角度为起点相对翻转 180 度；完成后回到状态 2。
         case FTM_STATE_M2006_TURN_180:
-            if (RunM2006Turn180())
+            if (RunM2006Turn(kM2006TurnAngleDeg))
             {
                 EnterState(FTM_STATE_IDLE);
             }
@@ -440,9 +551,9 @@ extern "C" void ftm_task(void *argument)
             }
             break;
 
-        // 状态 10：FTM 接管抬升机构，下降到 100mm；完成后回到状态 2。
+        // 状态 10：FTM 接管抬升机构，下降到 70mm；完成后回到状态 2。
         case FTM_STATE_LIFT_DOWN:
-            if (RunLiftState(kLiftDownHeightMm))
+            if (RunLiftState(g_ftm_lift_down_target_mm))
             {
                 EnterState(FTM_STATE_IDLE);
             }
@@ -450,7 +561,10 @@ extern "C" void ftm_task(void *argument)
 
         // 状态 11：全流程完成保持；M2006 停止，RS05 周期补发 0 度保持命令。
         case FTM_STATE_DONE:
-            M2006Angle_Stop();
+            if (g_m2006_angle_lock_active == 0U)
+            {
+                g_m2006_angle_lock_active = 1U;
+            }
             (void)RunRs05State(0.0f);
             break;
 
@@ -459,12 +573,37 @@ extern "C" void ftm_task(void *argument)
             ServiceWuqiquZero();
             break;
 
+        // 状态 13：M2006 以当前角度为起点反向翻转 180 度；完成后回到状态 2。
+        case FTM_STATE_M2006_TURN_BACK_180:
+            if (RunM2006Turn(-kM2006TurnAngleDeg))
+            {
+                EnterState(FTM_STATE_IDLE);
+            }
+            break;
+
+        // 状态 14：组合执行 5 -> 4 -> 3；完成后回到状态 2。
+        case FTM_STATE_SEQUENCE_5_4_3:
+            if (RunMechanismSequence(kSequence543, static_cast<uint8_t>(sizeof(kSequence543) / sizeof(kSequence543[0]))))
+            {
+                EnterState(FTM_STATE_IDLE);
+            }
+            break;
+
+        // 状态 15：组合执行 7 -> 3 -> 13 -> 9；完成后回到状态 2。
+        case FTM_STATE_SEQUENCE_7_3_13_9:
+            if (RunMechanismSequence(kSequence73139, static_cast<uint8_t>(sizeof(kSequence73139) / sizeof(kSequence73139[0]))))
+            {
+                EnterState(FTM_STATE_IDLE);
+            }
+            break;
+
         // 异常状态：回到初始化/空闲状态，等待重新触发。
         default:
             EnterState(FTM_STATE_INIT);
             break;
         }
 
+        ServiceM2006AngleLock(g_ftm_state);
         osDelay(1);
     }
 }

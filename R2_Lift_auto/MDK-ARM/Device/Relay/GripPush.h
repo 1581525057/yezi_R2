@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-/* 夹爪控制引脚 (PA1) */
+/* 夹爪控制引脚 (PD07) */
 #define CLAW_Pin GPIO_PIN_7
 #define CLAW_GPIO_Port GPIOD
 

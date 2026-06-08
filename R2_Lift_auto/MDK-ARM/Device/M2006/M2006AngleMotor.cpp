@@ -17,24 +17,6 @@ constexpr float kMaxSpeedDps = 720.0f;
 constexpr float kMaxCurrent = 8000.0f;
 constexpr float kIntegralLimit = 1000.0f;
 
-struct M2006AngleContext
-{
-    uint16_t ecd;
-    uint16_t last_ecd;
-    int16_t speed_rpm;
-    float angle_degree;
-    float target_angle_degree;
-    float position_integral;
-    float speed_integral;
-    float last_position_error;
-    float last_speed_error;
-    uint32_t last_tick;
-    int16_t current_cmd;
-    uint8_t initialized;
-};
-
-M2006AngleContext g_m2006_angle = {0U, 0U, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0U, 0, 0U};
-
 float ClampFloat(float value, float min_value, float max_value)
 {
     if (value < min_value)
@@ -80,9 +62,35 @@ float PidStep(float error,
 }
 }
 
+M2006AngleContext g_m2006_angle = {
+    0U,
+    0U,
+    0,
+    0.0f,
+    0.0f,
+    kPositionKp,
+    kPositionKi,
+    kPositionKd,
+    kIntegralLimit,
+    kMaxSpeedDps,
+    kSpeedKp,
+    kSpeedKi,
+    kSpeedKd,
+    kIntegralLimit,
+    kMaxCurrent,
+    0.0f,
+    0.0f,
+    0.0f,
+    0.0f,
+    0U,
+    0,
+    0U
+};
+
 void M2006Angle_Init(void)
 {
-    g_m2006_angle.target_angle_degree = g_m2006_angle.angle_degree;
+    g_m2006_angle.angle_degree = 0.0f;
+    g_m2006_angle.target_angle_degree = 0.0f;
     g_m2006_angle.position_integral = 0.0f;
     g_m2006_angle.speed_integral = 0.0f;
     g_m2006_angle.last_position_error = 0.0f;
@@ -105,7 +113,10 @@ void M2006Angle_UpdateFeedback(const uint8_t data[8])
     {
         g_m2006_angle.last_ecd = ecd;
         g_m2006_angle.ecd = ecd;
+        g_m2006_angle.angle_degree = 0.0f;
         g_m2006_angle.initialized = 1U;
+        g_m2006_angle.speed_rpm = speed_rpm;
+        return;
     }
 
     int32_t diff = static_cast<int32_t>(ecd) - static_cast<int32_t>(g_m2006_angle.last_ecd);
@@ -140,24 +151,24 @@ void M2006Angle_ControlTick(void)
     const float target_speed_dps = PidStep(position_error,
                                            g_m2006_angle.position_integral,
                                            g_m2006_angle.last_position_error,
-                                           kPositionKp,
-                                           kPositionKi,
-                                           kPositionKd,
+                                           g_m2006_angle.angle_kp,
+                                           g_m2006_angle.angle_ki,
+                                           g_m2006_angle.angle_kd,
                                            dt_s,
-                                           kIntegralLimit,
-                                           kMaxSpeedDps);
+                                           g_m2006_angle.angle_integral_limit,
+                                           g_m2006_angle.angle_speed_limit_dps);
 
     const float current_speed_dps = static_cast<float>(g_m2006_angle.speed_rpm) * 360.0f / 60.0f / kReductionRatio;
     const float speed_error = target_speed_dps - current_speed_dps;
     const float current = PidStep(speed_error,
                                   g_m2006_angle.speed_integral,
                                   g_m2006_angle.last_speed_error,
-                                  kSpeedKp,
-                                  kSpeedKi,
-                                  kSpeedKd,
+                                  g_m2006_angle.speed_kp,
+                                  g_m2006_angle.speed_ki,
+                                  g_m2006_angle.speed_kd,
                                   dt_s,
-                                  kIntegralLimit,
-                                  kMaxCurrent);
+                                  g_m2006_angle.speed_integral_limit,
+                                  g_m2006_angle.current_limit);
 
     g_m2006_angle.current_cmd = static_cast<int16_t>(current);
 }
