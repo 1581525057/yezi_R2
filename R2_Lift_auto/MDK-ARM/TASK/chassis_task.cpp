@@ -144,8 +144,8 @@ extern "C" void chassis_task(void *argument)
         target_vy = lift_auto.getChassisVyTarget(target_vy);
         target_vx = lift_auto.getChassisVxTarget(target_vx);
 
-        // 默认使用航向 PID，自动作业生效时使用任务仲裁后的自转速度。
-        omni_chassis.setRemote(target_vx, target_vy, target_vz);
+        // 当前自转输出仍使用航向 PID 结果，target_vz 只保留自动任务仲裁值。
+        omni_chassis.setRemote(target_vx, target_vy, remove_dji.chassis_.Vz);
 
         // 速度环：根据当前速度和目标速度的误差计算 x/y 方向驱动力。
         float Fx = pid_F_chassis_linear_x.PID_Calculate(omni_chassis.now.Vx, omni_chassis.target.Vx);

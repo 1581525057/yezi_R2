@@ -5,7 +5,7 @@
 #include "stdint.h"
 
 // 抬升卷轮直径（单位：mm）
-#define HEIGHT_DIAMETER (40.59f)
+#define HEIGHT_DIAMETER (43.00f)
 
 // 从动轮直径（单位：mm）
 #define WHEEL_DIAMETERr_MM (60.0f)
