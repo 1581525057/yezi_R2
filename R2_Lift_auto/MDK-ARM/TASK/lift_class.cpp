@@ -137,8 +137,8 @@ extern "C" void lift_task(void *argument)
         lift_class_pid_calculate();
 
         // 左右两侧云深电机按目标角度与 PID 力矩输出控制
-        yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 15, 0.5f, -pid_lift_left.pid.Output);
-        yun_j60_motor.SendControl(0x02, lift_debug.posi, 0, 15, 0.5f, pid_lift_right.pid.Output);
+        yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 15, 0.5f, pid_lift_left.pid.Output);
+        yun_j60_motor.SendControl(0x02, -lift_debug.posi, 0, 15, 0.5f, -pid_lift_right.pid.Output);
 
         // 2006 电机电流控制发送口目前保留
         lift_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame,
@@ -211,13 +211,13 @@ static void lift_class_pid_calculate(void)
 
 static void lift_cauclate_height(void)
 {
-    // 左侧电机角度方向与机械正方向相反，因此这里取负号
+    // 左侧电机正方向对应机构上升，直接使用反馈角度
     lift_class.left.angle = yun_j60_motor.motor[2].position;
     // 由卷轮直径换算左侧当前高度
     lift_class.left.height = lift_class.left.angle * HEIGHT_DIAMETER / 2.0f;
 
-    // 右侧电机角度直接使用正方向
-    lift_class.right.angle = yun_j60_motor.motor[1].position;
+    // 右侧电机安装方向相反，上升对应电机负角度
+    lift_class.right.angle = -yun_j60_motor.motor[1].position;
     // 由卷轮直径换算右侧当前高度
     lift_class.right.height = lift_class.right.angle * HEIGHT_DIAMETER / 2.0f;
 }
