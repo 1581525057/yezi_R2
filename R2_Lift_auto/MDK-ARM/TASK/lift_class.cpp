@@ -10,6 +10,7 @@
 #include "yun_j60.h"
 #include "lift_auto.h"
 #include <math.h>
+#include "usart_task.h"
 /*
 上200 高度为-230
 
@@ -35,6 +36,8 @@ static void calc_motor_rpm_from_linear_speed_target(float linear_speed_target);
 PID pid_lift_left, pid_lift_right;
 // 升降轮速度控制 PID
 PID pid_2006_r, pid_2006_l;
+// 2006角度控制 PID
+PID pid_2006_angle;
 // 抬升动作实际到位允许误差，单位 mm。
 static const float LIFT_HEIGHT_FINISH_TOLERANCE_MM = 5.0f;
 
@@ -66,6 +69,7 @@ debug_lift lift_debug = {0};
 
 float left_sensor, right_sensor;
 
+extern float yaw_target;
 extern "C" void lift_task(void *argument)
 {
     // 依次使能 2 个云深电机
@@ -99,7 +103,7 @@ extern "C" void lift_task(void *argument)
         // 如果半自动接管，则这里返回自动档位；否则返回手动拨杆档位
         uint8_t now_sw = lift_auto.getLiftSwitch(remove_dji.rc_.s[1]);
 
-        //只有档位变化时，才重新设置目标高度
+        // 只有档位变化时，才重新设置目标高度
         if (now_sw != last_sw) {
             if (now_sw == 3U) {
                 // 3 档对应目标高度
@@ -141,8 +145,8 @@ extern "C" void lift_task(void *argument)
         // 2006 电机电流控制发送口目前保留
         lift_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame,
                                        0x1FF,
-                                       -pid_2006_r.pid.Output,
-                                       pid_2006_l.pid.Output,
+                                       -pid_2006_r.pid.Output - pid_2006_angle.pid.Output,
+                                       pid_2006_l.pid.Output - pid_2006_angle.pid.Output,
                                        0,
                                        0);
 
@@ -189,6 +193,9 @@ static void lift_class_pid_init(void)
                         KD_LIFT,
                         0,
                         0x00);
+    pid_2006_angle.Init(1000, 0, 0.1, 400, 0, 0, 0, 0X00
+
+    );
 }
 
 static void lift_class_pid_calculate(void)
@@ -198,8 +205,10 @@ static void lift_class_pid_calculate(void)
     pid_lift_right.PID_Calculate(lift_class.right.height, lift_debug.height_calulate);
 
     // 左右两侧升降轮速度环：当前反馈 rpm -> 目标 rpm
-    pid_2006_l.PID_Calculate(-lift_class.now.rpm_left, lift_class.target.rpm_left);
+    pid_2006_l.PID_Calculate(lift_class.now.rpm_left, lift_class.target.rpm_left);
     pid_2006_r.PID_Calculate(lift_class.now.rpm_right, lift_class.target.rpm_right);
+
+    pid_2006_angle.PID_Calculate_Angle(vision.angle_x, yaw_target);
 }
 
 static void lift_cauclate_height(void)
@@ -304,7 +313,7 @@ static void calc_linear_speed_from_motor_rpm(void)
 
     // 当前电机反馈 rpm
     lift_class.now.rpm_left  = lift_motor.Lift_2006[1].Data.Rpm;
-    lift_class.now.rpm_right = lift_motor.Lift_2006[0].Data.Rpm;
+    lift_class.now.rpm_right = -lift_motor.Lift_2006[0].Data.Rpm;
 
     // 电机 rpm -> 轮端 rpm
     float wheel_rpm_left  = lift_class.now.rpm_left * gear_ratio;

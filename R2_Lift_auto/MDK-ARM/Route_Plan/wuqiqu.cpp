@@ -4,10 +4,17 @@
 
 static const float WUQIQU_PI = 3.14159265358979323846f;
 static const float kDegToRad = WUQIQU_PI / 180.0f;
+static const float kMinMoveMotorRpm = 20.0f;
+static const float kDriveWheelDiameterM = 0.149f;
+static const float kDriveGearRatio = 82.0f / 36.0f;
+static const float kOmniAxisScale = 0.7071f;
+static const float kMinMoveSpeedMps =
+    (kMinMoveMotorRpm * kDriveWheelDiameterM * WUQIQU_PI) /
+    (60.0f * kDriveGearRatio * kOmniAxisScale);
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {0.77f, 0.62f, 0.0f},
+    {-0.88f, -0.18f, -90.0f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 
@@ -19,12 +26,13 @@ WuqiquPathPlanner::WuqiquPathPlanner()
 
     approach_v_max_ = 0.55f;
     slow_v_max_ = 0.20f;
-    contact_v_max_ = 0.04f;
+    contact_v_max_ = kMinMoveSpeedMps;
     finish_v_max_ = 0.02f;
+    min_move_v_ = kMinMoveSpeedMps;
 
     slow_dist_ = 0.25f;
     contact_dist_ = 0.08f;
-    finish_dist_ = 0.02f;
+    finish_dist_ = 0.0f;
     decel_ = 0.45f;
 
     kp_approach_ = 1.2f;
@@ -34,7 +42,7 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     kp_contact_ = 0.5f;
     kd_contact_ = 0.10f;
 
-    yaw_sign_ = -1.0f;
+    yaw_sign_ = 1.0f;
     yaw_kp_ = 0.8f;
     moving_wz_max_ = 0.30f;
     settle_wz_max_ = 0.15f;
@@ -145,8 +153,8 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         wz_limit = settle_wz_max_;
     }
 
-    float vx_cmd = kp * err_x_m - kd * current_pose.car_speed_x;
-    float vy_cmd = kp * err_y_m - kd * current_pose.car_speed_y;
+    float vx_cmd = kp * err_x_m - kd * current_pose.world_speed_x;
+    float vy_cmd = kp * err_y_m - kd * current_pose.world_speed_y;
 
     limitVector(vx_cmd, vy_cmd, xy_limit);
 
@@ -166,6 +174,11 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
 
     vx_cmd *= yaw_xy_scale;
     vy_cmd *= yaw_xy_scale;
+
+    if (distance_m > finish_dist_ && yaw_abs_deg <= 10.0f)
+    {
+        raiseVectorToMin(vx_cmd, vy_cmd, min_move_v_);
+    }
 
     if (distance_m <= finish_dist_)
     {
@@ -266,6 +279,22 @@ void WuqiquPathPlanner::limitVector(float &vx, float &vy, float max_speed) const
     if (speed > max_speed && speed > 0.000001f)
     {
         const float scale = max_speed / speed;
+        vx *= scale;
+        vy *= scale;
+    }
+}
+
+void WuqiquPathPlanner::raiseVectorToMin(float &vx, float &vy, float min_speed) const
+{
+    if (min_speed <= 0.0f)
+    {
+        return;
+    }
+
+    const float speed = safeSqrt(vx * vx + vy * vy);
+    if (speed > 0.000001f && speed < min_speed)
+    {
+        const float scale = min_speed / speed;
         vx *= scale;
         vy *= scale;
     }

@@ -196,6 +196,38 @@ void UART_DMA_Channel::ReEnable()
     __HAL_DMA_ENABLE(huart->hdmarx);
 }
 
+void UART_DMA_Channel::RecoverFromError()
+{
+    if (huart == 0 || huart->hdmarx == 0 || buf0 == 0 || buf1 == 0) {
+        return;
+    }
+
+    DMA_Stream_TypeDef *dma_stream = (DMA_Stream_TypeDef *)huart->hdmarx->Instance;
+
+    do {
+        __HAL_DMA_DISABLE(huart->hdmarx);
+    } while ((dma_stream->CR & DMA_SxCR_EN) != 0U);
+
+    __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_PEF | UART_CLEAR_FEF |
+                                     UART_CLEAR_NEF | UART_CLEAR_OREF |
+                                     UART_CLEAR_IDLEF);
+
+    huart->ErrorCode     = HAL_UART_ERROR_NONE;
+    huart->RxState       = HAL_UART_STATE_BUSY_RX;
+    huart->ReceptionType = HAL_UART_RECEPTION_TOIDLE;
+    huart->RxXferSize    = buffSize * 2U;
+    huart->RxXferCount   = buffSize * 2U;
+
+    dma_stream->PAR  = (uint32_t)&huart->Instance->RDR;
+    dma_stream->M0AR = (uint32_t)buf0;
+    dma_stream->M1AR = (uint32_t)buf1;
+    dma_stream->NDTR = buffSize;
+    dma_stream->CR &= ~DMA_SxCR_CT;
+    SET_BIT(dma_stream->CR, DMA_SxCR_DBM);
+
+    ReEnable();
+}
+
 //============================================================
 // 判断是不是这个串口
 // 是返回1，不是返回0
@@ -248,6 +280,19 @@ void BSP_USART::RxEventDispatch(UART_HandleTypeDef *huart, uint16_t Size)
     }
 
     (void)CommData_UartRxEventDispatch(huart, Size);
+}
+
+void BSP_USART::ErrorDispatch(UART_HandleTypeDef *huart)
+{
+    if (uart2_dma.IsThisUart(huart)) {
+        uart2_dma.RecoverFromError();
+        return;
+    }
+
+    if (uart5_dma.IsThisUart(huart)) {
+        uart5_dma.RecoverFromError();
+        return;
+    }
 }
 
 //============================================================

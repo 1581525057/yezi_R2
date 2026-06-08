@@ -27,7 +27,8 @@ enum FTMState
     FTM_STATE_RELEASE_TO_ZERO = 6,      // 释放回零状态
     FTM_STATE_WUQIQU_ROUTE = 7,         // 武器区路径状态
     FTM_STATE_WUQIQU_ZERO = 8,          // 武器区路径前发送视觉置零
-    FTM_STATE_RS05_ZERO = 9             // RS05回零状态
+    FTM_STATE_RS05_ZERO = 9,            // RS05回零状态
+    FTM_STATE_WUQIQU_DONE = 10          // 武器区路径到位后保持状态
 };
 
 constexpr float kReleaseRs05LimitSpd = 1.5f;       // 释放阶段 RS05 限速，单位：rad/s
@@ -474,6 +475,11 @@ extern "C" uint8_t FTM_GetState(void)
     return g_ftm_state;
 }
 
+extern "C" uint8_t FTM_IsWuqiquDone(void)
+{
+    return (g_ftm_state == FTM_STATE_WUQIQU_DONE) ? 1U : 0U;
+}
+
 
 /**
  * @brief 微调机构主控制任务
@@ -587,9 +593,13 @@ extern "C" void ftm_task(void *argument)
                 if (WuqiquTask_IsAllFinished() != 0U)
                 {
                     WuqiquTask_Stop();
-                    g_ftm_state = FTM_STATE_MOVE;
+                    g_ftm_state = FTM_STATE_WUQIQU_DONE;
                 }
             }
+            break;
+        case FTM_STATE_WUQIQU_DONE:
+            ResetReleaseStateMachine();
+            g_m2006.Stop();
             break;
         /* RS05回零状态 */
         case FTM_STATE_RS05_ZERO:

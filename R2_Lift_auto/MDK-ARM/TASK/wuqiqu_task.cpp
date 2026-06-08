@@ -175,8 +175,11 @@ private:
         pose.omega = omni_chassis.now.Vz;
 
         /* 当前规划坐标已对齐底盘速度轴，用于调试时直接记录底盘速度。 */
-        pose.world_speed_x = pose.car_speed_x;
-        pose.world_speed_y = pose.car_speed_y;
+        chassisToWorldVelocity(pose.car_speed_x,
+                               pose.car_speed_y,
+                               pose.yaw,
+                               &pose.world_speed_x,
+                               &pose.world_speed_y);
 
         return pose;
     }
@@ -184,8 +187,13 @@ private:
     void updateOutput(const WuqiquPathPlanner::Output &output)
     {
         /* 规划器 X/Y 已对齐底盘 Vx/Vy，输出直接作为底盘车体系速度。 */
-        float vx_limited = output.world_vx_mps;
-        float vy_limited = output.world_vy_mps;
+        float vx_limited = 0.0f;
+        float vy_limited = 0.0f;
+        worldToChassisVelocity(output.world_vx_mps,
+                               output.world_vy_mps,
+                               vision.angle_x * kDegToRad,
+                               &vx_limited,
+                               &vy_limited);
 
         /* 二维速度限幅 */
         const float linear_speed = sqrtf(vx_limited * vx_limited + vy_limited * vy_limited);
@@ -202,6 +210,24 @@ private:
         vx_target_ = slewRateLimit(vx_limited, vx_target_, kLinearAccStepMps, kLinearDecStepMps);
         vy_target_ = slewRateLimit(vy_limited, vy_target_, kLinearAccStepMps, kLinearDecStepMps);
         wz_target_ = slewRateLimit(wz_limited, wz_target_, kAngularAccStepRadps, kAngularDecStepRadps);
+    }
+
+    static void worldToChassisVelocity(float world_vx, float world_vy, float yaw_rad, float *chassis_vx, float *chassis_vy)
+    {
+        const float cos_yaw = cosf(yaw_rad);
+        const float sin_yaw = sinf(yaw_rad);
+
+        *chassis_vx = cos_yaw * world_vx + sin_yaw * world_vy;
+        *chassis_vy = -sin_yaw * world_vx + cos_yaw * world_vy;
+    }
+
+    static void chassisToWorldVelocity(float chassis_vx, float chassis_vy, float yaw_rad, float *world_vx, float *world_vy)
+    {
+        const float cos_yaw = cosf(yaw_rad);
+        const float sin_yaw = sinf(yaw_rad);
+
+        *world_vx = cos_yaw * chassis_vx - sin_yaw * chassis_vy;
+        *world_vy = sin_yaw * chassis_vx + cos_yaw * chassis_vy;
     }
 };
 

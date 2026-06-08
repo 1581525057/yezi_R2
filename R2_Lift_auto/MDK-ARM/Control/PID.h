@@ -4,17 +4,17 @@
 
 #include "main.h"
 
-
-
 /******************************* PID改进功能枚举 *********************************/
-enum PID_Improvement_e {
-    PID_IMPROVE_NONE          = 0x00,
+enum PID_Improvement_e
+{
+    PID_IMPROVE_NONE = 0x00,
     PID_IMPROVE_OUTPUT_FILTER = 0x01,
-    PID_IMPROVE_INT_LIMIT     = 0x02,
+    PID_IMPROVE_INT_LIMIT = 0x02,
 };
 
 /******************************* PID控制器结构体 *********************************/
-struct PID_t {
+struct PID_t
+{
     /* 基本参数 */
     float Ref; // 目标值
     float Kp;  // 比例系数
@@ -46,13 +46,11 @@ struct PID_t {
     float dt;         // 时间间隔（毫秒）
 
     /* 改进功能标志 */
-    uint8_t Improve; // 改进功能位掩码
+    uint8_t Improve; // 改进  功能位掩码
 };
 
 class PID
 {
-public:
-    PID_t pid;
 
 public:
     PID();
@@ -62,6 +60,9 @@ public:
 
     float PID_Calculate(float measure, float ref);
     float PID_Calculate_Angle(float measure, float ref);
+
+    PID_t pid;
+    uint16_t flag;
 
 private:
     float PID_Calculate_WithErr(float measure, float ref, float err);

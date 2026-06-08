@@ -10,15 +10,17 @@ extern uint8_t vision_block_pop(int *out);
 // 靠近阶段最大底盘速度 (m/s)
 float STEP_UP_AUTO_APPROACH_MPS = 0.8f;
 // 爬升阶段升降最大线速度 (m/s)
-float STEP_UP_AUTO_CLIMB_SPEED_MPS = 0.6f;
+float STEP_UP_AUTO_CLIMB_SPEED_MPS = 0.65f;
+
 // 爬升阶段升降最大加速度 (m/s)
-float STEP_UP_LIFT_ACC_SPEED = 0.3f;
+float STEP_UP_LIFT_ACC_SPEED = 0.4f;
 // 底盘靠近阶段升降最大加速度 (m/s)
 float STEP_UP_CHASSIS_ACC_SPEED = 0.8f;
+
 // 靠近目标距离 (mm)，到达后停止前进
-uint32_t STEP_UP_AUTO_PREPARE_MM = 25U;
+uint32_t STEP_UP_AUTO_PREPARE_MM = 50U;
 // 爬升完成判定高度 (mm)，低于此值说明已过台阶
-uint32_t STEP_UP_AUTO_FINISH_MM = 580U;
+uint32_t STEP_UP_AUTO_FINISH_MM = 700U;
 // 到达中间台阶距离
 uint16_t STEP_UP_AUTO_MIDDLE_MM = 300U;
 // 横向目标参考值 (mm)
@@ -156,8 +158,8 @@ void LiftAuto::update(void)
 
             // 到位后需连续N次稳定确认，防误触发
             if (step_up_stable_confirm((laser_valid != 0U && laser_mm <= STEP_UP_AUTO_PREPARE_MM) ? 1U : 0U) != 0U) {
-                chassis_vx_target_ = 0.0f;
-                chassis_vy_target_ = 0.0f;
+                chassis_vx_target_    = 0.0f;
+                chassis_vy_target_    = 0.0f;
                 step_up_stable_count_ = 0U;
                 step_up_state_        = STEP_UP_CLIMB_FORWARD;
             }
@@ -218,7 +220,7 @@ void LiftAuto::update(void)
                 // ========== 雷达模式 ==========
                 // Vx: vision.x_diff 走到目标 x 点（前为正）
                 float x_err        = step_up_radar_x_ref_middle_ - vision.x_diff;
-                float y_err        = step_up_radar_y_ref_middle_ - vision.y_diff; //15 - 10 = 5 误差为正
+                float y_err        = step_up_radar_y_ref_middle_ - vision.y_diff; // 15 - 10 = 5 误差为正
                 chassis_vx_target_ = trapezoid_speed(x_err, STEP_UP_CHASSIS_ACC_SPEED, STEP_UP_AUTO_APPROACH_MPS);
 
                 // Vy: vision.y_diff 走到目标 y 点（左为正）
@@ -286,11 +288,11 @@ void LiftAuto::update(void)
 
         case STEP_UP_FINISHED:
             // 释放底盘控制权，升降回1档，交还手动
-            chassis_vy_override_      = 0U;
-            lift_switch_target_       = 1U;
-            lift_linear_speed_target_ = 0.0f;
-            chassis_vx_target_        = 0.0f;
-            chassis_vy_target_        = 0.0f;
+            chassis_vy_override_           = 0U;
+            lift_switch_target_            = 1U;
+            lift_linear_speed_target_      = 0.0f;
+            chassis_vx_target_             = 0.0f;
+            chassis_vy_target_             = 0.0f;
             step_up_use_radar_             = 0U;
             step_up_crossed_finish_height_ = 0;
             break;

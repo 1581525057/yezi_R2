@@ -11,6 +11,7 @@ extern volatile uint8_t g_ftm_state;
 
 void ftm_task(void *argument);
 uint8_t FTM_GetState(void);
+uint8_t FTM_IsWuqiquDone(void);
 
 #ifdef __cplusplus
 }

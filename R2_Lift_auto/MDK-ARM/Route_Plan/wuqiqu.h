@@ -75,6 +75,7 @@ private:
     float slow_v_max_;
     float contact_v_max_;
     float finish_v_max_;
+    float min_move_v_;
 
     float slow_dist_;
     float contact_dist_;
@@ -104,6 +105,7 @@ private:
     void setZeroOutput(void);
     void updateState(float distance_m, uint32_t now_tick);
     void limitVector(float &vx, float &vy, float max_speed) const;
+    void raiseVectorToMin(float &vx, float &vy, float min_speed) const;
     float limitFloat(float value, float min_value, float max_value) const;
     float normalizeAngleDeg(float angle) const;
     float safeSqrt(float value) const;
