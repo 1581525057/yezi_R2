@@ -37,6 +37,7 @@ private:
     enum StepUpState {
         STEP_UP_IDLE = 0,        // 空闲，透传手动控制
         STEP_UP_APPROACH_Y,      // 靠近台阶，准备进入上台阶动作
+        STEP_UP_WAIT_CLIMB_HEIGHT, // 等待抬升机构执行 2 档到位
         STEP_UP_WAIT_NEW_HEIGHT, // 等待抬升机构收回到中间靠近所需高度
         STEP_UP_CLIMB_FORWARD,   // 上台阶动作
         STEP_UP_APPROACH_MIDDLE, // 上台阶后移动到中间位置
@@ -71,6 +72,7 @@ private:
     int8_t step_up_radar_climb_y_direction_;
     float step_up_lateral_ref_mm_;
     uint32_t step_up_laser_max_mm_;
+    uint32_t step_up_climb_lift_command_seq_;
     uint32_t step_up_middle_lift_command_seq_;
 
     float speed_limit(float speed, float max);

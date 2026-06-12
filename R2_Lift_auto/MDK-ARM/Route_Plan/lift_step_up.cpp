@@ -31,7 +31,7 @@ float STEP_UP_LIFT_ACC_SPEED = 0.68f;
 // 配置雷达爬升阶段的前进距离 L，单位为 m。
 float STEP_UP_RADAR_CLIMB_DISTANCE_M = 0.87f;
 // 底盘靠近阶段升降最大加速度 (m/s)
-float STEP_UP_CHASSIS_ACC_SPEED = 0.8f;
+float STEP_UP_CHASSIS_ACC_SPEED = 0.95f;
 
 // 靠近目标距离 (mm)，到达后停止前进
 uint32_t STEP_UP_AUTO_PREPARE_MM = 68U;
@@ -144,6 +144,7 @@ void LiftAuto::resetStepUp(void)
     step_up_radar_climb_y_direction_ = 0;
     step_up_lateral_ref_mm_ = STEP_UP_AUTO_LATERAL_REF;
     step_up_laser_max_mm_ = STEP_UP_AUTO_LASER_MAX_MM;
+    step_up_climb_lift_command_seq_ = 0U;
     step_up_middle_lift_command_seq_ = 0U;
 }
 
@@ -197,9 +198,25 @@ void LiftAuto::update(void)
             chassis_vx_target_ = 0.0f;
             chassis_vy_target_ = 0.0f;
             step_up_stable_count_ = 0U;
-            step_up_state_ = STEP_UP_CLIMB_FORWARD;
+            step_up_climb_lift_command_seq_ = lift_calulate.command_seq;
+            step_up_state_ = STEP_UP_WAIT_CLIMB_HEIGHT;
         }
 
+        break;
+
+    case STEP_UP_WAIT_CLIMB_HEIGHT:
+        // 等待 2 档高度轨迹生成并完成，期间底盘和升降轮都保持不动。
+        chassis_vy_override_ = 1U;
+        chassis_vx_target_ = 0.0f;
+        chassis_vy_target_ = 0.0f;
+        lift_switch_target_ = 2U;
+        lift_linear_speed_target_ = 0.0f;
+
+        if (lift_calulate.command_seq != step_up_climb_lift_command_seq_ &&
+            lift_calulate.finished == 1U)
+        {
+            step_up_state_ = STEP_UP_CLIMB_FORWARD;
+        }
         break;
 
     case STEP_UP_CLIMB_FORWARD:
