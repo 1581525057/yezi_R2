@@ -16,6 +16,7 @@
 
 /* USB 串口接收缓冲区 */
 uint8_t data_usb[USB_RX_BUFFER_SIZE];
+uint16_t usb_rx_idx = 0;          /* USB接收缓冲区写指针，CDC_Receive_HS追加写入，usart_task消费后清零 */
 static uint8_t posi_conputer[40]; // usb单片机发送给电脑
 /* 视觉数据，由 parse_vision_frame_computer() 写入 */
 VisionData_t vision;
@@ -23,13 +24,13 @@ VisionData_t vision;
 /* ========================== 静态变量 ========================== */
 
 /* 动作指令环形队列：缓存视觉帧中 C 后面的不定长动作 */
-#define VISION_COMMAND_QUEUE_SIZE 16U
+#define VISION_COMMAND_QUEUE_SIZE 32U
 int vision_command_queue[VISION_COMMAND_QUEUE_SIZE];
 uint8_t vision_command_head = 0U;
 uint8_t vision_command_tail = 0U;
 
 /* 方块指令环形队列：缓存视觉帧中 B 后面的不定长方块编号 */
-#define VISION_BLOCK_QUEUE_SIZE 16U
+#define VISION_BLOCK_QUEUE_SIZE 32U
 int vision_block_queue[VISION_BLOCK_QUEUE_SIZE];
 uint8_t vision_block_head = 0U;
 uint8_t vision_block_tail = 0U;
@@ -42,9 +43,9 @@ float block_middle_y = -1.49f;
 // 通过第2个方块来计算得到其他8个的坐标位置
 static void Block_claulate_Middle(void)
 {
-    float Block_Size       = 1.2f;
-    float x                = block_middle_x;
-    float y                = block_middle_y;
+    float Block_Size = 1.2f;
+    float x = block_middle_x;
+    float y = block_middle_y;
     block_vision_middle[0] = {0.0, 0.0};
 
     block_vision_middle[1] = {x, y - Block_Size};
@@ -65,11 +66,11 @@ static void Block_claulate_Middle(void)
 
     block_vision_middle[9] = {x + Block_Size * 2.0f, y + Block_Size};
 
-    block_vision_middle[10] = {x + Block_Size * 2.0f, y - Block_Size};
+    block_vision_middle[10] = {x + Block_Size * 3.0f, y - Block_Size};
 
-    block_vision_middle[11] = {x + Block_Size * 2.0f, y};
+    block_vision_middle[11] = {x + Block_Size * 3.0f, y};
 
-    block_vision_middle[12] = {x + Block_Size * 2.0f, y + Block_Size};
+    block_vision_middle[12] = {x + Block_Size * 3.0f, y + Block_Size};
 }
 
 /* ===================== 内部工具函数 ===================== */
@@ -90,23 +91,27 @@ static float fast_atof(const uint8_t **pp, const uint8_t *end)
 
     /* 处理负号 */
     float sign = 1.0f;
-    if (p < end && *p == '-') {
+    if (p < end && *p == '-')
+    {
         sign = -1.0f;
         ++p;
     }
 
     /* 整数部分 */
     float v = 0.0f;
-    while (p < end && *p >= '0' && *p <= '9') {
+    while (p < end && *p >= '0' && *p <= '9')
+    {
         v = v * 10.0f + static_cast<float>(*p - '0');
         ++p;
     }
 
     /* 小数部分 */
-    if (p < end && *p == '.') {
+    if (p < end && *p == '.')
+    {
         ++p;
         float frac = 0.1f;
-        while (p < end && *p >= '0' && *p <= '9') {
+        while (p < end && *p >= '0' && *p <= '9')
+        {
             v += static_cast<float>(*p - '0') * frac;
             frac *= 0.1f;
             ++p;
@@ -128,7 +133,7 @@ uint8_t vision_command_push(int cmd)
 
     /* 在当前 tail 位置写入 B 值，然后推进 tail */
     vision_command_queue[vision_command_tail] = cmd;
-    vision_command_tail                       = next_tail;
+    vision_command_tail = next_tail;
     return 1U;
 }
 
@@ -140,7 +145,7 @@ uint8_t vision_command_pop(int *out)
         return 0U;
 
     /* 读取 head 位置的 B 值，然后推进 head */
-    *out                = vision_command_queue[vision_command_head];
+    *out = vision_command_queue[vision_command_head];
     vision_command_head = static_cast<uint8_t>((vision_command_head + 1U) % VISION_COMMAND_QUEUE_SIZE);
     return 1U;
 }
@@ -168,7 +173,7 @@ uint8_t vision_block_push(int val)
         return 0U;
 
     vision_block_queue[vision_block_tail] = val;
-    vision_block_tail                     = next_tail;
+    vision_block_tail = next_tail;
     return 1U;
 }
 
@@ -178,7 +183,7 @@ uint8_t vision_block_pop(int *out)
     if (out == nullptr || vision_block_head == vision_block_tail)
         return 0U;
 
-    *out              = vision_block_queue[vision_block_head];
+    *out = vision_block_queue[vision_block_head];
     vision_block_head = static_cast<uint8_t>((vision_block_head + 1U) % VISION_BLOCK_QUEUE_SIZE);
     return 1U;
 }
@@ -219,8 +224,10 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
 
     /* 查找帧头 'S' */
     const uint8_t *s = nullptr;
-    for (uint16_t i = 0; i < len; ++i) {
-        if (data[i] == 'S') {
+    for (uint16_t i = 0; i < len; ++i)
+    {
+        if (data[i] == 'S')
+        {
             s = &data[i];
             break;
         }
@@ -230,8 +237,10 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
 
     /* 查找帧尾 'E' */
     const uint8_t *e = nullptr;
-    for (const uint8_t *p = s + 1; p < data + len; ++p) {
-        if (*p == 'E') {
+    for (const uint8_t *p = s + 1; p < data + len; ++p)
+    {
+        if (*p == 'E')
+        {
             e = p;
             break;
         }
@@ -288,8 +297,10 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
     ++p;
 
     /* 解析 C 后面的不定长动作数字，压入动作队列 */
-    while (p < e) {
-        if (*p == ',') {
+    while (p < e)
+    {
+        if (*p == ',')
+        {
             ++p;
             /* 如果逗号后面是 'B'，跳出动作循环，进入方块解析 */
             if (p < e && *p == 'B')
@@ -300,7 +311,9 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
             int action = static_cast<int>(fast_atof(&p, e));
             if (action != 0)
                 vision_command_push(action);
-        } else {
+        }
+        else
+        {
             return 0;
         }
     }
@@ -311,8 +324,10 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
     ++p;
 
     /* 解析 B 后面的不定长方块编号，压入方块队列 */
-    while (p < e) {
-        if (*p == ',') {
+    while (p < e)
+    {
+        if (*p == ',')
+        {
             ++p;
             /* 逗号后面可能是数字或者直接到 E */
             if (p >= e)
@@ -320,7 +335,9 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
             int block = static_cast<int>(fast_atof(&p, e));
             if (block != 0)
                 vision_block_push(block);
-        } else {
+        }
+        else
+        {
             return 0;
         }
     }
@@ -363,35 +380,43 @@ extern "C" void usart_task(void *argument)
     // as5047.init(&hspi1);
     dt35.init(&hspi3);
     Block_claulate_Middle();
-    for (;;) {
+    for (;;)
+    {
         /* 更新传感器数据 */
         // as5047.updata();
         dt35.update();
 
         /* USB 视觉帧处理：每轮主循环只处理一次，处理完立即清零缓冲区 */
-        /* 第一步：快速扫描缓冲区是否包含帧头 'S'，没有则跳过解析 */
-        if (memchr(data_usb, 'S', sizeof(data_usb)) != nullptr) {
-            /* 第二步：帧头存在，尝试完整解析；成功（返回1）则更新 vision 结构体 */
-            if (parse_vision_frame_computer(data_usb, sizeof(data_usb), &vision) == 1) {
+        /* 第一步：检查是否有数据且包含帧头 'S'，没有则跳过解析 */
+        if (usb_rx_idx > 0 && memchr(data_usb, 'S', usb_rx_idx) != nullptr)
+        {
+            /* 第二步：帧头存在，尝试完整解析（使用实际数据长度而非整个缓冲区大小）；
+               成功（返回1）则更新 vision 结构体 */
+            if (parse_vision_frame_computer(data_usb, usb_rx_idx, &vision) == 1)
+            {
                 /* 第三步：解析过程中若发现非零 B 字段，会被压入动作队列；
                    此处检查队列是否有待处理指令，有则通知路由任务 */
                 route_t.flag_vision = vision_command_has_pending();
             }
-            /* 第四步：无论解析成功与否，都清零缓冲区，防止下一轮重复处理同一帧 */
+            /* 第四步：无论解析成功与否，都清零缓冲区和写指针，防止下一轮重复处理旧数据 */
             memset(data_usb, 0, sizeof(data_usb));
+            usb_rx_idx = 0;
         }
 
-        if (Flag1 == 1) {
+        if (Flag1 == 1)
+        {
             send_position_to_pc(0, 1, 0, 0, 0.0f);
             Flag1 = 0;
         }
 
-        if (Flag1 == 2) {
+        if (Flag1 == 2)
+        {
             send_position_to_pc(1, 0, 0, 0, 0);
             Flag1 = 0;
         }
 
-        if (Flag1 == 3) {
+        if (Flag1 == 3)
+        {
             dt35.init(&hspi3);
             Flag1 = 0;
         }

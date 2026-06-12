@@ -28,7 +28,6 @@ public:
     float getChassisVxTarget(float manual_target) const;
 
     void setStepUpRadarTarget(float x_ref_middle, float y_ref_middle);
-    void setStepUpRadarClimbDistance(float climb_distance_m);
     void setStepUpRadarClimbDirection(int8_t y_direction);
     void setStepUpBlockNum(int num);
 
@@ -67,7 +66,6 @@ private:
     float step_up_radar_last_x_ref_middle_;
     float step_up_radar_last_y_ref_middle_;
     uint8_t step_up_radar_last_middle_valid_;
-    float step_up_radar_climb_distance_m_;
     float step_up_radar_climb_target_;
     uint8_t step_up_radar_climb_target_valid_;
     int8_t step_up_radar_climb_y_direction_;

@@ -162,19 +162,19 @@ void VescMotor::sendFrame(CanPacketID cmd, const uint8_t data[8])
      *    bits[15: 8] = 命令类型（CanPacketID）
      *    bits[28:16] = 0（VESC 协议未使用高位）
      */
-    txFrame->Header.IdType      = FDCAN_EXTENDED_ID; // 29位扩展帧
-    txFrame->Header.TxFrameType = FDCAN_DATA_FRAME;  // 数据帧
-    txFrame->Header.DataLength  = FDCAN_DLC_BYTES_8; // 固定8字节
+    txFrame->Header.IdType = FDCAN_EXTENDED_ID;     // 29位扩展帧
+    txFrame->Header.TxFrameType = FDCAN_DATA_FRAME; // 数据帧
+    txFrame->Header.DataLength = FDCAN_DLC_BYTES_8; // 固定8字节
     txFrame->Header.Identifier =
         (static_cast<uint32_t>(nodeId_) & 0xFF) | // 低8位 = 节点ID
         (static_cast<uint32_t>(cmd) << 8);        // 高8位 = 命令类型
 
     // FD/错误状态字段（经典CAN模式下保持默认，HAL 要求必须填写）
     txFrame->Header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    txFrame->Header.BitRateSwitch       = FDCAN_BRS_OFF;
-    txFrame->Header.FDFormat            = FDCAN_CLASSIC_CAN;
-    txFrame->Header.TxEventFifoControl  = FDCAN_NO_TX_EVENTS;
-    txFrame->Header.MessageMarker       = 0;
+    txFrame->Header.BitRateSwitch = FDCAN_BRS_OFF;
+    txFrame->Header.FDFormat = FDCAN_CLASSIC_CAN;
+    txFrame->Header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+    txFrame->Header.MessageMarker = 0;
 
     /* --- 复制数据负载（8字节）--- */
     // 使用 memcpy 而非手动循环，编译器可优化为单条 LDM/STM 指令
@@ -383,7 +383,8 @@ void VescMotor::canRxHandler(const FDCAN_RxFrame_TypeDef *rxFrame)
     const uint8_t cmd = static_cast<uint8_t>((rawId >> 8) & 0xFF);
 
     // 只处理与本电机 nodeId_ 匹配的帧，过滤掉总线上其他 VESC 的广播
-    if (rxNodeId != static_cast<uint8_t>(nodeId_)) {
+    if (rxNodeId != static_cast<uint8_t>(nodeId_))
+    {
         return; // ID 不匹配，直接返回，不解析
     }
 
@@ -391,139 +392,151 @@ void VescMotor::canRxHandler(const FDCAN_RxFrame_TypeDef *rxFrame)
     const uint8_t *data = rxFrame->Data;
 
     // 根据命令类型分发解析逻辑
-    switch (static_cast<CanPacketID>(cmd)) {
-        /* ----------------------------------------------------
-         *  状态帧1（STATUS）：包含 eRPM、相电流、占空比
-         *
-         *  数据布局（8字节 big-endian）：
-         *  ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐
-         *  │Byte0 │Byte1 │Byte2 │Byte3 │Byte4 │Byte5 │Byte6 │Byte7 │
-         *  │符号标志(0xFF=负)  │eRPM低16位绝对值│电流×10(A) │占空比×1000  │
-         *  └──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘
-         *
-         *  eRPM 原码解析约定（沿用原始 C 代码逻辑）：
-         *    若 data[0]==0xFF && data[1]==0xFF → 负转速
-         *      对 Byte2/Byte3 按位取反后作为绝对值，加负号
-         *    否则 → 正转速，直接用 Byte2/Byte3 拼接
-         *  注：此方式只覆盖 ±65535 eRPM（约 ±4681 RPM@14极对），
-         *      若需更高转速请改为标准 int32 big-endian 解析
-         * ---------------------------------------------------- */
-        case CanPacketID::STATUS: {
-            // eRPM 解析：判断高两字节是否为 0xFFFF（负转速标志）
-            if (data[0] == 0xFF && data[1] == 0xFF) {
-                // 负转速：对 Byte2/Byte3 按位取反得绝对值，取负
-                const float erpm_abs = static_cast<float>(
-                    (static_cast<uint16_t>(~data[2] & 0xFF) << 8) |
-                    (static_cast<uint16_t>(~data[3] & 0xFF)));
-                rxData_.eRpm = -erpm_abs;
-            } else {
-                // 正转速：直接拼接 Byte2/Byte3
-                rxData_.eRpm = static_cast<float>(
-                    (static_cast<uint16_t>(data[2]) << 8) |
-                    (static_cast<uint16_t>(data[3])));
-            }
-
-            // 机械转速 = eRPM / 极对数
-            rxData_.rpm = rxData_.eRpm / static_cast<float>(POLE_PAIRS);
-
-            // 相电流（A）= int16(Byte4, Byte5) / 10.0
-            // VESC 发送：电流×10（0.1A精度），16位有符号整数，big-endian
-            rxData_.totalCurrent = static_cast<float>(
-                                       static_cast<int16_t>((static_cast<uint16_t>(data[4]) << 8) |
-                                                            static_cast<uint16_t>(data[5]))) /
-                                   10.0f;
-
-            // 占空比 = int16(Byte6, Byte7) / 1000.0
-            // VESC 发送：占空比×1000（0.001精度），16位有符号整数，big-endian
-            rxData_.duty = static_cast<float>(
-                               static_cast<int16_t>((static_cast<uint16_t>(data[6]) << 8) |
-                                                    static_cast<uint16_t>(data[7]))) /
-                           1000.0f;
-
-            rxData_.dutyCycle = rxData_.duty; // 保持兼容
-            break;
+    switch (static_cast<CanPacketID>(cmd))
+    {
+    /* ----------------------------------------------------
+     *  状态帧1（STATUS）：包含 eRPM、相电流、占空比
+     *
+     *  数据布局（8字节 big-endian）：
+     *  ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐
+     *  │Byte0 │Byte1 │Byte2 │Byte3 │Byte4 │Byte5 │Byte6 │Byte7 │
+     *  │符号标志(0xFF=负)  │eRPM低16位绝对值│电流×10(A) │占空比×1000  │
+     *  └──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘
+     *
+     *  eRPM 原码解析约定（沿用原始 C 代码逻辑）：
+     *    若 data[0]==0xFF && data[1]==0xFF → 负转速
+     *      对 Byte2/Byte3 按位取反后作为绝对值，加负号
+     *    否则 → 正转速，直接用 Byte2/Byte3 拼接
+     *  注：此方式只覆盖 ±65535 eRPM（约 ±4681 RPM@14极对），
+     *      若需更高转速请改为标准 int32 big-endian 解析
+     * ---------------------------------------------------- */
+    case CanPacketID::STATUS:
+    {
+        // eRPM 解析：判断高两字节是否为 0xFFFF（负转速标志）
+        if (data[0] == 0xFF && data[1] == 0xFF)
+        {
+            // 负转速：对 Byte2/Byte3 按位取反得绝对值，取负
+            const float erpm_abs = static_cast<float>(
+                (static_cast<uint16_t>(~data[2] & 0xFF) << 8) |
+                (static_cast<uint16_t>(~data[3] & 0xFF)));
+            rxData_.eRpm = -erpm_abs;
+        }
+        else
+        {
+            // 正转速：直接拼接 Byte2/Byte3
+            rxData_.eRpm = static_cast<float>(
+                (static_cast<uint16_t>(data[2]) << 8) |
+                (static_cast<uint16_t>(data[3])));
         }
 
-        /* ----------------------------------------------------
-         *  状态帧2（STATUS_2）：安时消耗（暂未使用）
-         *
-         *  数据布局：
-         *  Byte0-3：安时消耗（Ah×1e4，int32 big-endian）
-         *  Byte4-7：安时回充（Ah×1e4，int32 big-endian）
-         *
-         *  解析示例（当需要启用时）：
-         *    float amp_hours = (int32解析 data[0..3]) / 1e4f;
-         * ---------------------------------------------------- */
-        case CanPacketID::STATUS_2: {
-            // 暂未使用，保留扩展接口
-            break;
+        // 机械转速 = eRPM / 极对数
+        rxData_.rpm = rxData_.eRpm / static_cast<float>(POLE_PAIRS);
+
+        // 相电流（A）= int16(Byte4, Byte5) / 10.0
+        // VESC 发送：电流×10（0.1A精度），16位有符号整数，big-endian
+        rxData_.totalCurrent = static_cast<float>(
+                                   static_cast<int16_t>((static_cast<uint16_t>(data[4]) << 8) |
+                                                        static_cast<uint16_t>(data[5]))) /
+                               10.0f;
+
+        // 占空比 = int16(Byte6, Byte7) / 1000.0
+        // VESC 发送：占空比×1000（0.001精度），16位有符号整数，big-endian
+        rxData_.duty = static_cast<float>(
+                           static_cast<int16_t>((static_cast<uint16_t>(data[6]) << 8) |
+                                                static_cast<uint16_t>(data[7]))) /
+                       1000.0f;
+
+        rxData_.dutyCycle = rxData_.duty; // 保持兼容
+        break;
+    }
+
+    /* ----------------------------------------------------
+     *  状态帧2（STATUS_2）：安时消耗（暂未使用）
+     *
+     *  数据布局：
+     *  Byte0-3：安时消耗（Ah×1e4，int32 big-endian）
+     *  Byte4-7：安时回充（Ah×1e4，int32 big-endian）
+     *
+     *  解析示例（当需要启用时）：
+     *    float amp_hours = (int32解析 data[0..3]) / 1e4f;
+     * ---------------------------------------------------- */
+    case CanPacketID::STATUS_2:
+    {
+        // 暂未使用，保留扩展接口
+        break;
+    }
+
+    /* ----------------------------------------------------
+     *  状态帧3（STATUS_3）：瓦时消耗（暂未使用）
+     * ---------------------------------------------------- */
+    case CanPacketID::STATUS_3:
+    {
+        break;
+    }
+
+    /* ----------------------------------------------------
+     *  状态帧4（STATUS_4）：PID位置 + 温度 + 输入电流
+     *
+     *  数据布局（8字节 big-endian）：
+     *  ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐
+     *  │Byte0 │Byte1 │Byte2 │Byte3 │Byte4 │Byte5 │Byte6 │Byte7 │
+     *  │MOSFET温度×10  │电机温度×10   │输入电流×10  │PID角度×50  │
+     *  └──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘
+     *
+     *  当前只解析 PID 角度（Byte6, Byte7）：
+     *    pidPositionNow = int16(Byte6, Byte7) / 50.0f → 0~360°
+     *
+     *  【累计角度跟踪算法】
+     *  VESC 发送的 PID 角度范围 0~360°，跨零时发生跳变。
+     *    delta < -180° → 正转过零（359°→0°），turnCount++
+     *    delta > +180° → 反转过零（0°→359°），turnCount--
+     *    totalPosition = turnCount × 360 + pidPositionNow
+     * ---------------------------------------------------- */
+    case CanPacketID::STATUS_4:
+    {
+        // 保存上次角度，用于圈数跟踪
+        rxData_.pidPositionLast = rxData_.pidPositionNow;
+
+        // PID 当前角度：Byte6/Byte7 组成 int16，除以50得到度数（精度0.02°）
+        rxData_.pidPositionNow = static_cast<float>(
+                                     static_cast<int16_t>((static_cast<uint16_t>(data[6]) << 8) |
+                                                          static_cast<uint16_t>(data[7]))) /
+                                 50.0f;
+
+        // 圈数跟踪：处理 0°/360° 边界跳变
+        const float delta = rxData_.pidPositionNow - rxData_.pidPositionLast;
+
+        if (delta < -180.0f)
+        {
+            rxData_.turnCount++; // 正转经过 360°→0° 边界
+        }
+        else if (delta > 180.0f)
+        {
+            rxData_.turnCount--; // 反转经过 0°→360° 边界
         }
 
-        /* ----------------------------------------------------
-         *  状态帧3（STATUS_3）：瓦时消耗（暂未使用）
-         * ---------------------------------------------------- */
-        case CanPacketID::STATUS_3: {
-            break;
-        }
+        // 累计总角度
+        rxData_.totalPosition =
+            static_cast<float>(rxData_.turnCount) * 360.0f +
+            rxData_.pidPositionNow;
 
-        /* ----------------------------------------------------
-         *  状态帧4（STATUS_4）：PID位置 + 温度 + 输入电流
-         *
-         *  数据布局（8字节 big-endian）：
-         *  ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐
-         *  │Byte0 │Byte1 │Byte2 │Byte3 │Byte4 │Byte5 │Byte6 │Byte7 │
-         *  │MOSFET温度×10  │电机温度×10   │输入电流×10  │PID角度×50  │
-         *  └──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘
-         *
-         *  当前只解析 PID 角度（Byte6, Byte7）：
-         *    pidPositionNow = int16(Byte6, Byte7) / 50.0f → 0~360°
-         *
-         *  【累计角度跟踪算法】
-         *  VESC 发送的 PID 角度范围 0~360°，跨零时发生跳变。
-         *    delta < -180° → 正转过零（359°→0°），turnCount++
-         *    delta > +180° → 反转过零（0°→359°），turnCount--
-         *    totalPosition = turnCount × 360 + pidPositionNow
-         * ---------------------------------------------------- */
-        case CanPacketID::STATUS_4: {
-            // 保存上次角度，用于圈数跟踪
-            rxData_.pidPositionLast = rxData_.pidPositionNow;
+        // 以下字段未启用（注释保留，方便按需开启）：
+        // float temp_fet   = int16(data[0], data[1]) / 10.0f;
+        // float temp_motor = int16(data[2], data[3]) / 10.0f;
+        // float current_in = int16(data[4], data[5]) / 10.0f;
+        break;
+    }
 
-            // PID 当前角度：Byte6/Byte7 组成 int16，除以50得到度数（精度0.02°）
-            rxData_.pidPositionNow = static_cast<float>(
-                                         static_cast<int16_t>((static_cast<uint16_t>(data[6]) << 8) |
-                                                              static_cast<uint16_t>(data[7]))) /
-                                     50.0f;
+    /* ----------------------------------------------------
+     *  状态帧5（STATUS_5）：输入电压 + 里程计数（暂未使用）
+     * ---------------------------------------------------- */
+    case CanPacketID::STATUS_5:
+    {
+        break;
+    }
 
-            // 圈数跟踪：处理 0°/360° 边界跳变
-            const float delta = rxData_.pidPositionNow - rxData_.pidPositionLast;
-
-            if (delta < -180.0f) {
-                rxData_.turnCount++; // 正转经过 360°→0° 边界
-            } else if (delta > 180.0f) {
-                rxData_.turnCount--; // 反转经过 0°→360° 边界
-            }
-
-            // 累计总角度
-            rxData_.totalPosition =
-                static_cast<float>(rxData_.turnCount) * 360.0f +
-                rxData_.pidPositionNow;
-
-            // 以下字段未启用（注释保留，方便按需开启）：
-            // float temp_fet   = int16(data[0], data[1]) / 10.0f;
-            // float temp_motor = int16(data[2], data[3]) / 10.0f;
-            // float current_in = int16(data[4], data[5]) / 10.0f;
-            break;
-        }
-
-        /* ----------------------------------------------------
-         *  状态帧5（STATUS_5）：输入电压 + 里程计数（暂未使用）
-         * ---------------------------------------------------- */
-        case CanPacketID::STATUS_5: {
-            break;
-        }
-
-        /* 其余命令类型（发送命令的回声等）忽略 */
-        default:
-            break;
+    /* 其余命令类型（发送命令的回声等）忽略 */
+    default:
+        break;
     }
 }

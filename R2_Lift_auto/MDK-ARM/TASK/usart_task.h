@@ -14,15 +14,17 @@ typedef struct
     int B;         /* 整数标志位（保留兼容） */
 } VisionData_t;
 
-typedef struct {
+typedef struct
+{
     /* data */
     float x;
     float y;
 } Block_Vision;
 
 /* USB 串口接收缓冲区（中断回调写入，任务循环读取） */
-#define USB_RX_BUFFER_SIZE 128U
+#define USB_RX_BUFFER_SIZE 256U
 extern uint8_t data_usb[USB_RX_BUFFER_SIZE];
+extern uint16_t usb_rx_idx;  /* USB接收缓冲区的当前写入位置，由CDC_Receive_HS追加，usart_task消费后清零 */
 
 /* 全局视觉数据实例 */
 extern VisionData_t vision;

@@ -12,10 +12,7 @@
 #include "lift_step_down.h"
 #include <math.h>
 #include "usart_task.h"
-/*
-上200 高度为-230
 
-*/
 // 根据 2006 电机反馈转速，换算当前升降轮的线速度
 static void calc_linear_speed_from_motor_rpm(void);
 // 初始化升降机构相关 PID
@@ -49,7 +46,8 @@ static inline uint8_t LiftHeight_IsMoveFinished(float target_height,
 {
     // 只有左右两侧实际高度都进入目标容差，才认为抬升机构动作完成。
     if (fabsf(left_height - target_height) <= tolerance &&
-        fabsf(right_height - target_height) <= tolerance) {
+        fabsf(right_height - target_height) <= tolerance)
+    {
         return 1U;
     }
 
@@ -78,9 +76,10 @@ extern "C" void lift_task(void *argument)
     // 上电后先给一个回到 0 高度的初始轨迹
     lift_height_set_target(&lift_calulate, 0.0f, 2.0f);
 
-    for (;;) {
+    for (;;)
+    {
 
-        left_sensor  = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_15);
+        left_sensor = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_15);
         right_sensor = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3);
 
         // 读取当前机械位置并换算为左右两侧高度
@@ -102,19 +101,25 @@ extern "C" void lift_task(void *argument)
             lift_auto.getLiftSwitch(remove_dji.rc_.s[1]));
 
         // 只有档位变化时，才重新设置目标高度
-        if (now_sw != last_sw) {
-            if (now_sw == 3U) {
+        if (now_sw != last_sw)
+        {
+            if (now_sw == 3U)
+            {
                 // 3 档对应目标高度
                 lift_debug.height_target = 100.0f;
-                lift_debug.flag          = 1.0f;
-            } else if (now_sw == 1U) {
+                lift_debug.flag = 1.0f;
+            }
+            else if (now_sw == 1U)
+            {
                 // 1 档对应目标高度
                 lift_debug.height_target = 100.0f;
-                lift_debug.flag          = 1.0f;
-            } else if (now_sw == 2U) {
+                lift_debug.flag = 1.0f;
+            }
+            else if (now_sw == 2U)
+            {
                 // 2 档对应目标高度
                 lift_debug.height_target = -230.0f;
-                lift_debug.flag          = 1.0f;
+                lift_debug.flag = 1.0f;
             }
 
             // 更新上一拍档位
@@ -122,7 +127,8 @@ extern "C" void lift_task(void *argument)
         }
 
         // 当标志位置位时，重新生成一条 0.7s 的线性轨迹
-        if (lift_debug.flag == 1.0f) {
+        if (lift_debug.flag == 1.0f)
+        {
             lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.6f);
             lift_debug.flag = 0.0f;
         }
@@ -225,9 +231,12 @@ static void lift_cauclate_height(void)
 static float lift_position_input(float height)
 {
     // 对目标高度做限幅，避免超出机构行程
-    if (height > 220.0f) {
+    if (height > 220.0f)
+    {
         height = 220.0f;
-    } else if (height < -250.0f) {
+    }
+    else if (height < -250.0f)
+    {
         height = -250.0f;
     }
 
@@ -238,23 +247,25 @@ static float lift_position_input(float height)
 static void lift_height_set_target(LiftHeight_t *lift, float target, float T)
 {
     // 空指针保护
-    if (lift == 0) {
+    if (lift == 0)
+    {
         return;
     }
 
     // 保存轨迹起点，并写入本次目标和轨迹时间
-    lift->start_height  = lift->current_height;
+    lift->start_height = lift->current_height;
     lift->target_height = target;
-    lift->total_time    = T;
-    lift->start_time    = DWT_.getTimeline_s();
-    lift->started       = 1;
-    lift->finished      = 0;
+    lift->total_time = T;
+    lift->start_time = DWT_.getTimeline_s();
+    lift->started = 1;
+    lift->finished = 0;
     lift->command_seq++;
 
     // 如果给出的轨迹时间小于等于 0，则直接瞬时到目标值
-    if (T <= 0.0f) {
+    if (T <= 0.0f)
+    {
         lift->current_height = target;
-        lift->finished       = 1;
+        lift->finished = 1;
     }
 }
 
@@ -263,37 +274,47 @@ static float lift_height_input(LiftHeight_t *lift)
     float t;
 
     // 空指针保护
-    if (lift == 0) {
+    if (lift == 0)
+    {
         return 0.0f;
     }
 
     // 如果轨迹还没启动，直接返回当前高度
-    if (lift->started == 0U) {
+    if (lift->started == 0U)
+    {
         return lift->current_height;
     }
 
     // 如果轨迹已经完成，直接返回目标高度
-    if (lift->finished != 0U) {
+    if (lift->finished != 0U)
+    {
         return lift->target_height;
     }
 
     // 计算从轨迹开始到现在已经过去的时间
     t = DWT_.getTimeline_s() - lift->start_time;
 
-    if (t <= 0.0f) {
+    if (t <= 0.0f)
+    {
         // 时间未正式开始时，保持起点高度
         lift->current_height = lift->start_height;
-    } else if (LiftHeight_IsMoveFinished(lift->target_height,
-                                         lift_class.left.height,
-                                         lift_class.right.height,
-                                         LIFT_HEIGHT_FINISH_TOLERANCE_MM) != 0U) {
+    }
+    else if (LiftHeight_IsMoveFinished(lift->target_height,
+                                       lift_class.left.height,
+                                       lift_class.right.height,
+                                       LIFT_HEIGHT_FINISH_TOLERANCE_MM) != 0U)
+    {
         // 左右实际高度已经到位，才标记动作完成。
         lift->current_height = lift->target_height;
-        lift->finished       = 1U;
-    } else if (t >= lift->total_time) {
+        lift->finished = 1U;
+    }
+    else if (t >= lift->total_time)
+    {
         // 轨迹时间结束后保持目标高度，但等待实际机构到位。
         lift->current_height = lift->target_height;
-    } else {
+    }
+    else
+    {
         // 在总时间内按线性插值平滑推进高度轨迹
         lift->current_height = lift->start_height +
                                (lift->target_height - lift->start_height) * (t / lift->total_time);
@@ -311,19 +332,19 @@ static void calc_linear_speed_from_motor_rpm(void)
     float gear_ratio = (float)Z_MOTOR / (float)Z_WHEEL;
 
     // 当前电机反馈 rpm
-    lift_class.now.rpm_left  = lift_motor.Lift_2006[1].Data.Rpm;
+    lift_class.now.rpm_left = lift_motor.Lift_2006[1].Data.Rpm;
     lift_class.now.rpm_right = -lift_motor.Lift_2006[0].Data.Rpm;
 
     // 电机 rpm -> 轮端 rpm
-    float wheel_rpm_left  = lift_class.now.rpm_left * gear_ratio;
+    float wheel_rpm_left = lift_class.now.rpm_left * gear_ratio;
     float wheel_rpm_right = lift_class.now.rpm_right * gear_ratio;
 
     // 轮端 rpm -> 线速度 m/s
-    float wheel_speed_left  = wheel_rpm_left * 3.1415926f * wheel_diameter_m / 60.0f;
+    float wheel_speed_left = wheel_rpm_left * 3.1415926f * wheel_diameter_m / 60.0f;
     float wheel_speed_right = wheel_rpm_right * 3.1415926f * wheel_diameter_m / 60.0f;
 
     // 左右两侧按机械安装方向写入符号
-    lift_class.now.vel_2006_left  = wheel_speed_left;
+    lift_class.now.vel_2006_left = wheel_speed_left;
     lift_class.now.vel_2006_right = wheel_speed_right;
 }
 
@@ -336,18 +357,18 @@ static void calc_motor_rpm_from_linear_speed_target(float linear_speed_target)
     float gear_ratio = (float)Z_MOTOR / (float)Z_WHEEL;
 
     // 左右升降轮目标线速度方向相反
-    float v_left  = linear_speed_target;
+    float v_left = linear_speed_target;
     float v_right = linear_speed_target;
 
     // 保存目标线速度
-    lift_class.target.vel_2006_left  = v_left;
+    lift_class.target.vel_2006_left = v_left;
     lift_class.target.vel_2006_right = v_right;
 
     // 由目标线速度反算左右轮端 rpm
-    float wheel_rpm_left  = (v_left) * 60.0f / (3.1415926f * wheel_diameter_m);
+    float wheel_rpm_left = (v_left) * 60.0f / (3.1415926f * wheel_diameter_m);
     float wheel_rpm_right = (v_right) * 60.0f / (3.1415926f * wheel_diameter_m);
 
     // 再由轮端 rpm 反算电机目标 rpm
-    lift_class.target.rpm_left  = wheel_rpm_left / gear_ratio;
+    lift_class.target.rpm_left = wheel_rpm_left / gear_ratio;
     lift_class.target.rpm_right = wheel_rpm_right / gear_ratio;
 }

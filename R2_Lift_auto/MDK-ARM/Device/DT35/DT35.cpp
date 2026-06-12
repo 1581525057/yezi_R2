@@ -3,9 +3,9 @@
 DT35 dt35;
 
 /* ======================== GPIO Helpers =================================== */
-#define ADS8688_CS_LOW()   HAL_GPIO_WritePin(ADS8688_CS_PORT, ADS8688_CS_PIN, GPIO_PIN_RESET)
-#define ADS8688_CS_HIGH()  HAL_GPIO_WritePin(ADS8688_CS_PORT, ADS8688_CS_PIN, GPIO_PIN_SET)
-#define ADS8688_RST_LOW()  HAL_GPIO_WritePin(ADS8688_RST_PORT, ADS8688_RST_PIN, GPIO_PIN_RESET)
+#define ADS8688_CS_LOW() HAL_GPIO_WritePin(ADS8688_CS_PORT, ADS8688_CS_PIN, GPIO_PIN_RESET)
+#define ADS8688_CS_HIGH() HAL_GPIO_WritePin(ADS8688_CS_PORT, ADS8688_CS_PIN, GPIO_PIN_SET)
+#define ADS8688_RST_LOW() HAL_GPIO_WritePin(ADS8688_RST_PORT, ADS8688_RST_PIN, GPIO_PIN_RESET)
 #define ADS8688_RST_HIGH() HAL_GPIO_WritePin(ADS8688_RST_PORT, ADS8688_RST_PIN, GPIO_PIN_SET)
 
 /* ======================== ADS8688 SPI Protocol ============================ */
@@ -98,7 +98,8 @@ void DT35::ADS8688_Init(void)
 
     /* 回读校验 */
     uint8_t retry = 0;
-    while (ADS8688_ReadReg(ADS8688_REG_AUTO_SEQ_EN) != 0x0F) {
+    while (ADS8688_ReadReg(ADS8688_REG_AUTO_SEQ_EN) != 0x0F)
+    {
         ADS8688_WriteReg(ADS8688_REG_AUTO_SEQ_EN, 0x0F);
         ADS8688_WriteReg(ADS8688_REG_CH_PD, 0xF0);
         HAL_Delay(50);
@@ -131,7 +132,7 @@ void DT35::init(SPI_HandleTypeDef *hspi)
 
 static void convert_channel(uint16_t raw, DT35_Data_t &out, uint8_t channel)
 {
-    out.adc_raw   = raw;
+    out.adc_raw = raw;
     out.voltage_V = (float)raw * ADS8688_FS_VOLTAGE / ADS8688_ADC_MAX;
 
     float v = out.voltage_V;
@@ -141,25 +142,29 @@ static void convert_channel(uint16_t raw, DT35_Data_t &out, uint8_t channel)
     if (v > DT35_VOLTAGE_MAX_V)
         v = DT35_VOLTAGE_MAX_V;
 
-    switch (channel) {
-        case 0: // 左边激光
-            out.distance_mm = 487.77696f * v + 26.55159f;
-            break;
-        case 1: // 右边激光
-            out.distance_mm = 340.47226f * v + 26.15079f;
-            break;
-        case 2: // 前面激光
-            out.distance_mm = 134.72766f * v + 45.00009f;
-            break;
-        default:
-            out.distance_mm = 0;
-            break;
+    switch (channel)
+    {
+    case 0: // 左边激光
+        out.distance_mm = 487.77696f * v + 26.55159f;
+        break;
+    case 1: // 右边激光
+        out.distance_mm = 340.47226f * v + 26.15079f;
+        break;
+    case 2: // 前面激光
+        out.distance_mm = 134.72766f * v + 45.00009f;
+        break;
+    default:
+        out.distance_mm = 0;
+        break;
     }
 
     // 首次采样直接赋值，后续 EMA 滤波
-    if (out.valid == 0U) {
+    if (out.valid == 0U)
+    {
         out.distance_filtered = out.distance_mm;
-    } else {
+    }
+    else
+    {
         out.distance_filtered += (out.distance_mm - out.distance_filtered) / (float)DT35_EMA_N;
     }
 }

@@ -14,14 +14,14 @@
 
 MeilingLocator meiling;
 
-float MeilingLocator::MEILING_V_MAX        = 1.8f;   // 最大二维合速度，单位 m/s
-float MeilingLocator::MEILING_ACC_MAX      = 1.5f;   // 最大加速度，限制速度指令突变，单位 m/s^2
-float MeilingLocator::MEILING_DEC_MAX      = 0.5;    // 最大减速度，按剩余距离计算刹车速度，单位 m/s^2
-float MeilingLocator::MEILING_FILTER_ALPHA = 0.25f;  // 测距一阶低通系数，越大响应越快、滤波越弱
-float MeilingLocator::MEILING_MIN_DT       = 0.001f; // 最小规划周期，防止同一节拍内重复调用
-float MeilingLocator::MEILING_MAX_DT       = 0.05f;  // 最大规划周期，防止任务卡顿后步长过大
-float MeilingLocator::MEILING_DIST_EPS     = 0.001f; // 距离向量归一化阈值，避免除零
-float MeilingLocator::MEILING_DONE_SPEED   = 0.1f;   // 到位判定允许的底盘残余速度，单位 m/s
+float MeilingLocator::MEILING_V_MAX = 1.8f;         // 最大二维合速度，单位 m/s
+float MeilingLocator::MEILING_ACC_MAX = 1.5f;       // 最大加速度，限制速度指令突变，单位 m/s^2
+float MeilingLocator::MEILING_DEC_MAX = 0.45;       // 最大减速度，按剩余距离计算刹车速度，单位 m/s^2
+float MeilingLocator::MEILING_FILTER_ALPHA = 0.25f; // 测距一阶低通系数，越大响应越快、滤波越弱
+float MeilingLocator::MEILING_MIN_DT = 0.001f;      // 最小规划周期，防止同一节拍内重复调用
+float MeilingLocator::MEILING_MAX_DT = 0.05f;       // 最大规划周期，防止任务卡顿后步长过大
+float MeilingLocator::MEILING_DIST_EPS = 0.001f;    // 距离向量归一化阈值，避免除零
+float MeilingLocator::MEILING_DONE_SPEED = 0.1f;    // 到位判定允许的底盘残余速度，单位 m/s
 
 /*
  * 绝对值限幅：将 x 限制在 [-max, -min] ∪ [min, max] 区间。
@@ -33,22 +33,27 @@ float abs_limit(float x, float min, float max)
     float abs_min = (min < 0.0f) ? -min : min;
     float abs_max = (max < 0.0f) ? -max : max;
 
-    if (abs_max < abs_min) {
+    if (abs_max < abs_min)
+    {
         float temp = abs_max;
-        abs_max    = abs_min;
-        abs_min    = temp;
+        abs_max = abs_min;
+        abs_min = temp;
     }
 
-    if (x > abs_max) {
+    if (x > abs_max)
+    {
         return abs_max;
     }
-    if (x < -abs_max) {
+    if (x < -abs_max)
+    {
         return -abs_max;
     }
-    if (x > 0.0f && x < abs_min) {
+    if (x > 0.0f && x < abs_min)
+    {
         return abs_min;
     }
-    if (x < 0.0f && x > -abs_min) {
+    if (x < 0.0f && x > -abs_min)
+    {
         return -abs_min;
     }
 
@@ -58,10 +63,12 @@ float abs_limit(float x, float min, float max)
 /* 普通限幅：将 x 钳位到 [min, max] 区间。 */
 float MeilingLocator::clamp(float x, float min, float max)
 {
-    if (x > max) {
+    if (x > max)
+    {
         return max;
     }
-    if (x < min) {
+    if (x < min)
+    {
         return min;
     }
     return x;
@@ -84,7 +91,8 @@ void MeilingLocator::limitVectorSpeed(float *vx, float *vy, float max_speed)
 {
     float speed = sqrtf((*vx) * (*vx) + (*vy) * (*vy));
 
-    if (speed > max_speed && speed > MEILING_DIST_EPS) {
+    if (speed > max_speed && speed > MEILING_DIST_EPS)
+    {
         float scale = max_speed / speed;
         *vx *= scale;
         *vy *= scale;
@@ -97,7 +105,7 @@ void MeilingLocator::resetPlanState(uint32_t now_tick)
      * 每次重新启动定位时都清空规划状态：
      * 速度目标从0开始重新加速，滤波器等待第一帧测距原始值初始化，避免沿用上一次定位的残留数据。
      */
-    m_plan           = {};
+    m_plan = {};
     m_plan.last_tick = now_tick;
 }
 
@@ -108,14 +116,16 @@ float MeilingLocator::calcDeltaTime(uint32_t now_tick)
      * dt 夹在固定范围内，可以避免同一计时节拍重复调用时速度不动，也避免任务阻塞后一次性给过大的加速度步长。
      */
     uint32_t dt_ms = now_tick - m_plan.last_tick;
-    float dt       = static_cast<float>(dt_ms) * 0.001f;
+    float dt = static_cast<float>(dt_ms) * 0.001f;
 
     m_plan.last_tick = now_tick;
 
-    if (dt < MEILING_MIN_DT) {
+    if (dt < MEILING_MIN_DT)
+    {
         return MEILING_MIN_DT;
     }
-    if (dt > MEILING_MAX_DT) {
+    if (dt > MEILING_MAX_DT)
+    {
         return MEILING_MAX_DT;
     }
     return dt;
@@ -132,19 +142,22 @@ void MeilingLocator::updatePlanVelocity(float dt)
     float ex = 0.0f;
     float ey = 0.0f;
 
-    if (fabsf(m_state.e_lon) > m_target.tol_lon) {
+    if (fabsf(m_state.e_lon) > m_target.tol_lon)
+    {
         ex = m_state.e_lon * 0.001f;
     }
-    if (fabsf(m_state.e_lat) > m_target.tol_lat) {
+    if (fabsf(m_state.e_lat) > m_target.tol_lat)
+    {
         ey = m_state.e_lat * 0.001f;
     }
 
-    float dist   = sqrtf(ex * ex + ey * ey);
+    float dist = sqrtf(ex * ex + ey * ey);
     float vx_raw = 0.0f;
     float vy_raw = 0.0f;
 
     //  第二部分：计算刹车速度
-    if (dist > MEILING_DIST_EPS) {
+    if (dist > MEILING_DIST_EPS)
+    {
         float v_brake = sqrtf(2.0f * MEILING_DEC_MAX * dist); // 这是物理公式 v² = 2·a·s 的反推：以最大减速度  MEILING_DEC_MAX 刹车，需要多初速度才能在 dist 距离内停下。离目标远时 v_brake 大，靠近时 v_brake 自然变小。
 
         /*
@@ -172,12 +185,13 @@ void MeilingLocator::start(const MeilingTarget_t &target)
 {
     m_target = target;
 
-    if (m_target.timeout_ms == 0U) {
+    if (m_target.timeout_ms == 0U)
+    {
         m_target.timeout_ms = MEILING_TIMEOUT_MS;
     }
 
-    m_state      = {};
-    m_running    = 1U;
+    m_state = {};
+    m_running = 1U;
     m_start_tick = HAL_GetTick();
     resetPlanState(m_start_tick);
 }
@@ -189,13 +203,15 @@ void MeilingLocator::start(const MeilingTarget_t &target)
  */
 uint8_t MeilingLocator::update(void)
 {
-    if (m_running == 0U) {
+    if (m_running == 0U)
+    {
         return RUNNING;
     }
 
-    if (isTimeout()) {
+    if (isTimeout())
+    {
         m_state.result = TIMEOUT;
-        m_running      = 0U;
+        m_running = 0U;
         return TIMEOUT;
     }
 
@@ -203,14 +219,18 @@ uint8_t MeilingLocator::update(void)
 
     updatePlanVelocity(calcDeltaTime(HAL_GetTick()));
 
-    if (allInTolerance()) {
+    if (allInTolerance())
+    {
         m_state.stable_cnt++;
-        if (m_state.stable_cnt >= MEILING_STABLE_COUNT) {
+        if (m_state.stable_cnt >= MEILING_STABLE_COUNT)
+        {
             m_state.result = SUCCESS;
-            m_running      = 0U;
+            m_running = 0U;
             return SUCCESS;
         }
-    } else {
+    }
+    else
+    {
         m_state.stable_cnt = 0U;
     }
 
@@ -227,49 +247,65 @@ uint8_t MeilingLocator::update(void)
 void MeilingLocator::calcErrors(void)
 {
     uint8_t has_front = (m_target.sensor_mask & SENSOR_FRONT) != 0U;
-    uint8_t has_left  = (m_target.sensor_mask & SENSOR_LEFT) != 0U;
+    uint8_t has_left = (m_target.sensor_mask & SENSOR_LEFT) != 0U;
     uint8_t has_right = (m_target.sensor_mask & SENSOR_RIGHT) != 0U;
 
-    if (m_plan.filter_ready == 0U) {
+    if (m_plan.filter_ready == 0U)
+    {
         /*
          * 第一次进入定位时直接用当前测距原始值初始化滤波器。
          * 如果从0开始滤波，第一次误差会被人为放大，速度规划会出现不必要的启动冲击。
          */
-        m_plan.F_filtered   = dt35.ch2.distance_mm;
-        m_plan.L_filtered   = laser_left.data.distance_mm;
-        m_plan.R_filtered   = laser_right.data.distance_mm;
+        m_plan.F_filtered = dt35.ch2.distance_mm;
+        m_plan.L_filtered = laser_left.data.distance_mm;
+        m_plan.R_filtered = laser_right.data.distance_mm;
         m_plan.filter_ready = 1U;
-    } else {
+    }
+    else
+    {
         m_plan.F_filtered = lowPass(m_plan.F_filtered, dt35.ch2.distance_mm);
         m_plan.L_filtered = lowPass(m_plan.L_filtered, laser_left.data.distance_mm);
         m_plan.R_filtered = lowPass(m_plan.R_filtered, laser_right.data.distance_mm);
     }
 
-    if (has_front) {
+    if (has_front)
+    {
         m_state.F_meas = m_plan.F_filtered;
     }
-    if (has_left) {
+    if (has_left)
+    {
         m_state.L_meas = m_plan.L_filtered;
     }
-    if (has_right) {
+    if (has_right)
+    {
         m_state.R_meas = m_plan.R_filtered;
     }
 
-    if (has_front) {
+    if (has_front)
+    {
         m_state.e_lon = m_state.F_meas - m_target.F_ref;
-    } else {
+    }
+    else
+    {
         m_state.e_lon = 0.0f;
     }
 
-    if (has_left && has_right) {
-        float e_L     = m_state.L_meas - m_target.L_ref;
-        float e_R     = m_state.R_meas - m_target.R_ref;
+    if (has_left && has_right)
+    {
+        float e_L = m_state.L_meas - m_target.L_ref;
+        float e_R = m_state.R_meas - m_target.R_ref;
         m_state.e_lat = (e_L - e_R) / 2.0f;
-    } else if (has_left) {
+    }
+    else if (has_left)
+    {
         m_state.e_lat = m_state.L_meas - m_target.L_ref;
-    } else if (has_right) {
+    }
+    else if (has_right)
+    {
         m_state.e_lat = m_target.R_ref - m_state.R_meas;
-    } else {
+    }
+    else
+    {
         m_state.e_lat = 0.0f;
     }
 }
@@ -283,20 +319,24 @@ uint8_t MeilingLocator::allInTolerance(void) const
     float abs_lat = m_state.e_lat < 0.0f ? -m_state.e_lat : m_state.e_lat;
     float abs_lon = m_state.e_lon < 0.0f ? -m_state.e_lon : m_state.e_lon;
 
-    if (abs_lat > m_target.tol_lat) {
+    if (abs_lat > m_target.tol_lat)
+    {
         return 0U;
     }
-    if (abs_lon > m_target.tol_lon) {
+    if (abs_lon > m_target.tol_lon)
+    {
         return 0U;
     }
     /*
      * 这里有意读取底盘正运动学得到的实时速度反馈。
      * 位置误差进入容差范围后，还要等实车横向和纵向速度都收住，避免车还在滑行时提前判定定位成功。
      */
-    if (fabsf(omni_chassis.now.Vx) > MEILING_DONE_SPEED) {
+    if (fabsf(omni_chassis.now.Vx) > MEILING_DONE_SPEED)
+    {
         return 0U;
     }
-    if (fabsf(omni_chassis.now.Vy) > MEILING_DONE_SPEED) {
+    if (fabsf(omni_chassis.now.Vy) > MEILING_DONE_SPEED)
+    {
         return 0U;
     }
     return 1U;
@@ -311,7 +351,8 @@ uint8_t MeilingLocator::isTimeout(void) const
 /* 获取底盘X轴速度指令：定位运行中返回规划速度，否则返回手动目标值。 */
 float MeilingLocator::getChassisVxTarget(float manual_target) const
 {
-    if (m_running == 0U) {
+    if (m_running == 0U)
+    {
         return manual_target;
     }
 
@@ -321,7 +362,8 @@ float MeilingLocator::getChassisVxTarget(float manual_target) const
 /* 获取底盘Y轴速度指令：定位运行中返回规划速度，否则返回手动目标值。 */
 float MeilingLocator::getChassisVyTarget(float manual_target) const
 {
-    if (m_running == 0U) {
+    if (m_running == 0U)
+    {
         return manual_target;
     }
 

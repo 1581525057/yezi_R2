@@ -2114,6 +2114,11 @@
               <FileType>8</FileType>
               <FilePath>.\Route_Plan\lift_step_up.cpp</FilePath>
             </File>
+            <File>
+              <FileName>arm_comm.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Route_Plan\arm_comm.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

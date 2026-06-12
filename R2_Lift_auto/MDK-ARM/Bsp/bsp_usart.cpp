@@ -6,6 +6,7 @@
 #include "dm_imu.h"
 #include "usart_task.h"
 #include "laser_distance.h"
+#include "arm_comm.h"
 
 extern DM_IMU dm_imu;
 extern Remote remove_dji;
@@ -17,6 +18,10 @@ UART_DMA_Channel uart2_dma;
 UART_DMA_Channel uart5_dma;
 UART_DMA_Channel uart8_dma;
 UART_DMA_Channel uart9_dma;
+
+static uint8_t uart7_arm_rx_buf[ArmComm::RX_FRAME_LENGTH];
+static uint8_t uart7_arm_rx_byte;
+static uint8_t uart7_arm_rx_index;
 
 //============================================================
 // 各串口收到数据后的处理函数
@@ -41,6 +46,39 @@ static void USART5_RxCallback(uint8_t *buf, uint16_t len)
     if (len == SBUS_RX_BUF_NUM) {
         remove_dji.parseSBUS(buf);
     }
+}
+
+//------------------------------------------------------------
+// UART7 -> 机械臂回传帧
+//------------------------------------------------------------
+static void UART7_RxByteCallback(uint8_t data)
+{
+    if (uart7_arm_rx_index == 0U) {
+        if (data != 0xBBU) {
+            return;
+        }
+
+        uart7_arm_rx_buf[0] = data;
+        uart7_arm_rx_index  = 1U;
+        return;
+    }
+
+    uart7_arm_rx_buf[uart7_arm_rx_index] = data;
+    uart7_arm_rx_index++;
+
+    if (uart7_arm_rx_index >= ArmComm::RX_FRAME_LENGTH) {
+        if (arm_comm.parseRxFrame(uart7_arm_rx_buf, ArmComm::RX_FRAME_LENGTH) == 0U && data == 0xBBU) {
+            uart7_arm_rx_buf[0] = data;
+            uart7_arm_rx_index  = 1U;
+        } else {
+            uart7_arm_rx_index = 0U;
+        }
+    }
+}
+
+static void UART7_StartReceiveIT(void)
+{
+    (void)HAL_UART_Receive_IT(&huart7, &uart7_arm_rx_byte, 1U);
 }
 
 static void USART8_RxCallback(uint8_t *buf, uint16_t len)
@@ -277,6 +315,12 @@ void BSP_USART::Init(void)
                    remove_dji.SBUS_MultiRx_Buff[1],
                    SBUS_RX_BUF_NUM, USART5_RxCallback);
 
+    //--------------------------------------------------------
+    // UART7 -> 机械臂
+    //--------------------------------------------------------
+    // UART7 使用普通中断接收机械臂 6 字节回传帧，不走 DMA 双缓冲。
+    UART7_StartReceiveIT();
+
     uart8_dma.Init(&huart8, laser_right.rx_buf[0], laser_right.rx_buf[1], LASER_RX_LEN, USART8_RxCallback);
 
     uart9_dma.Init(&huart9, laser_left.rx_buf[0], laser_left.rx_buf[1], LASER_RX_LEN, USART9_RxCallback);
@@ -323,6 +367,16 @@ void BSP_USART::ErrorDispatch(UART_HandleTypeDef *huart)
         return;
     }
 
+    if (huart == &huart7) {
+        __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_PEF | UART_CLEAR_FEF |
+                                         UART_CLEAR_NEF | UART_CLEAR_OREF);
+        huart->ErrorCode = HAL_UART_ERROR_NONE;
+        huart->RxState = HAL_UART_STATE_READY;
+        uart7_arm_rx_index = 0U;
+        UART7_StartReceiveIT();
+        return;
+    }
+
     if (uart8_dma.IsThisUart(huart)) {
         uart8_dma.RecoverFromError();
         return;
@@ -340,4 +394,12 @@ void BSP_USART::ErrorDispatch(UART_HandleTypeDef *huart)
 extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     BSP_USART::RxEventDispatch(huart, Size);
+}
+
+extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart == &huart7) {
+        UART7_RxByteCallback(uart7_arm_rx_byte);
+        UART7_StartReceiveIT();
+    }
 }

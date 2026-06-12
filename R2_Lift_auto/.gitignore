@@ -1,5 +1,23 @@
+# 默认忽略所有文件，只放行 Keil/STM32 工程需要的内容
+*
+!*/
+
+# 保留 Git 忽略配置和 STM32CubeMX 工程入口
+!.gitignore
+!.mxproject
+!*.ioc
+
+# 保留 STM32 生成源码和用户源码
+!/Core/**
+!/Drivers/**
+!/Middlewares/**
+!/USB_DEVICE/**
+
+# 保留 Keil 工程目录、源码和工程配置
+!/MDK-ARM/**
+
 # EIDE 工程与本地配置不上传
-EIDE_Project/
+/EIDE_Project/
 **/.eide/
 **/.cmsis/
 **/.pack/
@@ -19,10 +37,14 @@ EIDE_Project/
 **/.claude/
 **/.clang-format
 
-# Keil/MDK 编译输出不上传，仅保留源码和工程配置
-MDK-ARM/My_Princess_cpp/
-MDK-ARM/Listings/
-MDK-ARM/Objects/
+# Keil/MDK 编译输出和临时文件不上传
+/MDK-ARM/My_Princess_cpp/
+/MDK-ARM/Listings/
+/MDK-ARM/Objects/
+**/Listings/
+**/Objects/
+**/Debug/
+**/Release/
 *.axf
 *.elf
 *.hex
@@ -38,3 +60,9 @@ MDK-ARM/Objects/
 *.build_log.htm
 *.uvguix.*
 *.uvgui.*
+*.bak
+*.bak.*
+*.tmp
+*.log
+*.orig
+*.swp

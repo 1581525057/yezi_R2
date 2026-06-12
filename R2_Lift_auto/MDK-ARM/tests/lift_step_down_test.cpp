@@ -97,6 +97,20 @@ static void test_turn_180_prepare_and_descend(void)
     assert(step.getLiftLinearSpeedTarget(0.0f) < 0.0f);
 }
 
+static void test_turn_180_prepare_keeps_converted_body_components(void)
+{
+    reset_test_config();
+    LiftStepDown step;
+    step.setStepDownRadarTarget(0.0f, 0.0f, 2.0f, 2.0f, 0U, 0U, 1U);
+    vision.angle_x = 177.0f;
+    step.startStepDown();
+
+    step.update();
+
+    assert(fabsf(step.getChassisVxTarget(0.0f)) > 0.1000f);
+    assert(fabsf(step.getChassisVyTarget(0.0f)) > 0.0100f);
+}
+
 static void test_left_90_prepare_and_descend(void)
 {
     reset_test_config();
@@ -113,6 +127,20 @@ static void test_left_90_prepare_and_descend(void)
     step.update();
     step.update();
     assert(step.getLiftLinearSpeedTarget(0.0f) < 0.0f);
+}
+
+static void test_left_90_prepare_converts_world_y_to_body_x(void)
+{
+    reset_test_config();
+    LiftStepDown step;
+    step.setStepDownRadarTarget(0.0f, 0.0f, 2.0f, 2.0f, 1U, 0U, 0U);
+    vision.angle_x = 87.0f;
+    step.startStepDown();
+
+    step.update();
+
+    assert(fabsf(step.getChassisVxTarget(0.0f)) > 0.1000f);
+    assert(fabsf(step.getChassisVyTarget(0.0f)) > 0.0100f);
 }
 
 static void test_right_90_prepare_and_descend(void)
@@ -133,12 +161,29 @@ static void test_right_90_prepare_and_descend(void)
     assert(step.getLiftLinearSpeedTarget(0.0f) < 0.0f);
 }
 
+static void test_right_90_prepare_converts_world_y_to_body_x(void)
+{
+    reset_test_config();
+    LiftStepDown step;
+    step.setStepDownRadarTarget(0.0f, 0.0f, 2.0f, 2.0f, 0U, 1U, 0U);
+    vision.angle_x = -87.0f;
+    step.startStepDown();
+
+    step.update();
+
+    assert(fabsf(step.getChassisVxTarget(0.0f)) > 0.1000f);
+    assert(fabsf(step.getChassisVyTarget(0.0f)) > 0.0100f);
+}
+
 int main(void)
 {
     test_prepare_base_uses_latest_config();
     test_prepare_base_uses_current_config_not_previous_finish();
     test_turn_180_prepare_and_descend();
+    test_turn_180_prepare_keeps_converted_body_components();
     test_left_90_prepare_and_descend();
+    test_left_90_prepare_converts_world_y_to_body_x();
     test_right_90_prepare_and_descend();
+    test_right_90_prepare_converts_world_y_to_body_x();
     return 0;
 }

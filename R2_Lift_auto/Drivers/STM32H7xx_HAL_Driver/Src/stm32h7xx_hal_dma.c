@@ -1263,7 +1263,7 @@ void HAL_DMA_IRQHandler(DMA_HandleTypeDef *hdma)
     /* Half Transfer Complete Interrupt management ******************************/
     if ((tmpisr_dma & (DMA_FLAG_HTIF0_4 << (hdma->StreamIndex & 0x1FU))) != 0U)
     {
-         if(__HAL_DMA_GET_IT_SOURCE(hdma, DMA_IT_HT) != 0U)
+      if(__HAL_DMA_GET_IT_SOURCE(hdma, DMA_IT_HT) != 0U)
       {
         /* Clear the half transfer complete flag */
         regs_dma->IFCR = DMA_FLAG_HTIF0_4 << (hdma->StreamIndex & 0x1FU);

@@ -266,12 +266,16 @@ static int8_t CDC_Receive_HS(uint8_t* Buf, uint32_t *Len)
   /* USER CODE BEGIN 11 */
   uint32_t len = *Len;
 
-  // 1) 长度保护：最多拷 data_usb 字节
-  if (len > sizeof(data_usb))
-    len = sizeof(data_usb);
+  // 计算缓冲区剩余空间，防止溢出
+  uint16_t remaining = sizeof(data_usb) - usb_rx_idx;
+  if (len > remaining)
+    len = remaining;
 
-  // 2) 拷贝数据到你的缓冲区
-  memcpy(data_usb, Buf, len);
+  // 追加拷贝到缓冲区尾部（USB FS 每包最多64字节，多包数据需要拼接）
+  if (len > 0) {
+    memcpy(&data_usb[usb_rx_idx], Buf, len);
+    usb_rx_idx += len;
+  }
 
   USBD_CDC_SetRxBuffer(&hUsbDeviceHS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceHS);
