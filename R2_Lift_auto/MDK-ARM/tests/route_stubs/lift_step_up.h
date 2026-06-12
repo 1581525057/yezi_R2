@@ -15,7 +15,6 @@ public:
 
     void setStepUpBlockNum(int) {}
     void setStepUpRadarClimbDirection(int8_t direction) { climb_direction = direction; }
-    void setStepUpRadarClimbDistance(float) {}
     void setStepUpRadarTarget(float, float) {}
     void startStepUp(void) {}
     uint8_t isStepUpFinished(void) const { return 0U; }

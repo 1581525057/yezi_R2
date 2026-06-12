@@ -9,19 +9,21 @@
 #include "PID.h"
 #include "yun_j60.h"
 #include "dm_imu.h"
-#include "lift_auto.h"
+#include "lift_step_up.h"
+#include "lift_step_down.h"
 #include "VescMotor.h"
 #include "mieling.h"
 #include "usart_task.h"
 #include "route_task.h"
-#include "FTMTask.h"
+#include "arm_comm.h"
 
 extern "C" float WuqiquTask_GetChassisVxTarget(float manual);
 extern "C" float WuqiquTask_GetChassisVyTarget(float manual);
 extern "C" float WuqiquTask_GetChassisVzTarget(float manual);
 extern "C" uint8_t WuqiquTask_IsActive(void);
 
-typedef enum {
+typedef enum
+{
     CHASSIS_AUTO_NONE = 0,
     CHASSIS_AUTO_MEILING,
     CHASSIS_AUTO_WUQIQU,
@@ -31,13 +33,16 @@ typedef enum {
 // 底盘自动控制只允许一个来源生效，避免多个任务同时改写目标速度。
 static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, uint8_t meiling_area_active)
 {
-    if (wuqiqu_active != 0U && meiling_area_active != 0U) {
+    if (wuqiqu_active != 0U && meiling_area_active != 0U)
+    {
         return CHASSIS_AUTO_CONFLICT;
     }
-    if (wuqiqu_active != 0U) {
+    if (wuqiqu_active != 0U)
+    {
         return CHASSIS_AUTO_WUQIQU;
     }
-    if (meiling_area_active != 0U) {
+    if (meiling_area_active != 0U)
+    {
         return CHASSIS_AUTO_MEILING;
     }
     return CHASSIS_AUTO_NONE;
@@ -60,7 +65,7 @@ static float target_vy_last = 0.0f;
 static float target_vz_last = 0.0f;
 float rpm, current;
 float yaw_target;
-uint16_t ele_target = 0;
+
 extern "C" void chassis_task(void *argument)
 {
     // 初始化底盘任务依赖的通信、计时和控制器模块。
@@ -82,20 +87,16 @@ extern "C" void chassis_task(void *argument)
 
     osDelay(200);
 
-    while (1) {
-
-        if (ele_target == 1) {
-            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
-        } else if (ele_target == 2) {
-            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
-        }
+    while (1)
+    {
 
         // 更新遥控器状态和底盘人工控制指令。
         remove_dji.monitor();
         remove_dji.updateChassosCommand();
 
         // 读取 4 个 VESC 电机的实际转速，作为底盘状态解算输入。
-        for (uint8_t i = 0; i < 4; i++) {
+        for (uint8_t i = 0; i < 4; i++)
+        {
             omni_chassis.now.rpm[i] = VescMotors[i].rxData_.rpm;
         }
 
@@ -104,19 +105,7 @@ extern "C" void chassis_task(void *argument)
 
         float VZ_OUT = 0.0f;
         // 航向保持：视觉角度偏差越大，输出的底盘自转速度越大。
-        if (FTM_IsYawTargetCorrectionEnabled() != 0U)
-        {
-            VZ_OUT = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
-        }
-        else
-        {
-            yaw_target = vision.angle_x;
-            pid_yaw.pid.Err = 0.0f;
-            pid_yaw.pid.Last_Err = 0.0f;
-            pid_yaw.pid.Iout = 0.0f;
-            pid_yaw.pid.Output = 0.0f;
-            pid_yaw.pid.Last_Output = 0.0f;
-        }
+        VZ_OUT = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
 
         // 先取遥控器目标速度；自动任务生效时会覆盖对应目标。
         float target_vx = remove_dji.chassis_.Vx;
@@ -125,36 +114,40 @@ extern "C" void chassis_task(void *argument)
 
         const ChassisAutoSource auto_source = ChassisAuto_SelectSource(WuqiquTask_IsActive(), RouteTask_IsMeilingAreaActive());
 
-        switch (auto_source) {
-            case CHASSIS_AUTO_WUQIQU:
-                // 武器区接管底盘速度。
-                target_vx = WuqiquTask_GetChassisVxTarget(target_vx);
-                target_vy = WuqiquTask_GetChassisVyTarget(target_vy);
-                target_vz = WuqiquTask_GetChassisVzTarget(target_vz);
-                break;
-            case CHASSIS_AUTO_MEILING:
-                // 梅林区接管底盘速度。
-                target_vx = meiling.getChassisVxTarget(target_vx);
-                target_vy = meiling.getChassisVyTarget(target_vy);
-                target_vz = meiling.getChassisVzTarget(target_vz);
-
-                break;
-            case CHASSIS_AUTO_CONFLICT:
-                // 两个自动任务同时生效时停车，避免底盘控制权冲突。
-                target_vx = 0.0f;
-                target_vy = 0.0f;
-                target_vz = 0.0f;
-                break;
-            default:
-                break;
+        switch (auto_source)
+        {
+        case CHASSIS_AUTO_WUQIQU:
+            // 武器区接管底盘速度。
+            target_vx = WuqiquTask_GetChassisVxTarget(target_vx);
+            target_vy = WuqiquTask_GetChassisVyTarget(target_vy);
+            target_vz = WuqiquTask_GetChassisVzTarget(target_vz);
+            break;
+        case CHASSIS_AUTO_MEILING:
+            // 梅林区接管底盘速度。
+            target_vx = meiling.getChassisVxTarget(target_vx);
+            target_vy = meiling.getChassisVyTarget(target_vy);
+            target_vz = meiling.getChassisVzTarget(target_vz);
+            break;
+        case CHASSIS_AUTO_CONFLICT:
+            // 两个自动任务同时生效时停车，避免底盘控制权冲突。
+            target_vx = 0.0f;
+            target_vy = 0.0f;
+            target_vz = 0.0f;
+            break;
+        default:
+            break;
         }
 
         // 抬升机构根据自身状态继续限制底盘平移速度。
         target_vy = lift_auto.getChassisVyTarget(target_vy);
         target_vx = lift_auto.getChassisVxTarget(target_vx);
+        target_vy = lift_step_down.getChassisVyTarget(target_vy);
+        target_vx = lift_step_down.getChassisVxTarget(target_vx);
+        target_vy = arm_comm.getChassisVyTarget(target_vy);
+        target_vx = arm_comm.getChassisVxTarget(target_vx);
 
         // 当前自转输出仍使用航向 PID 结果，target_vz 只保留自动任务仲裁值。
-        omni_chassis.setRemote(target_vx, target_vy, target_vz);
+        omni_chassis.setRemote(target_vx, target_vy, VZ_OUT);
 
         // 速度环：根据当前速度和目标速度的误差计算 x/y 方向驱动力。
         float Fx = pid_F_chassis_linear_x.PID_Calculate(omni_chassis.now.Vx, omni_chassis.target.Vx);
@@ -175,7 +168,8 @@ extern "C" void chassis_task(void *argument)
         float motor_input[4];
 
         // 通过 CAN 分别发送前馈电流和转速闭环输出。
-        for (uint8_t i = 0; i < 4; i++) {
+        for (uint8_t i = 0; i < 4; i++)
+        {
 
             motor_input[i] = omni_chassis.target.rpm[i];
             VescMotors[i].setRpm(motor_input[i]);

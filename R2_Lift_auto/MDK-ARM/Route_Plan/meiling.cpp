@@ -1,26 +1,27 @@
 /*
  * meiling.cpp — 梅林定位器实现
  *
- * 通过三路DT35测距传感器（前/左/右）计算机器人相对目标位置的横向和纵向误差，
+ * 通过前向DT35和左右串口激光计算机器人相对目标位置的横向和纵向误差，
  * 经一阶低通滤波后，生成带加减速限制的二维速度指令，驱动全向底盘闭环收敛到目标位姿。
  */
 
 #include "mieling.h"
 #include "DT35.h"
+#include "laser_distance.h"
 #include "main.h"
 #include "omni_chassis.h"
 #include <math.h>
 
 MeilingLocator meiling;
 
-float MeilingLocator::MEILING_V_MAX        = 1.8f;   // 最大二维合速度，单位 m/s
-float MeilingLocator::MEILING_ACC_MAX      = 1.5f;   // 最大加速度，限制速度指令突变，单位 m/s^2
-float MeilingLocator::MEILING_DEC_MAX      = 0.5;    // 最大减速度，按剩余距离计算刹车速度，单位 m/s^2
-float MeilingLocator::MEILING_FILTER_ALPHA = 0.25f;  // 测距一阶低通系数，越大响应越快、滤波越弱
-float MeilingLocator::MEILING_MIN_DT       = 0.001f; // 最小规划周期，防止同一节拍内重复调用
-float MeilingLocator::MEILING_MAX_DT       = 0.05f;  // 最大规划周期，防止任务卡顿后步长过大
-float MeilingLocator::MEILING_DIST_EPS     = 0.001f; // 距离向量归一化阈值，避免除零
-float MeilingLocator::MEILING_DONE_SPEED   = 0.1f;   // 到位判定允许的底盘残余速度，单位 m/s
+float MeilingLocator::MEILING_V_MAX = 1.8f;         // 最大二维合速度，单位 m/s
+float MeilingLocator::MEILING_ACC_MAX = 1.5f;       // 最大加速度，限制速度指令突变，单位 m/s^2
+float MeilingLocator::MEILING_DEC_MAX = 0.45;       // 最大减速度，按剩余距离计算刹车速度，单位 m/s^2
+float MeilingLocator::MEILING_FILTER_ALPHA = 0.25f; // 测距一阶低通系数，越大响应越快、滤波越弱
+float MeilingLocator::MEILING_MIN_DT = 0.001f;      // 最小规划周期，防止同一节拍内重复调用
+float MeilingLocator::MEILING_MAX_DT = 0.05f;       // 最大规划周期，防止任务卡顿后步长过大
+float MeilingLocator::MEILING_DIST_EPS = 0.001f;    // 距离向量归一化阈值，避免除零
+float MeilingLocator::MEILING_DONE_SPEED = 0.1f;    // 到位判定允许的底盘残余速度，单位 m/s
 
 /*
  * 绝对值限幅：将 x 限制在 [-max, -min] ∪ [min, max] 区间。
@@ -102,7 +103,7 @@ void MeilingLocator::resetPlanState(uint32_t now_tick)
 {
     /*
      * 每次重新启动定位时都清空规划状态：
-     * 速度目标从0开始重新加速，滤波器等待第一帧DT35原始值初始化，避免沿用上一次定位的残留数据。
+     * 速度目标从0开始重新加速，滤波器等待第一帧测距原始值初始化，避免沿用上一次定位的残留数据。
      */
     m_plan = {};
     m_plan.last_tick = now_tick;
@@ -241,7 +242,7 @@ uint8_t MeilingLocator::update(void)
  *
  * 纵向误差 = 前传感器测量值 - 前参考值（正 = 偏远，负 = 偏近）。
  * 横向误差：左右都有传感器时取两侧偏差均值；只有一侧时用单侧偏差。
- * 首次调用时用原始DT35值初始化低通滤波器，避免从零滤波导致启动冲击。
+ * 首次调用时用当前测距原始值初始化低通滤波器，避免从零滤波导致启动冲击。
  */
 void MeilingLocator::calcErrors(void)
 {
@@ -252,19 +253,19 @@ void MeilingLocator::calcErrors(void)
     if (m_plan.filter_ready == 0U)
     {
         /*
-         * 第一次进入定位时直接用当前DT35原始值初始化滤波器。
+         * 第一次进入定位时直接用当前测距原始值初始化滤波器。
          * 如果从0开始滤波，第一次误差会被人为放大，速度规划会出现不必要的启动冲击。
          */
         m_plan.F_filtered = dt35.ch2.distance_mm;
-        m_plan.L_filtered = dt35.ch0.distance_mm;
-        m_plan.R_filtered = dt35.ch1.distance_mm;
+        m_plan.L_filtered = laser_left.data.distance_mm;
+        m_plan.R_filtered = laser_right.data.distance_mm;
         m_plan.filter_ready = 1U;
     }
     else
     {
         m_plan.F_filtered = lowPass(m_plan.F_filtered, dt35.ch2.distance_mm);
-        m_plan.L_filtered = lowPass(m_plan.L_filtered, dt35.ch0.distance_mm);
-        m_plan.R_filtered = lowPass(m_plan.R_filtered, dt35.ch1.distance_mm);
+        m_plan.L_filtered = lowPass(m_plan.L_filtered, laser_left.data.distance_mm);
+        m_plan.R_filtered = lowPass(m_plan.R_filtered, laser_right.data.distance_mm);
     }
 
     if (has_front)

@@ -221,7 +221,7 @@
 
 //     // 第 3 步：记录本次角度读取返回帧中的 EF 错误标志。
 //     data.frame_error_flag = AS5047P_CheckErrorFlag(angleFrame);
- 
+
 //     // 第 4 步：若 EF=1，说明芯片提示上一帧命令存在错误，需要继续读取 ERRFL 看具体原因。
 //     // 读取 ERRFL 会清除芯片内部错误锁存，但本地缓存会保留最后一次读到的结果。
 //     if (data.frame_error_flag) {

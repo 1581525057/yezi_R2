@@ -4,6 +4,8 @@
 #include "mieling.h"
 #include "PID.h"
 #include "usart_task.h"
+#include "usart.h"
+#include "arm_comm.h"
 #include <assert.h>
 
 float yaw_target = 0.0f;
@@ -13,6 +15,7 @@ Block_Vision block_vision_middle[13] = {};
 LiftAuto lift_auto;
 LiftStepDown lift_step_down;
 MeilingLocator meiling;
+UART_HandleTypeDef huart7 = {};
 
 static int command_queue[8];
 static uint8_t command_head = 0U;
@@ -98,6 +101,11 @@ void send_position_to_pc(int16_t, uint8_t, float, float, float)
 {
 }
 
+HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *, const uint8_t *, uint16_t, uint32_t)
+{
+    return HAL_OK;
+}
+
 static void clear_queues(void)
 {
     vision_command_clear();
@@ -113,7 +121,7 @@ static void finish_turn_with_yaw(Route_state turn_state, float start_yaw_deg, fl
 
     route_t.meiling_route();
     vision.angle_x = finish_yaw_deg;
-    for (int i = 1; i < 200; ++i) {
+    for (int i = 0; i < 200; ++i) {
         route_t.meiling_route();
     }
 
@@ -174,9 +182,65 @@ static void test_consecutive_step_down_keeps_right_turn_direction(void)
     assert(lift_step_down.turn_180 == 0U);
 }
 
+static void test_left_turn_near_180_ignores_stale_pid_error(void)
+{
+    route_t.route_reset();
+    clear_queues();
+
+    route_t.flag_start = 1U;
+    route_t.state      = PHASE_VISION;
+    vision.angle_x     = 175.0f;
+    pid_yaw.pid.Err    = 0.0f;
+    vision_command_push(7);
+
+    route_t.vision_choice();
+    assert(route_t.state == PHASE_TURN_LEFT90);
+
+    for (int i = 0; i < 200; ++i) {
+        route_t.meiling_route();
+    }
+
+    assert(route_t.state == PHASE_TURN_LEFT90);
+}
+
+static void test_kfs_count_syncs_from_arm_feedback(void)
+{
+    route_t.route_reset();
+    clear_queues();
+
+    const uint8_t one_in_arm_two_in_car[ArmComm::RX_FRAME_LENGTH] = {0xBB, 0x03, 0x01, 0x01, 0x02, 0xEE};
+    assert(arm_comm.parseRxFrame(one_in_arm_two_in_car, ArmComm::RX_FRAME_LENGTH) == 1U);
+
+    route_t.state = PHASE_VISION;
+    vision_command_push(10);
+    route_t.vision_choice();
+    assert(route_t.number_KFS == 3U);
+
+    route_t.vision_choice();
+    assert(route_t.number_KFS == 3U);
+
+    const uint8_t none_in_arm_one_in_car[ArmComm::RX_FRAME_LENGTH] = {0xBB, 0x03, 0x01, 0x00, 0x01, 0xEE};
+    assert(arm_comm.parseRxFrame(none_in_arm_one_in_car, ArmComm::RX_FRAME_LENGTH) == 1U);
+
+    route_t.state = PHASE_VISION;
+    vision_command_push(11);
+    route_t.vision_choice();
+    assert(route_t.number_KFS == 1U);
+
+    const uint8_t one_in_arm_none_in_car[ArmComm::RX_FRAME_LENGTH] = {0xBB, 0x03, 0x01, 0x01, 0x00, 0xEE};
+    assert(arm_comm.parseRxFrame(one_in_arm_none_in_car, ArmComm::RX_FRAME_LENGTH) == 1U);
+
+    route_t.state = PHASE_VISION;
+    vision_command_push(12);
+    route_t.vision_choice();
+    assert(route_t.number_KFS == 1U);
+}
+
 int main(void)
 {
     test_step_up_direction_uses_radar_yaw_after_turns();
     test_consecutive_step_down_keeps_right_turn_direction();
+    test_left_turn_near_180_ignores_stale_pid_error();
+    test_kfs_count_syncs_from_arm_feedback();
     return 0;
 }

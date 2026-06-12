@@ -1,92 +1,368 @@
 #include "arm_comm.h"
+#include "usart.h"
+#include <math.h>
 
 // 全局机械臂通信对象，和 lift_auto、meiling 等模块保持同样的使用方式。
 ArmComm arm_comm;
 
+// 取 KFS 前底盘预走阶段的最大速度，单位 m/s。
+float ARM_COMM_PICK_KFS_CHASSIS_SPEED_MPS = 0.5f;
+// 取 KFS 前底盘预走阶段的制动包络参数。
+float ARM_COMM_PICK_KFS_CHASSIS_ACC_SPEED = 0.5f;
+// 取 KFS 前底盘到位判定阈值，单位 m。
+float ARM_COMM_PICK_KFS_POSITION_TOL_M = 0.02f;
+// 取 KFS 前底盘到位需要连续满足的周期数。
+uint8_t ARM_COMM_PICK_KFS_STABLE_COUNT = 10U;
+
+// 未上台阶取 KFS 前沿当前 X 轴预走距离，单位 cm。
+float PICK_KFS_BEFORE_STEP_ADVANCE_CM = 42.0f;
+// 已上台阶取 KFS 前按当前 yaw 方向预走距离，单位 cm。
+float PICK_KFS_AFTER_STEP_ADVANCE_CM = 29.0f;
+
+namespace
+{
+    static void pick_kfs_world_error_to_body_error(float x_world, float y_world, float yaw_deg, float *x_body, float *y_body)
+    {
+        const float deg_to_rad = 0.01745329251994329577f;
+        const float yaw_rad = yaw_deg * deg_to_rad;
+        const float cos_yaw = cosf(yaw_rad);
+        const float sin_yaw = sinf(yaw_rad);
+
+        // 将世界系误差转换为车体系误差，底盘速度接口使用车体系坐标。
+        *x_body = cos_yaw * x_world + sin_yaw * y_world;
+        *y_body = -sin_yaw * x_world + cos_yaw * y_world;
+    }
+
+    static float normalize_yaw_deg(float yaw_deg)
+    {
+        while (yaw_deg > 180.0f)
+        {
+            yaw_deg -= 360.0f;
+        }
+        while (yaw_deg < -180.0f)
+        {
+            yaw_deg += 360.0f;
+        }
+        return yaw_deg;
+    }
+}
+
 ArmComm::ArmComm()
 {
+    rx_data_.event = 0x00U;
+    rx_data_.sys_mode = 0x00U;
+    rx_data_.arm_kfs = 0x00U;
+    rx_data_.car_kfs = 0x00U;
+    resetPickKFS();
     reset();
 }
 
 void ArmComm::reset(void)
 {
-    // 默认全 0：机械臂关机、未吸取、未指定高度、三区不动作、车内不取货。
-    // 最后一位固定写 '\0'，保证 getCommandString() 返回的是标准 C 字符串。
-    command_[INDEX_POWER]        = '0';
-    command_[INDEX_PICKUP_COUNT] = '0';
-    command_[INDEX_KFS_HEIGHT]   = '0';
-    command_[INDEX_ZONE3_PLACE]  = '0';
-    command_[INDEX_ZONE3_FETCH]  = '0';
-    command_[COMMAND_LENGTH]     = '\0';
+    setFrame(0x00U, 0x00U, 0x00U, 0x00U, 0x00U);
 }
 
-void ArmComm::setPower(uint8_t power)
+uint8_t ArmComm::executeAction(uint8_t action_code, uint8_t num_KFS)
 {
-    // 启动位只允许 0 或 1，非法值直接忽略，保留上一帧有效命令。
-    if (isInRange(power, 0U, 1U) == 0U) {
-        return;
+    switch (action_code)
+    {
+    case ACTION_POWER_ON_INIT: // 初始化
+        setFrame(0x01U, 0x00U, 0x00U, 0x00U, 0x00U);
+        break;
+
+    case ACTION_PICK_HIGH_200:
+        setFrame(0x01U, num_KFS, 0x01U, 0x00U, 0x00U);
+        break;
+
+    case ACTION_PICK_HIGH_400:
+        setFrame(0x01U, num_KFS, 0x02U, 0x00U, 0x00U);
+        break;
+
+    case ACTION_PICK_LOW_200:
+        setFrame(0x01U, num_KFS, 0x03U, 0x00U, 0x00U);
+        break;
+
+    case ACTION_ZONE3_READY:
+        setFrame(0x01U, 0x00U, 0x00U, 0x01U, 0x00U);
+        break;
+
+    case ACTION_ZONE3_PLACE_HAND:
+        setFrame(0x01U, 0x00U, 0x00U, 0x02U, 0x00U);
+        break;
+
+    case ACTION_ZONE3_FETCH_UPPER:
+        setFrame(0x01U, num_KFS, 0x00U, 0x00U, 0x00U);
+        break;
+
+    case ACTION_ZONE3_PLACE_UPPER:
+        setFrame(0x01U, 0x00U, 0x00U, 0x02U, 0x00U);
+        break;
+
+    case ACTION_ZONE3_FETCH_LOWER:
+        setFrame(0x01U, num_KFS, 0x00U, 0x00U, 0x00U);
+        break;
+
+    case ACTION_ZONE3_RESET:
+        setFrame(0x01U, 0x00U, 0x00U, 0x00U, 0x00U);
+        break;
+
+    case ACTION_POWER_OFF:
+        setFrame(0x00U, 0x00U, 0x00U, 0x00U, 0x00U);
+        break;
+
+    default:
+        return 0U;
     }
 
-    command_[INDEX_POWER] = toDigit(power);
+    return 1U;
 }
 
-void ArmComm::setPickup(uint8_t pickup_count, KfsHeight height)
+const uint8_t *ArmComm::getFrame(void) const
 {
-    // 吸取次数只允许 0~3，分别表示未吸、第一块、第二块、第三块。
-    if (isInRange(pickup_count, 0U, 3U) == 0U) {
-        return;
-    }
-
-    // 高度位只允许协议定义的三种 kfs 类型。
-    if (isInRange((uint8_t)height, (uint8_t)KFS_HIGH_200, (uint8_t)KFS_LOW_200) == 0U) {
-        return;
-    }
-
-    // 第二位和第三位必须成对更新，避免机械臂读到吸取次数和高度不匹配。
-    command_[INDEX_PICKUP_COUNT] = toDigit(pickup_count);
-    command_[INDEX_KFS_HEIGHT]   = toDigit((uint8_t)height);
+    return frame_;
 }
 
-void ArmComm::setZone3Place(uint8_t place_state)
+uint8_t ArmComm::getFrameLength(void) const
 {
-    // 三区放置位：0 不动作，1 回预备位置，2 放下手上的 kfs。
-    if (isInRange(place_state, 0U, 2U) == 0U) {
-        return;
-    }
-
-    command_[INDEX_ZONE3_PLACE] = toDigit(place_state);
+    return (uint8_t)FRAME_LENGTH;
 }
 
-void ArmComm::setZone3Fetch(uint8_t fetch_state)
+uint8_t ArmComm::parseRxFrame(const uint8_t *data, uint8_t length)
 {
-    // 三区取车内 kfs：0 不动作，1 取最上面，2 取下面。
-    if (isInRange(fetch_state, 0U, 2U) == 0U) {
-        return;
+    if (data == 0 || length != RX_FRAME_LENGTH)
+    {
+        return 0U;
     }
 
-    command_[INDEX_ZONE3_FETCH] = toDigit(fetch_state);
+    if (data[RX_INDEX_HEAD] != 0xBBU || data[RX_INDEX_TAIL] != 0xEEU)
+    {
+        return 0U;
+    }
+
+    rx_data_.event = data[RX_INDEX_EVENT];
+    rx_data_.sys_mode = data[RX_INDEX_SYS_MODE];
+    rx_data_.arm_kfs = data[RX_INDEX_ARM_KFS];
+    rx_data_.car_kfs = data[RX_INDEX_CAR_KFS];
+
+    return 1U;
 }
 
-const char *ArmComm::getCommandString(void) const
+const ArmComm::RxData &ArmComm::getRxData(void) const
 {
-    // 返回内部缓存指针，不复制数据；调用方需要在下一次 set/reset 前使用。
-    return command_;
+    return rx_data_;
+}
+
+uint8_t ArmComm::pickKFS(uint8_t action_code,
+                         uint8_t num_KFS,
+                         uint8_t already_step_up,
+                         float current_x_m,
+                         float current_y_m,
+                         float yaw_deg)
+{
+    const float before_step_x_m = PICK_KFS_BEFORE_STEP_ADVANCE_CM * 0.01f;
+    const float after_step_x_m = PICK_KFS_AFTER_STEP_ADVANCE_CM * 0.01f;
+
+    if (pick_kfs_state_ == PICK_KFS_IDLE)
+    {
+        pick_kfs_action_code_ = action_code;
+        pick_kfs_num_ = num_KFS;
+        pick_kfs_stable_count_ = 0U;
+        pick_kfs_vx_target_ = 0.0f;
+        pick_kfs_vy_target_ = 0.0f;
+        pick_kfs_zero_yaw_move_ = 0U;
+        rx_data_.event = 0U;
+
+        if (executeAction(pick_kfs_action_code_, pick_kfs_num_) == 0U)
+        {
+            resetPickKFS();
+            return 0U;
+        }
+
+        send();
+
+        if (already_step_up == 0U)
+        {
+            if (before_step_x_m == 0.0f)
+            {
+                pick_kfs_state_ = PICK_KFS_SEND;
+            }
+            else
+            {
+                pick_kfs_target_x_m_ = current_x_m + before_step_x_m;
+                pick_kfs_target_y_m_ = current_y_m;
+                pick_kfs_zero_yaw_move_ = 1U;
+                pick_kfs_state_ = PICK_KFS_MOVE;
+            }
+        }
+        else if (after_step_x_m == 0.0f)
+        {
+            pick_kfs_state_ = PICK_KFS_SEND;
+        }
+        else
+        {
+            const float yaw = normalize_yaw_deg(yaw_deg);
+
+            pick_kfs_target_x_m_ = current_x_m;
+            pick_kfs_target_y_m_ = current_y_m;
+
+            if (yaw >= 45.0f && yaw < 135.0f)
+            {
+                pick_kfs_target_y_m_ = current_y_m + after_step_x_m;
+            }
+            else if (yaw <= -45.0f && yaw > -135.0f)
+            {
+                pick_kfs_target_y_m_ = current_y_m - after_step_x_m;
+            }
+            else
+            {
+                pick_kfs_target_x_m_ = current_x_m + after_step_x_m;
+            }
+
+            pick_kfs_state_ = PICK_KFS_MOVE;
+        }
+    }
+
+    if (pick_kfs_state_ == PICK_KFS_MOVE)
+    {
+        const float x_err_world = pick_kfs_target_x_m_ - current_x_m;
+        const float y_err_world = pick_kfs_target_y_m_ - current_y_m;
+        float x_err_body = 0.0f;
+        float y_err_body = 0.0f;
+
+        pick_kfs_world_error_to_body_error(x_err_world,
+                                           y_err_world,
+                                           (pick_kfs_zero_yaw_move_ != 0U) ? 0.0f : yaw_deg,
+                                           &x_err_body,
+                                           &y_err_body);
+
+        pick_kfs_vx_target_ = trapezoid_speed(x_err_body,
+                                              ARM_COMM_PICK_KFS_CHASSIS_ACC_SPEED,
+                                              ARM_COMM_PICK_KFS_CHASSIS_SPEED_MPS);
+        pick_kfs_vy_target_ = trapezoid_speed(y_err_body,
+                                              ARM_COMM_PICK_KFS_CHASSIS_ACC_SPEED,
+                                              ARM_COMM_PICK_KFS_CHASSIS_SPEED_MPS);
+
+        if (pick_kfs_stable_confirm((fabsf(x_err_world) < ARM_COMM_PICK_KFS_POSITION_TOL_M &&
+                                     fabsf(y_err_world) < ARM_COMM_PICK_KFS_POSITION_TOL_M)
+                                        ? 1U
+                                        : 0U) != 0U)
+        {
+            pick_kfs_vx_target_ = 0.0f;
+            pick_kfs_vy_target_ = 0.0f;
+            pick_kfs_stable_count_ = 0U;
+            pick_kfs_state_ = PICK_KFS_SEND;
+        }
+    }
+
+    if (pick_kfs_state_ == PICK_KFS_SEND)
+    {
+        pick_kfs_vx_target_ = 0.0f;
+        pick_kfs_vy_target_ = 0.0f;
+    }
+
+    if (rx_data_.event == 1U)
+    {
+        resetPickKFS();
+        return 1U;
+    }
+
+    return 0U;
+}
+
+float ArmComm::getChassisVxTarget(float manual_target) const
+{
+    if (pick_kfs_state_ == PICK_KFS_IDLE)
+    {
+        return manual_target;
+    }
+
+    return pick_kfs_vx_target_;
+}
+
+float ArmComm::getChassisVyTarget(float manual_target) const
+{
+    if (pick_kfs_state_ == PICK_KFS_IDLE)
+    {
+        return manual_target;
+    }
+
+    return pick_kfs_vy_target_;
+}
+
+void ArmComm::resetPickKFS(void)
+{
+    pick_kfs_state_ = PICK_KFS_IDLE;
+    pick_kfs_action_code_ = 0U;
+    pick_kfs_num_ = 0U;
+    pick_kfs_stable_count_ = 0U;
+    pick_kfs_target_x_m_ = 0.0f;
+    pick_kfs_target_y_m_ = 0.0f;
+    pick_kfs_vx_target_ = 0.0f;
+    pick_kfs_vy_target_ = 0.0f;
+    pick_kfs_zero_yaw_move_ = 0U;
 }
 
 void ArmComm::send(void)
 {
-    // 串口发送由后续接入，这里只保留调用入口。
-    // 后续可在这里发送 command_ 的前 COMMAND_LENGTH 个 ASCII 字符。
+    HAL_UART_Transmit_DMA(&huart7, frame_, (uint16_t)FRAME_LENGTH);
 }
 
-char ArmComm::toDigit(uint8_t value)
+void ArmComm::setFrame(uint8_t boot,
+                       uint8_t pick_count,
+                       uint8_t kfs_height,
+                       uint8_t zone3_cmd,
+                       uint8_t r2r1_fused)
 {
-    // 当前所有协议位都在 0~3 范围内，调用前已经完成合法性检查。
-    return (char)('0' + value);
+    frame_[INDEX_HEAD] = 0xAAU;
+    frame_[INDEX_BOOT] = boot;
+    frame_[INDEX_PICK_COUNT] = pick_count;
+    frame_[INDEX_KFS_HEIGHT] = kfs_height;
+    frame_[INDEX_ZONE3_CMD] = zone3_cmd;
+    frame_[INDEX_R2R1_FUSED] = r2r1_fused;
+    frame_[INDEX_TAIL] = 0x55U;
 }
 
-uint8_t ArmComm::isInRange(uint8_t value, uint8_t min, uint8_t max)
+float ArmComm::speed_limit(float speed, float max) const
 {
-    // 使用 uint8_t 返回值，方便在嵌入式代码里保持现有 0/1 判断风格。
-    return (value >= min && value <= max) ? 1U : 0U;
+    if (speed > max)
+    {
+        speed = max;
+    }
+    if (speed < -max)
+    {
+        speed = -max;
+    }
+    return speed;
+}
+
+float ArmComm::trapezoid_speed(float error, float acc, float max) const
+{
+    if (error == 0.0f || acc <= 0.0f || max <= 0.0f)
+    {
+        return 0.0f;
+    }
+
+    float speed = sqrtf(2.0f * fabsf(error) * acc);
+    if (error < 0.0f)
+    {
+        speed = -speed;
+    }
+
+    return speed_limit(speed, max);
+}
+
+uint8_t ArmComm::pick_kfs_stable_confirm(uint8_t condition)
+{
+    if (condition == 0U)
+    {
+        pick_kfs_stable_count_ = 0U;
+        return 0U;
+    }
+
+    if (pick_kfs_stable_count_ < ARM_COMM_PICK_KFS_STABLE_COUNT)
+    {
+        pick_kfs_stable_count_++;
+    }
+
+    return (pick_kfs_stable_count_ >= ARM_COMM_PICK_KFS_STABLE_COUNT) ? 1U : 0U;
 }

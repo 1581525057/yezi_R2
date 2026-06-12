@@ -81,9 +81,9 @@
             <nStopB2X>0</nStopB2X>
           </BeforeMake>
           <AfterMake>
-            <RunUserProg1>0</RunUserProg1>
-            <RunUserProg2>0</RunUserProg2>
-            <UserProg1Name></UserProg1Name>
+            <RunUserProg1>1</RunUserProg1>
+            <RunUserProg2>1</RunUserProg2>
+            <UserProg1Name>D:\Keil5\Postbuild\postbuild.bat #L</UserProg1Name>
             <UserProg2Name></UserProg2Name>
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>USE_PWR_LDO_SUPPLY,USE_HAL_DRIVER,STM32H723xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../USB_DEVICE/App;../USB_DEVICE/Target;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/STM32_USB_Device_Library/Core/Inc;../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Middlewares/ST/ARM/DSP/Inc;./Control;../Middlewares/ST/ARM/DSP/Lib;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;./TASK;./Device/Motor;./Device/Remote_control;./Device/Communication;./Device/M2006;./Device/RS05;./Device/Relay;./Device/USB;./Bsp;./Device/laser_distance;./Device/DT35;./Device/AS5047P;./Route_Plan</IncludePath>
+              <IncludePath>../Core/Inc;../USB_DEVICE/App;../USB_DEVICE/Target;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/STM32_USB_Device_Library/Core/Inc;../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Middlewares/ST/ARM/DSP/Inc;./Control;../Middlewares/ST/ARM/DSP/Lib;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;./TASK;./Device/Motor;./Device/Remote_control;./Device/Communication;./Device/M2006;./Device/RS05;./Device/StepMotor;./Device/Relay;./Device/USB;./Bsp;./Device/laser_distance;./Device/DT35;./Device/AS5047P;./Route_Plan</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -1990,11 +1990,6 @@
               <FilePath>.\TASK\FTMTask.cpp</FilePath>
             </File>
             <File>
-              <FileName>FTMLiftAction.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\TASK\FTMLiftAction.cpp</FilePath>
-            </File>
-            <File>
               <FileName>wuqiqu_task.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\TASK\wuqiqu_task.cpp</FilePath>
@@ -2015,9 +2010,19 @@
               <FilePath>.\Device\Communication\CommData.cpp</FilePath>
             </File>
             <File>
-              <FileName>M2006AngleMotor.cpp</FileName>
+              <FileName>EmmV5.cpp</FileName>
               <FileType>8</FileType>
-              <FilePath>.\Device\M2006\M2006AngleMotor.cpp</FilePath>
+              <FilePath>.\Device\StepMotor\EmmV5.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>StepMotorTask.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Device\StepMotor\StepMotorTask.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>M2006Follower.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Device\M2006\M2006Follower.cpp</FilePath>
             </File>
             <File>
               <FileName>RS05.cpp</FileName>
@@ -2085,21 +2090,6 @@
               <FilePath>.\Route_Plan\meiling.cpp</FilePath>
             </File>
             <File>
-              <FileName>plan_route.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\Route_Plan\plan_route.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>lift_auto.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\Route_Plan\lift_auto.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>lift_step_down.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\Route_Plan\lift_step_down.cpp</FilePath>
-            </File>
-            <File>
               <FileName>wuqiqu.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\Route_Plan\wuqiqu.cpp</FilePath>
@@ -2108,6 +2098,26 @@
               <FileName>arm_comm.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\Route_Plan\arm_comm.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>path_follow.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Route_Plan\path_follow.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>lift_step_down.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Route_Plan\lift_step_down.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>lift_step_up.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Route_Plan\lift_step_up.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>arm_comm.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Route_Plan\arm_comm.h</FilePath>
             </File>
           </Files>
         </Group>
