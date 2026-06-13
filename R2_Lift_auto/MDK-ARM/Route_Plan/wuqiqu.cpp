@@ -14,7 +14,10 @@ static const float kMinMoveSpeedMps =
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {-0.88f, -0.18f, -90.0f},
+    {-0.92f, -0.49f, 0.0f, 0.90f, 1.0f, 0.0f},
+    {-0.52f, -0.53f, 0.0f, 1.0f, 1.0f, 0.0f},
+    {-0.52f, -0.53f, -179.5f, 1.0f, 1.2f, 1.2f},
+    {-0.92f, -0.49f, -179.5f, 1.0f, 1.0f, 0.0f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 
@@ -24,29 +27,32 @@ WuqiquPathPlanner::WuqiquPathPlanner()
 {
     reset();
 
-    approach_v_max_ = 0.55f;
-    slow_v_max_ = 0.20f;
-    contact_v_max_ = kMinMoveSpeedMps;
-    finish_v_max_ = 0.02f;
-    min_move_v_ = kMinMoveSpeedMps;
+    approach_v_max_ = 0.90f;
+    slow_v_max_ = 0.55f;
+    contact_v_max_ = 0.25f;
+    finish_v_max_ = 0.12f;
+    min_move_v_ = 0.18f;
 
-    slow_dist_ = 0.25f;
-    contact_dist_ = 0.08f;
-    finish_dist_ = 0.0f;
-    decel_ = 0.45f;
+    slow_dist_ = 0.16f;
+    contact_dist_ = 0.02f;
+    finish_dist_ = 0.010f;
+    decel_ = 1.50f;
 
-    kp_approach_ = 1.2f;
-    kd_approach_ = 0.15f;
-    kp_slow_ = 0.8f;
-    kd_slow_ = 0.20f;
-    kp_contact_ = 0.5f;
-    kd_contact_ = 0.10f;
+    kp_approach_ = 2.6f;
+    kd_approach_ = 0.08f;
+    kp_slow_ = 3.0f;
+    kd_slow_ = 0.10f;
+    kp_contact_ = 2.2f;
+    kd_contact_ = 0.06f;
 
     yaw_sign_ = 1.0f;
-    yaw_kp_ = 0.8f;
-    moving_wz_max_ = 0.30f;
-    settle_wz_max_ = 0.15f;
-    yaw_tolerance_deg_ = 3.0f;
+    yaw_kp_ = 2.8f;
+    min_yaw_wz_ = 0.18f;
+    strong_yaw_wz_ = 0.35f;
+    strong_yaw_error_deg_ = 6.0f;
+    moving_wz_max_ = 0.80f;
+    settle_wz_max_ = 0.55f;
+    yaw_tolerance_deg_ = 1.0f;
 
     stable_cycles_ = 120U;
     contact_hold_ms_ = 500U;
@@ -153,44 +159,67 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         wz_limit = settle_wz_max_;
     }
 
+    const float yaw_kp_scale = limitFloat(target_.yaw_kp_scale, 0.0f, 3.0f);
+    const float yaw_wz_max = (target_.yaw_wz_max > 0.0f) ? target_.yaw_wz_max : wz_limit;
+    wz_limit = limitFloat(yaw_wz_max, 0.0f, 2.0f);
+
     float vx_cmd = kp * err_x_m - kd * current_pose.world_speed_x;
     float vy_cmd = kp * err_y_m - kd * current_pose.world_speed_y;
 
-    limitVector(vx_cmd, vy_cmd, xy_limit);
+    const float move_speed_scale = limitFloat(target_.move_speed_scale, 0.0f, 1.0f);
+    vx_cmd *= move_speed_scale;
+    vy_cmd *= move_speed_scale;
+
+    const float scaled_xy_limit = xy_limit * move_speed_scale;
+    const float scaled_min_move_v = min_move_v_ * move_speed_scale;
+    const float scaled_finish_v_max = finish_v_max_ * move_speed_scale;
+    const float scaled_contact_v_max = contact_v_max_ * move_speed_scale;
+
+    limitVector(vx_cmd, vy_cmd, scaled_xy_limit);
 
     const float brake_distance_m = (distance_m > finish_dist_) ? (distance_m - finish_dist_) : 0.0f;
     const float brake_v_max = safeSqrt(2.0f * decel_ * brake_distance_m);
-    limitVector(vx_cmd, vy_cmd, brake_v_max);
+    limitVector(vx_cmd, vy_cmd, brake_v_max * move_speed_scale);
 
     float yaw_xy_scale = 1.0f;
-    if (yaw_abs_deg > 20.0f)
+    if (yaw_abs_deg > 30.0f)
     {
-        yaw_xy_scale = 0.25f;
+        yaw_xy_scale = 0.6f;
     }
-    else if (yaw_abs_deg > 10.0f)
+    else if (yaw_abs_deg > 15.0f)
     {
-        yaw_xy_scale = 0.5f;
+        yaw_xy_scale = 0.8f;
     }
 
     vx_cmd *= yaw_xy_scale;
     vy_cmd *= yaw_xy_scale;
 
-    if (distance_m > finish_dist_ && yaw_abs_deg <= 10.0f)
+    if (distance_m > finish_dist_ && yaw_abs_deg <= 35.0f)
     {
-        raiseVectorToMin(vx_cmd, vy_cmd, min_move_v_);
+        raiseVectorToMin(vx_cmd, vy_cmd, scaled_min_move_v);
     }
 
     if (distance_m <= finish_dist_)
     {
-        limitVector(vx_cmd, vy_cmd, finish_v_max_);
+        limitVector(vx_cmd, vy_cmd, scaled_finish_v_max);
     }
     else if (state_ == STATE_SOFT_CONTACT)
     {
-        limitVector(vx_cmd, vy_cmd, contact_v_max_);
+        limitVector(vx_cmd, vy_cmd, scaled_contact_v_max);
     }
 
-    float wz_cmd = yaw_sign_ * yaw_kp_ * yaw_control_deg * kDegToRad;
+    float wz_cmd = yaw_sign_ * yaw_kp_ * yaw_kp_scale * yaw_control_deg * kDegToRad;
     wz_cmd = limitFloat(wz_cmd, -wz_limit, wz_limit);
+    if (yaw_abs_deg > yaw_tolerance_deg_)
+    {
+        const float min_wz = (yaw_abs_deg >= strong_yaw_error_deg_) ? strong_yaw_wz_ : min_yaw_wz_;
+        const float scaled_min_wz = limitFloat(min_wz * yaw_kp_scale, 0.0f, wz_limit);
+        if (fabsf(wz_cmd) < scaled_min_wz)
+        {
+            wz_cmd = (wz_cmd >= 0.0f) ? scaled_min_wz : -scaled_min_wz;
+            wz_cmd = limitFloat(wz_cmd, -wz_limit, wz_limit);
+        }
+    }
 
     output_.world_vx_mps = vx_cmd;
     output_.world_vy_mps = vy_cmd;
@@ -214,7 +243,7 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         }
 
         if ((soft_contact_stable_count_ >= stable_cycles_ && contact_time_ms >= contact_hold_ms_) ||
-            contact_time_ms >= contact_timeout_ms_)
+            ((pose_stable != 0U) && contact_time_ms >= contact_timeout_ms_))
         {
             state_ = STATE_FINISHED;
             setZeroOutput();

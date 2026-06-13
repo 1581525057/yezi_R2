@@ -134,9 +134,6 @@ virtualFolder:
         - path: Device/USB/MiniPC.cpp
         - path: Device/Communication/CommData.cpp
         - path: Device/M2006/M2006AngleMotor.cpp
-        - path: Device/StepMotor/EmmV5.cpp
-        - path: Device/StepMotor/StepMotorTask.cpp
-        - path: Device/M2006/M2006Follower.cpp
         - path: Device/RS05/RS05.cpp
         - path: Device/RS05/RobStride.cpp
         - path: Device/Relay/GripPush.cpp

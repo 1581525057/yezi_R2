@@ -104,9 +104,18 @@ extern "C" void chassis_task(void *argument)
 
         float VZ_OUT = 0.0f;
         // 航向保持：视觉角度偏差越大，输出的底盘自转速度越大。
-        if (FTM_IsWuqiquDone() == 0U)
+        if (FTM_IsYawTargetCorrectionEnabled() != 0U)
         {
             VZ_OUT = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
+        }
+        else
+        {
+            yaw_target = vision.angle_x;
+            pid_yaw.pid.Err = 0.0f;
+            pid_yaw.pid.Last_Err = 0.0f;
+            pid_yaw.pid.Iout = 0.0f;
+            pid_yaw.pid.Output = 0.0f;
+            pid_yaw.pid.Last_Output = 0.0f;
         }
 
         // 先取遥控器目标速度；自动任务生效时会覆盖对应目标。
@@ -145,7 +154,7 @@ extern "C" void chassis_task(void *argument)
         target_vx = lift_auto.getChassisVxTarget(target_vx);
 
         // 当前自转输出仍使用航向 PID 结果，target_vz 只保留自动任务仲裁值。
-        omni_chassis.setRemote(target_vx, target_vy, remove_dji.chassis_.Vz);
+        omni_chassis.setRemote(target_vx, target_vy, target_vz);
 
         // 速度环：根据当前速度和目标速度的误差计算 x/y 方向驱动力。
         float Fx = pid_F_chassis_linear_x.PID_Calculate(omni_chassis.now.Vx, omni_chassis.target.Vx);

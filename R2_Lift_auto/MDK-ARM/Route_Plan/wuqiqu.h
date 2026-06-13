@@ -23,6 +23,9 @@ public:
         float x_m;
         float y_m;
         float yaw_deg;
+        float move_speed_scale;
+        float yaw_kp_scale;
+        float yaw_wz_max;
     };
 
     class Pose
@@ -91,6 +94,9 @@ private:
 
     float yaw_sign_;
     float yaw_kp_;
+    float min_yaw_wz_;
+    float strong_yaw_wz_;
+    float strong_yaw_error_deg_;
     float moving_wz_max_;
     float settle_wz_max_;
     float yaw_tolerance_deg_;
