@@ -40,6 +40,7 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out);
 /* 动作队列（原有） */
 uint8_t vision_command_push(int cmd);
 uint8_t vision_command_pop(int *out);
+uint8_t vision_command_peek(int *out);
 uint8_t vision_command_has_pending(void);
 void vision_command_clear(void);
 

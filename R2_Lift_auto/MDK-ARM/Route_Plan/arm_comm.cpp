@@ -157,7 +157,10 @@ uint8_t ArmComm::pickKFS(uint8_t action_code,
                          uint8_t already_step_up,
                          float current_x_m,
                          float current_y_m,
-                         float yaw_deg)
+                         float yaw_deg,
+                         uint8_t finish_at_center,
+                         float finish_center_x_m,
+                         float finish_center_y_m)
 {
     const float before_step_x_m = PICK_KFS_BEFORE_STEP_ADVANCE_CM * 0.01f;
     const float after_step_x_m = PICK_KFS_AFTER_STEP_ADVANCE_CM * 0.01f;
@@ -222,16 +225,17 @@ uint8_t ArmComm::pickKFS(uint8_t action_code,
         }
     }
 
-    if (pick_kfs_state_ == PICK_KFS_MOVE)
+    if (pick_kfs_state_ == PICK_KFS_MOVE || pick_kfs_state_ == PICK_KFS_RETURN_CENTER)
     {
         const float x_err_world = pick_kfs_target_x_m_ - current_x_m;
         const float y_err_world = pick_kfs_target_y_m_ - current_y_m;
         float x_err_body = 0.0f;
         float y_err_body = 0.0f;
+        const uint8_t return_center = (pick_kfs_state_ == PICK_KFS_RETURN_CENTER) ? 1U : 0U;
 
         pick_kfs_world_error_to_body_error(x_err_world,
                                            y_err_world,
-                                           (pick_kfs_zero_yaw_move_ != 0U) ? 0.0f : yaw_deg,
+                                           (return_center == 0U && pick_kfs_zero_yaw_move_ != 0U) ? 0.0f : yaw_deg,
                                            &x_err_body,
                                            &y_err_body);
 
@@ -249,8 +253,16 @@ uint8_t ArmComm::pickKFS(uint8_t action_code,
         {
             pick_kfs_vx_target_ = 0.0f;
             pick_kfs_vy_target_ = 0.0f;
-            pick_kfs_stable_count_ = 0U;
-            pick_kfs_state_ = PICK_KFS_SEND;
+            if (return_center != 0U)
+            {
+                resetPickKFS();
+                return 1U;
+            }
+            else
+            {
+                pick_kfs_stable_count_ = 0U;
+                pick_kfs_state_ = PICK_KFS_SEND;
+            }
         }
     }
 
@@ -262,6 +274,19 @@ uint8_t ArmComm::pickKFS(uint8_t action_code,
 
     if (rx_data_.event == 1U)
     {
+        if (finish_at_center != 0U)
+        {
+            pick_kfs_target_x_m_ = finish_center_x_m;
+            pick_kfs_target_y_m_ = finish_center_y_m;
+            pick_kfs_vx_target_ = 0.0f;
+            pick_kfs_vy_target_ = 0.0f;
+            pick_kfs_stable_count_ = 0U;
+            pick_kfs_zero_yaw_move_ = 0U;
+            rx_data_.event = 0U;
+            pick_kfs_state_ = PICK_KFS_RETURN_CENTER;
+            return 0U;
+        }
+
         resetPickKFS();
         return 1U;
     }

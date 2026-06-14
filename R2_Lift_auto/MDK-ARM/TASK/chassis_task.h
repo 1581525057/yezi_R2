@@ -20,7 +20,7 @@ extern "C" {
 #define OUTPUT_LIFT_MOVE     10000
 #define INTERLIMIT_LIFT_MOVE 0
 #define DEBAND_LIFT_MOVE     1
-#define KP_LIFT_MOVE         20
+#define KP_LIFT_MOVE         30
 #define KI_LIFT_MOVE         0.8
 #define KD_LIFT_MOVE         0
 

@@ -7,8 +7,10 @@
 #include "usart.h"
 #include "arm_comm.h"
 #include <assert.h>
+#include <math.h>
 
 float yaw_target = 0.0f;
+uint32_t route_test_tick_ms = 0U;
 PID pid_yaw      = {};
 VisionData_t vision = {};
 Block_Vision block_vision_middle[13] = {};
@@ -44,6 +46,16 @@ uint8_t vision_command_pop(int *out)
 
     *out         = command_queue[command_head];
     command_head = static_cast<uint8_t>((command_head + 1U) % 8U);
+    return 1U;
+}
+
+uint8_t vision_command_peek(int *out)
+{
+    if (out == 0 || command_head == command_tail) {
+        return 0U;
+    }
+
+    *out = command_queue[command_head];
     return 1U;
 }
 
@@ -104,6 +116,11 @@ void send_position_to_pc(int16_t, uint8_t, float, float, float)
 HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *, const uint8_t *, uint16_t, uint32_t)
 {
     return HAL_OK;
+}
+
+HAL_StatusTypeDef HAL_UART_Transmit_DMA(UART_HandleTypeDef *huart, const uint8_t *pData, uint16_t Size)
+{
+    return HAL_UART_Transmit(huart, pData, Size, 0U);
 }
 
 static void clear_queues(void)
@@ -203,6 +220,26 @@ static void test_left_turn_near_180_ignores_stale_pid_error(void)
     assert(route_t.state == PHASE_TURN_LEFT90);
 }
 
+static void test_direct_turn_keeps_immediate_yaw_target(void)
+{
+    route_t.route_reset();
+    clear_queues();
+
+    route_test_tick_ms = 1000U;
+    route_t.flag_start = 1U;
+    route_t.state      = PHASE_VISION;
+    vision.angle_x     = 10.0f;
+    vision_command_push(7);
+
+    route_t.vision_choice();
+    route_t.meiling_route();
+    assert(fabsf(yaw_target - 100.0f) < 0.001f);
+
+    route_test_tick_ms = 1500U;
+    route_t.meiling_route();
+    assert(fabsf(yaw_target - 100.0f) < 0.001f);
+}
+
 static void test_kfs_count_syncs_from_arm_feedback(void)
 {
     route_t.route_reset();
@@ -241,6 +278,7 @@ int main(void)
     test_step_up_direction_uses_radar_yaw_after_turns();
     test_consecutive_step_down_keeps_right_turn_direction();
     test_left_turn_near_180_ignores_stale_pid_error();
+    test_direct_turn_keeps_immediate_yaw_target();
     test_kfs_count_syncs_from_arm_feedback();
     return 0;
 }

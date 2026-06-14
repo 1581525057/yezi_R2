@@ -150,6 +150,16 @@ uint8_t vision_command_pop(int *out)
     return 1U;
 }
 
+/* 查看队头视觉指令但不弹出，用于路线层判断下一步动作。 */
+uint8_t vision_command_peek(int *out)
+{
+    if (out == nullptr || vision_command_head == vision_command_tail)
+        return 0U;
+
+    *out = vision_command_queue[vision_command_head];
+    return 1U;
+}
+
 /* 检查队列中是否有待处理的视觉指令：head != tail 即非空 */
 uint8_t vision_command_has_pending(void)
 {

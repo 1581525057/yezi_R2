@@ -193,5 +193,5 @@ static void chassis_pid_init(void)
     pid_F_chassis_linear_y.Init(OUTPUT_CHASSIS_LINEAR, INTERLIMIT_CHASSIS_LINEAR, DEBAND_CHASSIS_LINEAR, KP_CHASSIS_LINEAR, KI_CHASSIS_LINEAR, KD_CHASSIS_LINEAR, 0, 0x00);
 
     // 航向保持 PID。
-    pid_yaw.Init(2.5, 0.2, 0.1, 0.1, 0.02, 0, 0, 0x00);
+    pid_yaw.Init(2.0, 0.8, 0.1, 0.12, 0.1, 0, 0, 0x00);
 }

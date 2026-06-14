@@ -197,7 +197,7 @@ static void lift_class_pid_init(void)
                         KD_LIFT,
                         0,
                         0x00);
-    pid_2006_angle.Init(1000, 0, 0.1, 400, 0, 0, 0, 0X00
+    pid_2006_angle.Init(1000, 200, 0.1, 400, 0.5, 0, 0, 0X00
 
     );
 }

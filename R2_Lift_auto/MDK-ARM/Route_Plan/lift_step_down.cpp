@@ -16,12 +16,12 @@ static void step_down_world_error_to_body_error(float x_world, float y_world, fl
 }
 
 // 第 1、3 阶段底盘移动时允许输出的最大速度，单位为 m/s。
-float STEP_DOWN_AUTO_CHASSIS_SPEED_MPS = 0.5f;
+float STEP_DOWN_AUTO_CHASSIS_SPEED_MPS = 0.6f;
 // 底盘速度计算使用的制动包络参数。数值越大，距离目标较远时允许的速度越高。
-float STEP_DOWN_CHASSIS_ACC_SPEED = 0.3f;
+float STEP_DOWN_CHASSIS_ACC_SPEED = 0.35f;
 
 // 第 2 阶段升降轮带动车辆离开台阶时允许输出的最大线速度，单位为 m/s。
-float STEP_DOWN_AUTO_LIFT_SPEED_MPS = 0.55f;
+float STEP_DOWN_AUTO_LIFT_SPEED_MPS = 0.65f;
 // 升降轮速度计算使用的制动包络参数。数值越大，离开台阶时允许的速度越高。
 float STEP_DOWN_LIFT_ACC_SPEED = 0.4f;
 
@@ -273,7 +273,7 @@ void LiftStepDown::update(void)
         }
         lift_linear_speed_target_ = lift_speed;
 
-        if (step_down_stable_confirm((fabsf(lift_err) < 0.030f) ? 1U : 0U) != 0U)
+        if (step_down_stable_confirm((fabsf(lift_err) < 0.040f) ? 1U : 0U) != 0U)
         {
             lift_switch_target_ = 1U;
             lift_linear_speed_target_ = 0.0f;
@@ -310,8 +310,8 @@ void LiftStepDown::update(void)
                                              STEP_DOWN_AUTO_CHASSIS_SPEED_MPS);
 
         // 只有 X、Y 误差都连续 10 个周期小于 5 cm，才认为下台阶流程完成。
-        if (step_down_stable_confirm((fabsf(x_err) < 0.030f &&
-                                      fabsf(y_err) < 0.030f)
+        if (step_down_stable_confirm((fabsf(x_err) < 0.020f &&
+                                      fabsf(y_err) < 0.020f)
                                          ? 1U
                                          : 0U) != 0U)
         {

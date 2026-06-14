@@ -69,7 +69,10 @@ public:
                     uint8_t already_step_up,
                     float current_x_m,
                     float current_y_m,
-                    float yaw_deg);
+                    float yaw_deg,
+                    uint8_t finish_at_center = 0U,
+                    float finish_center_x_m = 0.0f,
+                    float finish_center_y_m = 0.0f);
 
     // 取 KFS 流程接管底盘时返回内部目标速度，否则透传 manual_target。
     float getChassisVxTarget(float manual_target) const;
@@ -107,6 +110,7 @@ private:
         PICK_KFS_IDLE = 0,
         PICK_KFS_MOVE,
         PICK_KFS_SEND,
+        PICK_KFS_RETURN_CENTER,
     };
 
     uint8_t frame_[FRAME_LENGTH];
@@ -135,3 +139,4 @@ private:
 extern ArmComm arm_comm;
 
 #endif
+

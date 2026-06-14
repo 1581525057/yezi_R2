@@ -22,17 +22,19 @@ static void step_up_world_error_to_body_error(float x_world, float y_world, floa
 }
 
 // 靠近阶段最大底盘速度 (m/s)
-float STEP_UP_AUTO_APPROACH_MPS = 0.85f;
-// 爬升阶段升降最大线速度 (m/s)
-float STEP_UP_AUTO_CLIMB_SPEED_MPS = 0.85f;
-
-// 爬升阶段升降最大加速度 (m/s)
-float STEP_UP_LIFT_ACC_SPEED = 0.68f;
-// 配置雷达爬升阶段的前进距离 L，单位为 m。
-float STEP_UP_RADAR_CLIMB_DISTANCE_M = 0.87f;
+float STEP_UP_AUTO_APPROACH_MPS = 0.95f;
 // 底盘靠近阶段升降最大加速度 (m/s)
 float STEP_UP_CHASSIS_ACC_SPEED = 0.95f;
+// 爬升阶段未到完成区时的最小线速度，避免小误差下卡在静摩擦附近。
+float STEP_UP_AUTO_CLIMB_MIN_SPEED_MPS = 0.35f;
 
+// 爬升阶段升降最大线速度 (m/s)
+float STEP_UP_AUTO_CLIMB_SPEED_MPS = 1.15f;
+// 爬升阶段升降最大加速度 (m/s)
+float STEP_UP_LIFT_ACC_SPEED = 0.98f;
+
+// 配置雷达爬升阶段的前进距离 L，单位为 m。
+float STEP_UP_RADAR_CLIMB_DISTANCE_M = 0.87f;
 // 靠近目标距离 (mm)，到达后停止前进
 uint32_t STEP_UP_AUTO_PREPARE_MM = 68U;
 // 爬升完成判定高度 (mm)，低于此值说明已过台阶
@@ -75,6 +77,22 @@ float LiftAuto::trapezoid_speed(float error, float acc, float max)
     }
 
     return speed_limit(speed, max);
+}
+
+static float step_up_min_abs_speed(float speed, float min_abs, float max_abs)
+{
+    if (speed == 0.0f || min_abs <= 0.0f)
+    {
+        return speed;
+    }
+
+    if (fabsf(speed) < min_abs)
+    {
+        speed = (speed > 0.0f) ? min_abs : -min_abs;
+    }
+
+    return (speed > 0.0f) ? ((speed > max_abs) ? max_abs : speed)
+                          : ((speed < -max_abs) ? -max_abs : speed);
 }
 
 uint8_t LiftAuto::step_up_stable_confirm(uint8_t condition)
@@ -247,14 +265,25 @@ void LiftAuto::update(void)
 
             float climb_pos = (step_up_radar_climb_y_direction_ != 0) ? vision.y_diff : vision.x_diff;
             float climb_err = step_up_radar_climb_target_ - climb_pos;
-            lift_linear_speed_target_ = trapezoid_speed(climb_err, STEP_UP_LIFT_ACC_SPEED, STEP_UP_AUTO_CLIMB_SPEED_MPS);
-            if (step_up_radar_climb_y_direction_ < 0)
+            const uint8_t climb_reached = (fabsf(climb_err) < 0.030f) ? 1U : 0U;
+            if (climb_reached != 0U)
             {
-                lift_linear_speed_target_ = -lift_linear_speed_target_;
+                lift_linear_speed_target_ = 0.0f;
+            }
+            else
+            {
+                lift_linear_speed_target_ = trapezoid_speed(climb_err, STEP_UP_LIFT_ACC_SPEED, STEP_UP_AUTO_CLIMB_SPEED_MPS);
+                if (step_up_radar_climb_y_direction_ < 0)
+                {
+                    lift_linear_speed_target_ = -lift_linear_speed_target_;
+                }
+                lift_linear_speed_target_ = step_up_min_abs_speed(lift_linear_speed_target_,
+                                                                  STEP_UP_AUTO_CLIMB_MIN_SPEED_MPS,
+                                                                  STEP_UP_AUTO_CLIMB_SPEED_MPS);
             }
 
             // 到位判定
-            if (step_up_stable_confirm((fabsf(climb_err) < 0.030f) ? 1U : 0U) != 0U)
+            if (step_up_stable_confirm(climb_reached) != 0U)
             {
                 lift_switch_target_ = 1U;
                 lift_linear_speed_target_ = 0.0f;
@@ -273,14 +302,22 @@ void LiftAuto::update(void)
             }
 
             // 梯形速度曲线升降
-            if (laser_valid != 0U && step_up_crossed_finish_height_ == 1U)
+            const uint8_t laser_reached = (step_up_crossed_finish_height_ != 0U && laser_valid != 0U && laser_mm <= STEP_UP_AUTO_FINISH_MM) ? 1U : 0U;
+            if (laser_reached != 0U)
+            {
+                lift_linear_speed_target_ = 0.0f;
+            }
+            else if (laser_valid != 0U && step_up_crossed_finish_height_ == 1U)
             {
                 float err = ((float)laser_mm - (float)STEP_UP_AUTO_FINISH_MM) * 0.001f;
                 lift_linear_speed_target_ = trapezoid_speed(err, STEP_UP_LIFT_ACC_SPEED, STEP_UP_AUTO_CLIMB_SPEED_MPS);
+                lift_linear_speed_target_ = step_up_min_abs_speed(lift_linear_speed_target_,
+                                                                  STEP_UP_AUTO_CLIMB_MIN_SPEED_MPS,
+                                                                  STEP_UP_AUTO_CLIMB_SPEED_MPS);
             }
 
             // 必须先爬升到高处，再降回FINISH_MM以下才算完成
-            if (step_up_stable_confirm((step_up_crossed_finish_height_ != 0U && laser_valid != 0U && laser_mm <= STEP_UP_AUTO_FINISH_MM) ? 1U : 0U) != 0U)
+            if (step_up_stable_confirm(laser_reached) != 0U)
             {
                 lift_switch_target_ = 1U;
                 lift_linear_speed_target_ = 0.0f;
