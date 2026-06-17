@@ -21,23 +21,6 @@ typedef struct
     float y;
 } Block_Vision;
 
-/* PID 参数结构体：存储串口 8 接收的 PID 参数 */
-typedef struct
-{
-    float kp;
-    float ki;
-    float kd;
-    float limit_inter;
-    float outputmax;
-} pid_data;
-
-#define CURVE_END_0         0x00
-#define CURVE_END_1         0x00
-#define CURVE_END_2         0x80
-#define CURVE_END_3         0x7F
-
-#define CURVE_TX_MAX_FLOATS 10
-
 /* USB 串口接收缓冲区（中断回调写入，任务循环读取） */
 #define USB_RX_BUFFER_SIZE 256U
 extern uint8_t data_usb[USB_RX_BUFFER_SIZE];
@@ -46,8 +29,7 @@ extern uint16_t usb_rx_idx;  /* USB接收缓冲区的当前写入位置，由CDC
 /* 全局视觉数据实例 */
 extern VisionData_t vision;
 extern Block_Vision block_vision[10];
-extern Block_Vision block_vision_middle[10];
-extern Block_Vision block_vision_climb[10];
+extern Block_Vision block_vision_middle[13];
 /*
  * 解析视觉帧，提取坐标偏差和角度，并把不定长 B 指令压入队列。
  * 帧格式：S,<x_diff>,<y_diff>,<yaw>E 或 S,<x_diff>,<y_diff>,<yaw>,<B>[,<B>...]E
@@ -67,11 +49,5 @@ uint8_t vision_block_pop(int *out);
 uint8_t vision_block_has_pending(void);
 void vision_block_clear(void);
 
-/*
- * 解析 PID 参数帧
- * 帧格式：S,<kp>,<ki>,<kd>,<inter>,<outmax>E
- * 返回 0 成功，-1 失败，失败时不修改输出结构体
- */
-int parse_vision_frame_pid(uint8_t *data, uint16_t len, pid_data *out);
 void send_position_to_pc(int16_t behaivor, uint8_t p_diff, float X_diff, float Y_diff, float yaw);
 #endif

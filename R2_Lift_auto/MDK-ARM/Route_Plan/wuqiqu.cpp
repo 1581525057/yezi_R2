@@ -14,10 +14,10 @@ static const float kMinMoveSpeedMps =
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {-0.92f, -0.49f, 0.0f, 0.90f, 1.0f, 0.0f},
-    {-0.52f, -0.53f, 0.0f, 1.0f, 1.0f, 0.0f},
-    {-0.52f, -0.53f, -179.5f, 1.0f, 1.2f, 1.2f},
-    {-0.92f, -0.49f, -179.5f, 1.0f, 1.0f, 0.0f},
+    {-0.91f, -0.46f, 0.0f, 0.90f, 1.0f, 0.0f},
+    {-0.52f, -0.46f, 0.0f, 1.0f, 1.0f, 0.0f},
+    {-0.52f, -0.46f, -179.5f, 1.0f, 1.2f, 1.2f},
+    {-0.91f, -0.46f, -179.5f, 1.0f, 1.0f, 0.0f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 

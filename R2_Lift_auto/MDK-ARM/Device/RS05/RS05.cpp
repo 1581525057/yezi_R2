@@ -2,17 +2,18 @@
 #include "cmsis_os.h"
 
 constexpr float kRs05DegreesToRadians = 0.01745329251994329577f;  // 角度转弧度比例系数
-constexpr float kRs05PositionLimitCurrent = 12.0f;                 // 速度位置模式电流限幅，单位：A
-constexpr float kRs05ZeroLockLimitCurrent = 16.0f;                 // 0 度紧保持电流限幅，单位：A
+constexpr float kRs05PositionLimitCurrent = 13.0f;                 // 速度位置模式电流限幅，单位：A（适度提高到13A，避免过热）
+constexpr float kRs05ZeroLockLimitCurrent = 15.0f;                 // 0 度紧保持电流限幅，单位：A（适度提高到15A）
 constexpr float kRs05CspLimitSpeed = 10.0f;                        // CSP 位置模式速度限制，单位：rad/s
 constexpr float kRs05TorqueLimitNm = 5.5f;                          // RS05 峰值力矩限制，单位：Nm
 constexpr float kRs05ZeroLockTorqueLimitNm = 10.0f;                 // 0 度紧保持转矩限制，单位：Nm
-constexpr float kRs05PositionKp = 75.0f;                            // 位置环 Kp，默认 40，增大保持刚度
-constexpr float kRs05SpeedKp = 7.0f;                                // 速度环 Kp，默认 6
-constexpr float kRs05SpeedKi = 0.03f;                               // 速度环 Ki，默认 0.02
-constexpr float kRs05ZeroLockPositionKp = 120.0f;                   // 0 度紧保持位置环 Kp
-constexpr float kRs05ZeroLockSpeedKp = 8.0f;                         // 0 度紧保持速度环 Kp
-constexpr float kRs05ZeroLockSpeedKi = 0.04f;                        // 0 度紧保持速度环 Ki
+constexpr float kRs05PositionKp = 100.0f;                            // 位置环 Kp，从75提高到100，平衡刚度和发热
+constexpr float kRs05SpeedKp = 7.5f;                                // 速度环 Kp，从7微调到7.5
+constexpr float kRs05SpeedKi = 0.04f;                               // 速度环 Ki，从0.03微调到0.04
+constexpr float kRs05ZeroLockPositionKp = 140.0f;                   // 0 度紧保持位置环 Kp（从120提高到140）
+constexpr float kRs05ZeroLockSpeedKp = 8.5f;                         // 0 度紧保持速度环 Kp（从8微调到8.5）
+constexpr float kRs05ZeroLockSpeedKi = 0.05f;                        // 0 度紧保持速度环 Ki（从0.04微调到0.05）
+constexpr uint8_t kRs05ProactiveReportEnable = 1U;                  // 开启通信类型 24 主动上报
 constexpr uint32_t kRs05CanStartCheckIntervalMs = 1U;              // 等待 CAN3 启动的轮询间隔
 constexpr uint32_t kRs05PowerOnDelayMs = 200U;                     // CAN 启动后等待电机上电完成
 constexpr uint32_t kRs05StopDelayMs = 20U;                         // 停止/失能后等待电机进入可切模式状态
@@ -61,6 +62,12 @@ void RS05_ApplyZeroLockParameters(void)
     RS05_WriteParameter(0x7020, kRs05ZeroLockSpeedKi);
     RS05_WriteParameter(0x7017, kRs05CspLimitSpeed);
 }
+
+void RS05_EnableProactiveReport(void)
+{
+    g_rs05_motor.RobStride_Motor_ProactiveEscalationSet(kRs05ProactiveReportEnable);
+    osDelay(kRs05ParamWriteDelayMs);
+}
 }
 
 /**
@@ -87,6 +94,7 @@ void RS05_Init(void)
     osDelay(kRs05ModeSwitchDelayMs);
     RS05_ApplyCspHoldParameters();
     RS05_WriteParameter(0x7016, 0.0f);
+    RS05_EnableProactiveReport();
     g_rs05_zero_lock_enabled = 0U;
 
     g_rs05_initialized = 1U;

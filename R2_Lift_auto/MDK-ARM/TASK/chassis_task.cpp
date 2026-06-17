@@ -16,6 +16,7 @@
 #include "usart_task.h"
 #include "route_task.h"
 #include "arm_comm.h"
+#include "FTMTask.h"
 
 extern "C" float WuqiquTask_GetChassisVxTarget(float manual);
 extern "C" float WuqiquTask_GetChassisVyTarget(float manual);
@@ -46,6 +47,18 @@ static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, 
         return CHASSIS_AUTO_MEILING;
     }
     return CHASSIS_AUTO_NONE;
+}
+
+static inline uint8_t Chassis_IsRouteYawTurnActive(void)
+{
+    if (route_t.flag_start != 1U)
+    {
+        return 0U;
+    }
+
+    return ((route_t.state == PHASE_TURN_LEFT90) ||
+            (route_t.state == PHASE_TURN_RIGHT90) ||
+            (route_t.state == PHASE_TURN180)) ? 1U : 0U;
 }
 
 // 初始化底盘任务中使用的全部 PID。
@@ -103,16 +116,23 @@ extern "C" void chassis_task(void *argument)
         // 正运动学：由轮速反推底盘当前速度。
         omni_chassis.forwardKinematics();
 
-        float VZ_OUT = 0.0f;
-        // 航向保持：视觉角度偏差越大，输出的底盘自转速度越大。
-        VZ_OUT = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
-
         // 先取遥控器目标速度；自动任务生效时会覆盖对应目标。
         float target_vx = remove_dji.chassis_.Vx;
         float target_vy = remove_dji.chassis_.Vy;
-        float target_vz = VZ_OUT;
+        float target_vz = remove_dji.chassis_.Vz;
 
         const ChassisAutoSource auto_source = ChassisAuto_SelectSource(WuqiquTask_IsActive(), RouteTask_IsMeilingAreaActive());
+
+        if (FTM_IsYawTargetCorrectionEnabled() != 0U)
+        {
+            yaw_target = 0.0f;
+            // FTM 完成后才开启 0 度航向保持，避免上电立即修 0 度。
+            target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
+        }
+        else if (Chassis_IsRouteYawTurnActive() != 0U)
+        {
+            target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
+        }
 
         switch (auto_source)
         {
@@ -146,8 +166,8 @@ extern "C" void chassis_task(void *argument)
         target_vy = arm_comm.getChassisVyTarget(target_vy);
         target_vx = arm_comm.getChassisVxTarget(target_vx);
 
-        // 当前自转输出仍使用航向 PID 结果，target_vz 只保留自动任务仲裁值。
-        omni_chassis.setRemote(target_vx, target_vy, VZ_OUT);
+        // 自转输出统一走 target_vz：默认遥控，FTM 完成/路线转向时由航向 PID 生成，自动任务可覆盖。
+        omni_chassis.setRemote(target_vx, target_vy, target_vz);
 
         // 速度环：根据当前速度和目标速度的误差计算 x/y 方向驱动力。
         float Fx = pid_F_chassis_linear_x.PID_Calculate(omni_chassis.now.Vx, omni_chassis.target.Vx);

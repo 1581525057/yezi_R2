@@ -1990,6 +1990,11 @@
               <FilePath>.\TASK\FTMTask.cpp</FilePath>
             </File>
             <File>
+              <FileName>FTMLiftAction.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\TASK\FTMLiftAction.cpp</FilePath>
+            </File>
+            <File>
               <FileName>wuqiqu_task.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\TASK\wuqiqu_task.cpp</FilePath>
@@ -2010,19 +2015,9 @@
               <FilePath>.\Device\Communication\CommData.cpp</FilePath>
             </File>
             <File>
-              <FileName>EmmV5.cpp</FileName>
+              <FileName>M2006AngleMotor.cpp</FileName>
               <FileType>8</FileType>
-              <FilePath>.\Device\StepMotor\EmmV5.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>StepMotorTask.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\Device\StepMotor\StepMotorTask.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>M2006Follower.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\Device\M2006\M2006Follower.cpp</FilePath>
+              <FilePath>.\Device\M2006\M2006AngleMotor.cpp</FilePath>
             </File>
             <File>
               <FileName>RS05.cpp</FileName>

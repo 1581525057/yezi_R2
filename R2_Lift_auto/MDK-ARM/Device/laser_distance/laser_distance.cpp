@@ -1,6 +1,7 @@
 #include "laser_distance.h"
 
-LaserDistance laser;
+LaserDistance laser_left;
+LaserDistance laser_right;
 
 LaserDistance::LaserDistance()
 {

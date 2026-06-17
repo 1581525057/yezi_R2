@@ -20,23 +20,25 @@ enum FTMState
     FTM_STATE_INIT = 0,               // 初始化/空闲准备状态。
     FTM_STATE_WUQIQU_ROUTE = 1,       // 武器区跑点状态，只负责底盘跑点。
     FTM_STATE_IDLE = 2,               // 手动调试等待状态；不执行动作，等待 Keil Watch 写入下一状态。
-    FTM_STATE_RS05_TO_90 = 3,         // RS05 转到 Keil Watch 中 Angle 指定的角度。
-    FTM_STATE_LIFT_UP = 4,            // 抬升机构上升到 81mm。
+    FTM_STATE_RS05_TO_90 = 3,         // RS05 转到90角度。
+    FTM_STATE_LIFT_UP = 4,            // 抬升机构上升到 75mm。
     FTM_STATE_CLAW_OPEN = 5,          // 夹爪张开。
     FTM_STATE_CLAW_CLOSE = 6,         // 夹爪闭合。
-    FTM_STATE_LIFT_UP_220 = 7,        // 抬升机构上升到 217mm。
+    FTM_STATE_LIFT_UP_210 = 7,        // 抬升机构上升到调试高度，默认 210mm。
     FTM_STATE_M2006_TURN_180 = 8,     // M2006 从当前角度相对翻转 180 度。
-    FTM_STATE_RS05_TO_0 = 9,          // RS05 回到 0 度。
+    FTM_STATE_RS05_TO_0 = 9,          // RS05 回到可调目标角度，默认 0 度。
     FTM_STATE_LIFT_DOWN = 10,         // 抬升机构下降到 70mm。
     FTM_STATE_DONE = 11,              // 全流程完成保持状态。
     FTM_STATE_WUQIQU_ZERO = 12,       // 武器区跑点前发送视觉置零。
     FTM_STATE_M2006_TURN_BACK_180 = 13, // M2006 从当前角度反向翻转 180 度。
     FTM_STATE_SEQUENCE_5_4_3 = 14,    // 组合执行：5 -> 4 -> 3。
-    FTM_STATE_SEQUENCE_7_3_13_9 = 15, // 组合执行：7 -> 3 -> 13 -> 9。
+    FTM_STATE_SEQUENCE_13_9 = 15,     // 组合执行：13 -> 9。
     FTM_STATE_WUQIQU_ROUTE_2 = 16,
     FTM_STATE_WUQIQU_ROUTE_3 = 17,
     FTM_STATE_WUQIQU_ROUTE_4 = 18,
-    FTM_STATE_SEQUENCE_16_17_18_15 = 19
+    FTM_STATE_SEQUENCE_16_17_18_15 = 19,
+    FTM_STATE_SEQUENCE_1_6_7_19 = 20, // 组合执行：1 -> 6 -> 7 -> 19。
+    FTM_STATE_SEQUENCE_5_3_8 = 21     // 组合执行：5 -> 3 -> 8。
 };
 
 namespace
@@ -49,7 +51,6 @@ constexpr uint32_t kRs05TimeoutMs = 3500U;
 
 constexpr float kLiftToleranceMm = 5.0f;
 constexpr float kLiftMoveTimeS = 0.7f;
-constexpr float kLiftUpHighTargetMm = 217.0f;
 
 constexpr uint32_t kClawActionDelayMs = 200U;
 constexpr float kM2006TurnAngleDeg = 180.0f;
@@ -74,8 +75,11 @@ uint8_t g_wuqiqu_route_finished = 0U;
 uint8_t g_active_state = 0xFFU;
 uint8_t g_modules_initialized = 0U;
 uint8_t g_m2006_angle_lock_active = 1U;
+constexpr uint8_t kYawTargetCorrectionOff = 0U;
+constexpr uint8_t kYawTargetCorrectionZero = 1U;
 uint8_t g_sequence_step_index = 0U;
 uint8_t g_wuqiqu_sequence_step_index = 0U;
+uint8_t g_route_mechanism_sequence_step_index = 0U;
 
 const uint8_t kSequence543[] = {
     FTM_STATE_CLAW_OPEN,
@@ -83,11 +87,20 @@ const uint8_t kSequence543[] = {
     FTM_STATE_RS05_TO_90
 };
 
-const uint8_t kSequence73139[] = {
-    FTM_STATE_LIFT_UP_220,
-    FTM_STATE_RS05_TO_90,
+const uint8_t kSequence139[] = {
     FTM_STATE_M2006_TURN_BACK_180,
     FTM_STATE_RS05_TO_0
+};
+
+const uint8_t kSequence67[] = {
+    FTM_STATE_CLAW_CLOSE,
+    FTM_STATE_LIFT_UP_210
+};
+
+const uint8_t kSequence538[] = {
+    FTM_STATE_CLAW_OPEN,
+    FTM_STATE_RS05_TO_90,
+    FTM_STATE_M2006_TURN_180
 };
 
 uint32_t g_wuqiqu_zero_start_tick = 0U;
@@ -121,6 +134,12 @@ void ResetMechanismStep(void)
     g_lift_last_target_height_mm = 0.0f;
 }
 
+void UpdateYawTargetCorrectionState(uint8_t state)
+{
+    g_ftm_yaw_target_correction_state =
+        (state == FTM_STATE_DONE) ? kYawTargetCorrectionZero : kYawTargetCorrectionOff;
+}
+
 void ServiceM2006AngleLock(uint8_t state)
 {
     if (g_m2006_angle_lock_active == 0U)
@@ -142,8 +161,10 @@ uint8_t IsMechanismState(uint8_t state)
     return (((state >= FTM_STATE_RS05_TO_90) && (state <= FTM_STATE_DONE)) ||
             (state == FTM_STATE_M2006_TURN_BACK_180) ||
             (state == FTM_STATE_SEQUENCE_5_4_3) ||
-            (state == FTM_STATE_SEQUENCE_7_3_13_9) ||
-            (state == FTM_STATE_SEQUENCE_16_17_18_15)) ? 1U : 0U;
+            (state == FTM_STATE_SEQUENCE_13_9) ||
+            (state == FTM_STATE_SEQUENCE_16_17_18_15) ||
+            (state == FTM_STATE_SEQUENCE_1_6_7_19) ||
+            (state == FTM_STATE_SEQUENCE_5_3_8)) ? 1U : 0U;
 }
 
 uint8_t IsWuqiquRouteState(uint8_t state)
@@ -152,14 +173,18 @@ uint8_t IsWuqiquRouteState(uint8_t state)
             (state == FTM_STATE_WUQIQU_ROUTE_2) ||
             (state == FTM_STATE_WUQIQU_ROUTE_3) ||
             (state == FTM_STATE_WUQIQU_ROUTE_4) ||
-            (state == FTM_STATE_SEQUENCE_16_17_18_15)) ? 1U : 0U;
+            (state == FTM_STATE_SEQUENCE_16_17_18_15) ||
+            (state == FTM_STATE_SEQUENCE_1_6_7_19)) ? 1U : 0U;
 }
 
 void PrepareState(uint8_t state)
 {
+    UpdateYawTargetCorrectionState(state);
+
     ResetMechanismStep();
     g_sequence_step_index = 0U;
     g_wuqiqu_sequence_step_index = 0U;
+    g_route_mechanism_sequence_step_index = 0U;
 
     if (IsWuqiquRouteState(state) != 0U)
     {
@@ -366,14 +391,14 @@ bool RunMechanismStep(uint8_t state)
     case FTM_STATE_CLAW_CLOSE:
         return RunClawDelay(claw_close);
 
-    case FTM_STATE_LIFT_UP_220:
-        return RunLiftState(kLiftUpHighTargetMm);
+    case FTM_STATE_LIFT_UP_210:
+        return RunLiftState(g_ftm_lift_up_210_target_mm);
 
     case FTM_STATE_M2006_TURN_180:
         return RunM2006Turn(kM2006TurnAngleDeg);
 
     case FTM_STATE_RS05_TO_0:
-        return RunRs05State(0.0f, 1U);
+        return RunRs05State(g_ftm_rs05_return_target_degree, 1U);
 
     case FTM_STATE_LIFT_DOWN:
         return RunLiftState(g_ftm_lift_down_target_mm);
@@ -475,7 +500,37 @@ bool RunWuqiquAndMechanismSequence(void)
         return false;
     }
 
-    return RunMechanismSequence(kSequence73139, static_cast<uint8_t>(sizeof(kSequence73139) / sizeof(kSequence73139[0])));
+    return RunMechanismSequence(kSequence139, static_cast<uint8_t>(sizeof(kSequence139) / sizeof(kSequence139[0])));
+}
+
+bool RunRouteAndMechanismSequence(void)
+{
+    switch (g_route_mechanism_sequence_step_index)
+    {
+    case 0:
+        if (RunWuqiquRoutePoint(0U) == 0U)
+        {
+            return false;
+        }
+        ++g_route_mechanism_sequence_step_index;
+        return false;
+
+    case 1:
+        if (RunMechanismSequence(kSequence67, static_cast<uint8_t>(sizeof(kSequence67) / sizeof(kSequence67[0]))) == false)
+        {
+            return false;
+        }
+        ++g_route_mechanism_sequence_step_index;
+        g_sequence_step_index = 0U;
+        ResetMechanismStep();
+        return false;
+
+    case 2:
+        return RunWuqiquAndMechanismSequence();
+
+    default:
+        return true;
+    }
 }
 
 void ServiceWuqiquZero(void)
@@ -519,8 +574,11 @@ void InitModules(void)
 }
 
 extern "C" volatile uint8_t g_ftm_state = FTM_STATE_INIT;
-extern "C" volatile float g_ftm_lift_up_target_mm = 81.0f;
+extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
+extern "C" volatile float g_ftm_lift_up_target_mm = 75.0f;
+extern "C" volatile float g_ftm_lift_up_210_target_mm = 210.0f;
 extern "C" volatile float g_ftm_lift_down_target_mm = 70.0f;
+extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
 
 extern "C" uint8_t FTM_GetState(void)
 {
@@ -534,21 +592,7 @@ extern "C" uint8_t FTM_IsWuqiquDone(void)
 
 extern "C" uint8_t FTM_IsYawTargetCorrectionEnabled(void)
 {
-    if ((g_ftm_state == FTM_STATE_WUQIQU_ROUTE) ||
-        (g_ftm_state == FTM_STATE_WUQIQU_ROUTE_2) ||
-        (g_ftm_state == FTM_STATE_WUQIQU_ROUTE_3) ||
-        (g_ftm_state == FTM_STATE_WUQIQU_ROUTE_4) ||
-        ((g_ftm_state == FTM_STATE_SEQUENCE_16_17_18_15) &&
-         (g_wuqiqu_sequence_step_index < 3U)) ||
-        (g_ftm_state == FTM_STATE_IDLE) ||
-        (g_ftm_state == FTM_STATE_INIT) ||
-        (g_ftm_state == FTM_STATE_DONE) ||
-        (g_ftm_state == FTM_STATE_WUQIQU_ZERO))
-    {
-        return 0U;
-    }
-
-    return 1U;
+    return (g_ftm_yaw_target_correction_state == kYawTargetCorrectionZero) ? 1U : 0U;
 }
 
 extern "C" void ftm_task(void *argument)
@@ -591,7 +635,7 @@ extern "C" void ftm_task(void *argument)
             }
             break;
 
-        // 状态 4：FTM 接管抬升机构，上升到 86mm；完成后回到状态 2。
+        // 状态 4：FTM 接管抬升机构，上升到 75mm；完成后回到状态 2。
         case FTM_STATE_LIFT_UP:
             if (RunLiftState(g_ftm_lift_up_target_mm))
             {
@@ -615,9 +659,9 @@ extern "C" void ftm_task(void *argument)
             }
             break;
 
-        // 状态 7：FTM 接管抬升机构，上升到 217mm；完成后回到状态 2。
-        case FTM_STATE_LIFT_UP_220:
-            if (RunLiftState(kLiftUpHighTargetMm))
+        // 状态 7：FTM 接管抬升机构，上升到调试高度，默认 210mm；完成后回到状态 2。
+        case FTM_STATE_LIFT_UP_210:
+            if (RunLiftState(g_ftm_lift_up_210_target_mm))
             {
                 EnterState(FTM_STATE_IDLE);
             }
@@ -631,9 +675,9 @@ extern "C" void ftm_task(void *argument)
             }
             break;
 
-        // 状态 9：RS05 回到 0 度；到位或超时后回到状态 2。
+        // 状态 9：RS05 回到可调目标角度；到位或超时后回到状态 2。
         case FTM_STATE_RS05_TO_0:
-            if (RunRs05State(0.0f, 1U))
+            if (RunRs05State(g_ftm_rs05_return_target_degree, 1U))
             {
                 EnterState(FTM_STATE_IDLE);
             }
@@ -653,7 +697,7 @@ extern "C" void ftm_task(void *argument)
             {
                 g_m2006_angle_lock_active = 1U;
             }
-            (void)RunRs05State(0.0f, 1U);
+            (void)RunRs05State(g_ftm_rs05_return_target_degree, 1U);
             break;
 
         // 状态 12：向视觉发送置零命令，稳定后回到状态 2。
@@ -677,9 +721,9 @@ extern "C" void ftm_task(void *argument)
             }
             break;
 
-        // 状态 15：组合执行 7 -> 3 -> 13 -> 9；完成后回到状态 2。
-        case FTM_STATE_SEQUENCE_7_3_13_9:
-            if (RunMechanismSequence(kSequence73139, static_cast<uint8_t>(sizeof(kSequence73139) / sizeof(kSequence73139[0]))))
+        // 状态 15：组合执行 13 -> 9；完成后回到状态 2。
+        case FTM_STATE_SEQUENCE_13_9:
+            if (RunMechanismSequence(kSequence139, static_cast<uint8_t>(sizeof(kSequence139) / sizeof(kSequence139[0]))))
             {
                 EnterState(FTM_STATE_IDLE);
             }
@@ -699,6 +743,22 @@ extern "C" void ftm_task(void *argument)
 
         case FTM_STATE_SEQUENCE_16_17_18_15:
             if (RunWuqiquAndMechanismSequence())
+            {
+                EnterState(FTM_STATE_IDLE);
+            }
+            break;
+
+        // 状态 20：组合执行 1 -> 6 -> 7 -> 19；完成后回到状态 2。
+        case FTM_STATE_SEQUENCE_1_6_7_19:
+            if (RunRouteAndMechanismSequence())
+            {
+                EnterState(FTM_STATE_IDLE);
+            }
+            break;
+
+        // 状态 21：组合执行 5 -> 3 -> 8；完成后回到状态 2。
+        case FTM_STATE_SEQUENCE_5_3_8:
+            if (RunMechanismSequence(kSequence538, static_cast<uint8_t>(sizeof(kSequence538) / sizeof(kSequence538[0]))))
             {
                 EnterState(FTM_STATE_IDLE);
             }
