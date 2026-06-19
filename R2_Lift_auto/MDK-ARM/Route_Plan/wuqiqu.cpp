@@ -14,12 +14,19 @@ static const float kMinMoveSpeedMps =
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {-0.91f, -0.46f, 0.0f, 0.90f, 1.0f, 0.0f},
-    {-0.52f, -0.46f, 0.0f, 1.0f, 1.0f, 0.0f},
-    {-0.52f, -0.46f, -179.5f, 1.0f, 1.2f, 1.2f},
-    {-0.91f, -0.46f, -179.5f, 1.0f, 1.0f, 0.0f},
+    {-0.88f, -0.51f, 0.0f, 0.90f, 1.0f, 0.0f, 0.010f},
+    {-0.52f, -0.51f, 0.0f, 1.0f, 1.0f, 0.0f, 0.020f},
+    {-0.52f, -0.51f, -179.0f, 1.0f, 2.0f, 2.0f, 0.020f},
+    {-0.88f, -0.51f, -179.0f, 1.0f, 1.0f, 0.0f, 0.020f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
+static const uint8_t kPureYawPidWaypointIndex = 2U;
+static const float kChassisYawPidMaxOut = 2.5f;
+static const float kChassisYawPidIntegralLimit = 0.2f;
+static const float kChassisYawPidDeadbandDeg = 0.1f;
+static const float kChassisYawPidKp = 0.1f;
+static const float kChassisYawPidKi = 0.02f;
+static const float kChassisYawPidKd = 0.0f;
 
 WuqiquPathPlanner wuqiqu;
 
@@ -52,7 +59,7 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     strong_yaw_error_deg_ = 6.0f;
     moving_wz_max_ = 0.80f;
     settle_wz_max_ = 0.55f;
-    yaw_tolerance_deg_ = 1.0f;
+    yaw_tolerance_deg_ = 2.0f;
 
     stable_cycles_ = 120U;
     contact_hold_ms_ = 500U;
@@ -86,6 +93,7 @@ void WuqiquPathPlanner::reset(void)
     state_ = STATE_IDLE;
     soft_contact_start_tick_ = 0U;
     soft_contact_stable_count_ = 0U;
+    resetPureYawPid();
     setZeroOutput();
 }
 
@@ -127,11 +135,15 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
     const float err_x_m = target_.x_m - current_pose.x;
     const float err_y_m = target_.y_m - current_pose.y;
     const float distance_m = safeSqrt(err_x_m * err_x_m + err_y_m * err_y_m);
+    const float xy_tolerance_m = (target_.xy_tolerance_m > 0.0f) ? target_.xy_tolerance_m : finish_dist_;
+    const uint8_t xy_in_tolerance =
+        (fabsf(err_x_m) <= xy_tolerance_m && fabsf(err_y_m) <= xy_tolerance_m) ? 1U : 0U;
     const float err_yaw_deg = normalizeAngleDeg(target_.yaw_deg - current_pose.yaw_360);
     const float yaw_control_deg = normalizeAngleDeg(current_pose.yaw_360 - target_.yaw_deg);
     const float yaw_abs_deg = fabsf(err_yaw_deg);
+    const uint8_t pure_yaw_pid_target = isPureYawPidTarget(xy_in_tolerance);
 
-    updateState(distance_m, now_tick);
+    updateState(distance_m, xy_in_tolerance, now_tick);
 
     if (state_ == STATE_FINISHED)
     {
@@ -177,7 +189,7 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
 
     limitVector(vx_cmd, vy_cmd, scaled_xy_limit);
 
-    const float brake_distance_m = (distance_m > finish_dist_) ? (distance_m - finish_dist_) : 0.0f;
+    const float brake_distance_m = (distance_m > xy_tolerance_m) ? (distance_m - xy_tolerance_m) : 0.0f;
     const float brake_v_max = safeSqrt(2.0f * decel_ * brake_distance_m);
     limitVector(vx_cmd, vy_cmd, brake_v_max * move_speed_scale);
 
@@ -194,12 +206,12 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
     vx_cmd *= yaw_xy_scale;
     vy_cmd *= yaw_xy_scale;
 
-    if (distance_m > finish_dist_ && yaw_abs_deg <= 35.0f)
+    if (xy_in_tolerance == 0U && yaw_abs_deg <= 35.0f)
     {
         raiseVectorToMin(vx_cmd, vy_cmd, scaled_min_move_v);
     }
 
-    if (distance_m <= finish_dist_)
+    if (xy_in_tolerance != 0U)
     {
         limitVector(vx_cmd, vy_cmd, scaled_finish_v_max);
     }
@@ -208,16 +220,27 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         limitVector(vx_cmd, vy_cmd, scaled_contact_v_max);
     }
 
-    float wz_cmd = yaw_sign_ * yaw_kp_ * yaw_kp_scale * yaw_control_deg * kDegToRad;
-    wz_cmd = limitFloat(wz_cmd, -wz_limit, wz_limit);
-    if (yaw_abs_deg > yaw_tolerance_deg_)
+    float wz_cmd = 0.0f;
+    if (pure_yaw_pid_target != 0U)
     {
-        const float min_wz = (yaw_abs_deg >= strong_yaw_error_deg_) ? strong_yaw_wz_ : min_yaw_wz_;
-        const float scaled_min_wz = limitFloat(min_wz * yaw_kp_scale, 0.0f, wz_limit);
-        if (fabsf(wz_cmd) < scaled_min_wz)
+        vx_cmd = 0.0f;
+        vy_cmd = 0.0f;
+        wz_cmd = calculatePureYawPid(current_pose.yaw_360, target_.yaw_deg, now_tick);
+    }
+    else
+    {
+        resetPureYawPid();
+        wz_cmd = yaw_sign_ * yaw_kp_ * yaw_kp_scale * yaw_control_deg * kDegToRad;
+        wz_cmd = limitFloat(wz_cmd, -wz_limit, wz_limit);
+        if (yaw_abs_deg > yaw_tolerance_deg_)
         {
-            wz_cmd = (wz_cmd >= 0.0f) ? scaled_min_wz : -scaled_min_wz;
-            wz_cmd = limitFloat(wz_cmd, -wz_limit, wz_limit);
+            const float min_wz = (yaw_abs_deg >= strong_yaw_error_deg_) ? strong_yaw_wz_ : min_yaw_wz_;
+            const float scaled_min_wz = limitFloat(min_wz * yaw_kp_scale, 0.0f, wz_limit);
+            if (fabsf(wz_cmd) < scaled_min_wz)
+            {
+                wz_cmd = (wz_cmd >= 0.0f) ? scaled_min_wz : -scaled_min_wz;
+                wz_cmd = limitFloat(wz_cmd, -wz_limit, wz_limit);
+            }
         }
     }
 
@@ -228,7 +251,7 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
     if (state_ == STATE_SOFT_CONTACT)
     {
         const uint32_t contact_time_ms = now_tick - soft_contact_start_tick_;
-        const uint8_t pose_stable = (distance_m <= finish_dist_ && yaw_abs_deg <= yaw_tolerance_deg_) ? 1U : 0U;
+        const uint8_t pose_stable = (xy_in_tolerance != 0U && yaw_abs_deg <= yaw_tolerance_deg_) ? 1U : 0U;
 
         if (pose_stable != 0U)
         {
@@ -276,7 +299,15 @@ void WuqiquPathPlanner::setZeroOutput(void)
     output_.wz_radps = 0.0f;
 }
 
-void WuqiquPathPlanner::updateState(float distance_m, uint32_t now_tick)
+void WuqiquPathPlanner::resetPureYawPid(void)
+{
+    pure_yaw_pid_initialized_ = 0U;
+    pure_yaw_pid_last_tick_ = 0U;
+    pure_yaw_pid_last_err_deg_ = 0.0f;
+    pure_yaw_pid_iout_ = 0.0f;
+}
+
+void WuqiquPathPlanner::updateState(float distance_m, uint8_t xy_in_tolerance, uint32_t now_tick)
 {
     if (state_ == STATE_IDLE)
     {
@@ -289,12 +320,57 @@ void WuqiquPathPlanner::updateState(float distance_m, uint32_t now_tick)
     }
 
     if ((state_ == STATE_APPROACH || state_ == STATE_SLOW_APPROACH) &&
-        distance_m <= contact_dist_)
+        (distance_m <= contact_dist_ || xy_in_tolerance != 0U))
     {
         state_ = STATE_SOFT_CONTACT;
         soft_contact_start_tick_ = now_tick;
         soft_contact_stable_count_ = 0U;
     }
+}
+
+uint8_t WuqiquPathPlanner::isPureYawPidTarget(uint8_t xy_in_tolerance) const
+{
+    return ((current_index_ == kPureYawPidWaypointIndex) && (xy_in_tolerance != 0U)) ? 1U : 0U;
+}
+
+float WuqiquPathPlanner::calculatePureYawPid(float current_yaw_deg, float target_yaw_deg, uint32_t now_tick)
+{
+    float err_deg = normalizeAngleDeg(target_yaw_deg - current_yaw_deg);
+    float dt_s = 0.0f;
+
+    if (fabsf(err_deg) < kChassisYawPidDeadbandDeg)
+    {
+        err_deg = 0.0f;
+    }
+
+    if (pure_yaw_pid_initialized_ != 0U)
+    {
+        dt_s = static_cast<float>(now_tick - pure_yaw_pid_last_tick_) * 0.001f;
+    }
+    else
+    {
+        pure_yaw_pid_initialized_ = 1U;
+    }
+
+    const float pout = kChassisYawPidKp * err_deg;
+    pure_yaw_pid_iout_ += kChassisYawPidKi * err_deg * dt_s;
+    pure_yaw_pid_iout_ = limitFloat(pure_yaw_pid_iout_,
+                                    -kChassisYawPidIntegralLimit,
+                                    kChassisYawPidIntegralLimit);
+
+    float dout = 0.0f;
+    if (dt_s > 0.000001f)
+    {
+        dout = kChassisYawPidKd * (err_deg - pure_yaw_pid_last_err_deg_) / dt_s;
+    }
+
+    float pid_output = pout + pure_yaw_pid_iout_ + dout;
+    pid_output = limitFloat(pid_output, -kChassisYawPidMaxOut, kChassisYawPidMaxOut);
+
+    pure_yaw_pid_last_tick_ = now_tick;
+    pure_yaw_pid_last_err_deg_ = err_deg;
+
+    return -pid_output;
 }
 
 void WuqiquPathPlanner::limitVector(float &vx, float &vy, float max_speed) const

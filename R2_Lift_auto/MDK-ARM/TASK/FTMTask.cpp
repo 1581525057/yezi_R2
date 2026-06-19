@@ -15,30 +15,37 @@ extern "C" uint8_t WuqiquTask_IsActive(void);
 extern "C" void WuqiquTask_AdvanceToNext(void);
 extern "C" uint8_t WuqiquTask_IsAllFinished(void);
 
-enum FTMState
+enum FTMMainState
 {
-    FTM_STATE_INIT = 0,               // 初始化/空闲准备状态。
-    FTM_STATE_WUQIQU_ROUTE = 1,       // 武器区跑点状态，只负责底盘跑点。
-    FTM_STATE_IDLE = 2,               // 手动调试等待状态；不执行动作，等待 Keil Watch 写入下一状态。
-    FTM_STATE_RS05_TO_90 = 3,         // RS05 转到90角度。
-    FTM_STATE_LIFT_UP = 4,            // 抬升机构上升到 75mm。
-    FTM_STATE_CLAW_OPEN = 5,          // 夹爪张开。
-    FTM_STATE_CLAW_CLOSE = 6,         // 夹爪闭合。
-    FTM_STATE_LIFT_UP_210 = 7,        // 抬升机构上升到调试高度，默认 210mm。
-    FTM_STATE_M2006_TURN_180 = 8,     // M2006 从当前角度相对翻转 180 度。
-    FTM_STATE_RS05_TO_0 = 9,          // RS05 回到可调目标角度，默认 0 度。
-    FTM_STATE_LIFT_DOWN = 10,         // 抬升机构下降到 70mm。
-    FTM_STATE_DONE = 11,              // 全流程完成保持状态。
-    FTM_STATE_WUQIQU_ZERO = 12,       // 武器区跑点前发送视觉置零。
-    FTM_STATE_M2006_TURN_BACK_180 = 13, // M2006 从当前角度反向翻转 180 度。
-    FTM_STATE_SEQUENCE_5_4_3 = 14,    // 组合执行：5 -> 4 -> 3。
-    FTM_STATE_SEQUENCE_13_9 = 15,     // 组合执行：13 -> 9。
-    FTM_STATE_WUQIQU_ROUTE_2 = 16,
-    FTM_STATE_WUQIQU_ROUTE_3 = 17,
-    FTM_STATE_WUQIQU_ROUTE_4 = 18,
-    FTM_STATE_SEQUENCE_16_17_18_15 = 19,
-    FTM_STATE_SEQUENCE_1_6_7_19 = 20, // 组合执行：1 -> 6 -> 7 -> 19。
-    FTM_STATE_SEQUENCE_5_3_8 = 21     // 组合执行：5 -> 3 -> 8。
+    FTM_MAIN_INIT = 0,             // 初始化各功能模块，完成后进入空闲。
+    FTM_MAIN_IDLE = 1,             // 空闲/手动调试状态，等待 Watch 写入动作状态。
+    FTM_MAIN_WUQIQU_ROUTE = 2,     // 独立执行武器区第 1 个跑点。
+    FTM_MAIN_WUQIQU_ZERO = 3,      // 向视觉发送置零命令。
+    FTM_MAIN_DONE = 4,             // 全流程完成保持状态。
+    FTM_MAIN_AUTO_PICK_ROUTE = 5,  // 武器区综合取物流程：开爪、先到取出武器头对接高度、对位、跑点、到抓取高度、闭爪、再到取出武器头对接高度、继续跑点并回位。
+    FTM_MAIN_AUTO_TURN_READY = 6   // 武器区姿态准备流程：张爪、对位并让 M2006 翻转到预备姿态。
+};
+
+enum FTMActionState
+{
+    FTM_ACTION_NONE = 0,                         // 不执行小动作。
+    FTM_ACTION_RS05_TO_TARGET = 1,               // RS05 转到 Angle 指定角度。
+    FTM_ACTION_LIFT_UP_GRAB = 2,                 // 抬升机构上升到抓取高度。
+    FTM_ACTION_CLAW_OPEN = 3,                    // 夹爪张开。
+    FTM_ACTION_CLAW_CLOSE = 4,                   // 夹爪闭合。
+    FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK = 5, // 抬升机构上升到取出武器头对接高度。
+    FTM_ACTION_M2006_TURN_180 = 6,               // M2006 正向翻转 180 度。
+    FTM_ACTION_RS05_TO_RETURN = 7,               // RS05 回到可调目标角度。
+    FTM_ACTION_LIFT_DOWN = 8,                    // 抬升机构下降。
+    FTM_ACTION_M2006_TURN_BACK_180 = 9,          // M2006 反向翻转 180 度。
+    FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05 = 10,     // 夹爪张开、抬升到取出武器头对接高度、RS05 对位。
+    FTM_ACTION_SEQUENCE_BACKTURN_RS05 = 11,      // M2006 反向翻转 180 度、RS05 回位。
+    FTM_ACTION_WUQIQU_ROUTE_2 = 12,              // 武器区第 2 个跑点。
+    FTM_ACTION_WUQIQU_ROUTE_3 = 13,              // 武器区第 3 个跑点。
+    FTM_ACTION_WUQIQU_ROUTE_4 = 14,              // 武器区第 4 个跑点。
+    FTM_ACTION_SEQUENCE_ROUTE_BACKTURN = 15,     // 完成武器区 2/3/4 号跑点后，执行 M2006 反转和 RS05 回位。
+    FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT = 16,   // 先跑武器区 1 号点，再到抓取高度并闭爪，然后抬到取出武器头对接高度继续后续跑点和回位。
+    FTM_ACTION_SEQUENCE_OPEN_RS05_TURN = 17      // 夹爪张开、RS05 对位、M2006 正向翻转 180 度。
 };
 
 namespace
@@ -72,35 +79,47 @@ TimedStep g_step = {0U, 0U, 0U, 0U};
 uint8_t g_lift_commanded = 0U;
 float g_lift_last_target_height_mm = 0.0f;
 uint8_t g_wuqiqu_route_finished = 0U;
-uint8_t g_active_state = 0xFFU;
+uint8_t g_active_main_state = 0xFFU;
+uint8_t g_active_action_state = 0xFFU;
 uint8_t g_modules_initialized = 0U;
 uint8_t g_m2006_angle_lock_active = 1U;
 constexpr uint8_t kYawTargetCorrectionOff = 0U;
 constexpr uint8_t kYawTargetCorrectionZero = 1U;
-uint8_t g_sequence_step_index = 0U;
-uint8_t g_wuqiqu_sequence_step_index = 0U;
-uint8_t g_route_mechanism_sequence_step_index = 0U;
+uint8_t g_action_sequence_step_index = 0U;
+uint8_t g_wuqiqu_route_sequence_step_index = 0U;
+uint8_t g_route_action_sequence_step_index = 0U;
+uint8_t g_main_action_step_index = 0U;
 
-const uint8_t kSequence543[] = {
-    FTM_STATE_CLAW_OPEN,
-    FTM_STATE_LIFT_UP,
-    FTM_STATE_RS05_TO_90
+const uint8_t kSequenceOpenLiftRs05[] = {
+    FTM_ACTION_CLAW_OPEN,
+    FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK,
+    FTM_ACTION_RS05_TO_TARGET
 };
 
-const uint8_t kSequence139[] = {
-    FTM_STATE_M2006_TURN_BACK_180,
-    FTM_STATE_RS05_TO_0
+const uint8_t kSequenceBackturnRs05[] = {
+    FTM_ACTION_M2006_TURN_BACK_180,
+    FTM_ACTION_RS05_TO_RETURN
 };
 
-const uint8_t kSequence67[] = {
-    FTM_STATE_CLAW_CLOSE,
-    FTM_STATE_LIFT_UP_210
+const uint8_t kSequenceGrabClose[] = {
+    FTM_ACTION_LIFT_UP_GRAB,
+    FTM_ACTION_CLAW_CLOSE,
+    FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK
 };
 
-const uint8_t kSequence538[] = {
-    FTM_STATE_CLAW_OPEN,
-    FTM_STATE_RS05_TO_90,
-    FTM_STATE_M2006_TURN_180
+const uint8_t kSequenceOpenRs05Turn[] = {
+    FTM_ACTION_CLAW_OPEN,
+    FTM_ACTION_RS05_TO_TARGET,
+    FTM_ACTION_M2006_TURN_180
+};
+
+const uint8_t kMainSequencePickRoute[] = {
+    FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05,
+    FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT
+};
+
+const uint8_t kMainSequenceTurnReady[] = {
+    FTM_ACTION_SEQUENCE_OPEN_RS05_TURN
 };
 
 uint32_t g_wuqiqu_zero_start_tick = 0U;
@@ -134,21 +153,61 @@ void ResetMechanismStep(void)
     g_lift_last_target_height_mm = 0.0f;
 }
 
-void UpdateYawTargetCorrectionState(uint8_t state)
+void ResetActionRuntime(void)
 {
-    g_ftm_yaw_target_correction_state =
-        (state == FTM_STATE_DONE) ? kYawTargetCorrectionZero : kYawTargetCorrectionOff;
+    ResetMechanismStep();
+    g_action_sequence_step_index = 0U;
+    g_wuqiqu_route_sequence_step_index = 0U;
+    g_route_action_sequence_step_index = 0U;
 }
 
-void ServiceM2006AngleLock(uint8_t state)
+uint8_t IsMechanismAction(uint8_t action_state)
+{
+    return (((action_state >= FTM_ACTION_RS05_TO_TARGET) &&
+             (action_state <= FTM_ACTION_M2006_TURN_BACK_180)) ||
+            (action_state == FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05) ||
+            (action_state == FTM_ACTION_SEQUENCE_BACKTURN_RS05) ||
+            (action_state == FTM_ACTION_SEQUENCE_ROUTE_BACKTURN) ||
+            (action_state == FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT) ||
+            (action_state == FTM_ACTION_SEQUENCE_OPEN_RS05_TURN)) ? 1U : 0U;
+}
+
+uint8_t IsWuqiquRouteMainState(uint8_t main_state)
+{
+    return ((main_state == FTM_MAIN_WUQIQU_ROUTE) ||
+            (main_state == FTM_MAIN_AUTO_PICK_ROUTE)) ? 1U : 0U;
+}
+
+uint8_t IsWuqiquRouteAction(uint8_t action_state)
+{
+    return ((action_state == FTM_ACTION_WUQIQU_ROUTE_2) ||
+            (action_state == FTM_ACTION_WUQIQU_ROUTE_3) ||
+            (action_state == FTM_ACTION_WUQIQU_ROUTE_4) ||
+            (action_state == FTM_ACTION_SEQUENCE_ROUTE_BACKTURN) ||
+            (action_state == FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT)) ? 1U : 0U;
+}
+
+uint8_t IsWuqiquRouteActiveContext(void)
+{
+    return ((IsWuqiquRouteMainState(g_ftm_main_state) != 0U) ||
+            (IsWuqiquRouteAction(g_ftm_action_state) != 0U)) ? 1U : 0U;
+}
+
+void UpdateYawTargetCorrectionState(uint8_t main_state)
+{
+    g_ftm_yaw_target_correction_state =
+        (main_state == FTM_MAIN_DONE) ? kYawTargetCorrectionZero : kYawTargetCorrectionOff;
+}
+
+void ServiceM2006AngleLock(uint8_t action_state)
 {
     if (g_m2006_angle_lock_active == 0U)
     {
         return;
     }
 
-    if ((state == FTM_STATE_M2006_TURN_180) ||
-        (state == FTM_STATE_M2006_TURN_BACK_180))
+    if ((action_state == FTM_ACTION_M2006_TURN_180) ||
+        (action_state == FTM_ACTION_M2006_TURN_BACK_180))
     {
         return;
     }
@@ -156,83 +215,101 @@ void ServiceM2006AngleLock(uint8_t state)
     M2006Angle_ControlTick();
 }
 
-uint8_t IsMechanismState(uint8_t state)
+void PrepareActionState(uint8_t action_state)
 {
-    return (((state >= FTM_STATE_RS05_TO_90) && (state <= FTM_STATE_DONE)) ||
-            (state == FTM_STATE_M2006_TURN_BACK_180) ||
-            (state == FTM_STATE_SEQUENCE_5_4_3) ||
-            (state == FTM_STATE_SEQUENCE_13_9) ||
-            (state == FTM_STATE_SEQUENCE_16_17_18_15) ||
-            (state == FTM_STATE_SEQUENCE_1_6_7_19) ||
-            (state == FTM_STATE_SEQUENCE_5_3_8)) ? 1U : 0U;
-}
+    ResetActionRuntime();
 
-uint8_t IsWuqiquRouteState(uint8_t state)
-{
-    return ((state == FTM_STATE_WUQIQU_ROUTE) ||
-            (state == FTM_STATE_WUQIQU_ROUTE_2) ||
-            (state == FTM_STATE_WUQIQU_ROUTE_3) ||
-            (state == FTM_STATE_WUQIQU_ROUTE_4) ||
-            (state == FTM_STATE_SEQUENCE_16_17_18_15) ||
-            (state == FTM_STATE_SEQUENCE_1_6_7_19)) ? 1U : 0U;
-}
-
-void PrepareState(uint8_t state)
-{
-    UpdateYawTargetCorrectionState(state);
-
-    ResetMechanismStep();
-    g_sequence_step_index = 0U;
-    g_wuqiqu_sequence_step_index = 0U;
-    g_route_mechanism_sequence_step_index = 0U;
-
-    if (IsWuqiquRouteState(state) != 0U)
+    if (IsWuqiquRouteAction(action_state) != 0U)
     {
         WuqiquTask_Stop();
         g_wuqiqu_route_finished = 0U;
     }
 
-    if (state != FTM_STATE_WUQIQU_ZERO)
-    {
-        ResetWuqiquZero();
-    }
-
-    if (IsMechanismState(state) == 0U)
+    if ((IsMechanismAction(action_state) == 0U) &&
+        (g_ftm_main_state != FTM_MAIN_DONE))
     {
         FTMLiftAction_SetTakeover(0U);
     }
 
-    if (state == FTM_STATE_INIT)
-    {
-        M2006Angle_SetTarget(0.0f);
-        g_m2006_angle_lock_active = 1U;
-    }
-    else if ((IsWuqiquRouteState(state) != 0U) ||
-             (state == FTM_STATE_WUQIQU_ZERO))
-    {
-        g_m2006_angle_lock_active = 1U;
-    }
-    else if ((state != FTM_STATE_M2006_TURN_180) &&
-             (state != FTM_STATE_M2006_TURN_BACK_180))
+    if ((action_state != FTM_ACTION_M2006_TURN_180) &&
+        (action_state != FTM_ACTION_M2006_TURN_BACK_180))
     {
         g_m2006_angle_lock_active = 1U;
     }
 }
 
-void EnterState(uint8_t state)
+void PrepareMainState(uint8_t main_state)
 {
-    g_ftm_state = state;
-    g_active_state = state;
-    PrepareState(state);
+    UpdateYawTargetCorrectionState(main_state);
+    ResetActionRuntime();
+    g_main_action_step_index = 0U;
+
+    if (main_state != FTM_MAIN_IDLE)
+    {
+        g_ftm_action_state = FTM_ACTION_NONE;
+        g_active_action_state = FTM_ACTION_NONE;
+    }
+
+    if (IsWuqiquRouteMainState(main_state) != 0U)
+    {
+        WuqiquTask_Stop();
+        g_wuqiqu_route_finished = 0U;
+    }
+
+    if (main_state != FTM_MAIN_WUQIQU_ZERO)
+    {
+        ResetWuqiquZero();
+    }
+
+    if ((main_state != FTM_MAIN_DONE) &&
+        (IsMechanismAction(g_ftm_action_state) == 0U))
+    {
+        FTMLiftAction_SetTakeover(0U);
+    }
+
+    if (main_state == FTM_MAIN_INIT)
+    {
+        M2006Angle_SetTarget(0.0f);
+    }
+
+    if ((main_state == FTM_MAIN_INIT) ||
+        (main_state == FTM_MAIN_WUQIQU_ROUTE) ||
+        (main_state == FTM_MAIN_WUQIQU_ZERO) ||
+        (main_state == FTM_MAIN_AUTO_PICK_ROUTE) ||
+        (main_state == FTM_MAIN_AUTO_TURN_READY))
+    {
+        g_m2006_angle_lock_active = 1U;
+    }
+}
+
+void EnterMainState(uint8_t main_state)
+{
+    g_ftm_main_state = main_state;
+    g_active_main_state = main_state;
+    PrepareMainState(main_state);
+}
+
+void EnterActionState(uint8_t action_state)
+{
+    g_ftm_action_state = action_state;
+    g_active_action_state = action_state;
+    PrepareActionState(action_state);
 }
 
 void SyncExternalState(void)
 {
-    const uint8_t state = g_ftm_state;
-    if (state != g_active_state)
+    const uint8_t main_state = g_ftm_main_state;
+    if (main_state != g_active_main_state)
     {
-        g_active_state = state;
-        PrepareState(state);
+        g_active_main_state = main_state;
+        PrepareMainState(main_state);
+    }
+
+    const uint8_t action_state = g_ftm_action_state;
+    if (action_state != g_active_action_state)
+    {
+        g_active_action_state = action_state;
+        PrepareActionState(action_state);
     }
 }
 
@@ -375,35 +452,35 @@ bool RunM2006Turn(float relative_angle_degree)
     return false;
 }
 
-bool RunMechanismStep(uint8_t state)
+bool RunMechanismStep(uint8_t action_state)
 {
-    switch (state)
+    switch (action_state)
     {
-    case FTM_STATE_RS05_TO_90:
+    case FTM_ACTION_RS05_TO_TARGET:
         return RunRs05State(Angle);
 
-    case FTM_STATE_LIFT_UP:
+    case FTM_ACTION_LIFT_UP_GRAB:
         return RunLiftState(g_ftm_lift_up_target_mm);
 
-    case FTM_STATE_CLAW_OPEN:
+    case FTM_ACTION_CLAW_OPEN:
         return RunClawDelay(claw_open);
 
-    case FTM_STATE_CLAW_CLOSE:
+    case FTM_ACTION_CLAW_CLOSE:
         return RunClawDelay(claw_close);
 
-    case FTM_STATE_LIFT_UP_210:
-        return RunLiftState(g_ftm_lift_up_210_target_mm);
+    case FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK:
+        return RunLiftState(g_ftm_lift_weapon_head_takeout_dock_target_mm);
 
-    case FTM_STATE_M2006_TURN_180:
+    case FTM_ACTION_M2006_TURN_180:
         return RunM2006Turn(kM2006TurnAngleDeg);
 
-    case FTM_STATE_RS05_TO_0:
+    case FTM_ACTION_RS05_TO_RETURN:
         return RunRs05State(g_ftm_rs05_return_target_degree, 1U);
 
-    case FTM_STATE_LIFT_DOWN:
+    case FTM_ACTION_LIFT_DOWN:
         return RunLiftState(g_ftm_lift_down_target_mm);
 
-    case FTM_STATE_M2006_TURN_BACK_180:
+    case FTM_ACTION_M2006_TURN_BACK_180:
         return RunM2006Turn(-kM2006TurnAngleDeg);
 
     default:
@@ -413,20 +490,20 @@ bool RunMechanismStep(uint8_t state)
 
 bool RunMechanismSequence(const uint8_t *sequence, uint8_t sequence_count)
 {
-    if (g_sequence_step_index >= sequence_count)
+    if (g_action_sequence_step_index >= sequence_count)
     {
         return true;
     }
 
-    if (RunMechanismStep(sequence[g_sequence_step_index]) == false)
+    if (RunMechanismStep(sequence[g_action_sequence_step_index]) == false)
     {
         return false;
     }
 
-    g_sequence_step_index++;
+    g_action_sequence_step_index++;
     ResetMechanismStep();
 
-    return (g_sequence_step_index >= sequence_count);
+    return (g_action_sequence_step_index >= sequence_count);
 }
 
 void StartWuqiquRoutePoint(uint8_t waypoint_index)
@@ -452,7 +529,7 @@ void ServiceWuqiquRoutePoint(uint8_t waypoint_index)
         {
             WuqiquTask_Stop();
             g_wuqiqu_route_finished = 1U;
-            EnterState(FTM_STATE_INIT);
+            EnterMainState(FTM_MAIN_INIT);
             return;
         }
     }
@@ -461,7 +538,7 @@ void ServiceWuqiquRoutePoint(uint8_t waypoint_index)
     {
         WuqiquTask_Stop();
         g_wuqiqu_route_finished = 1U;
-        EnterState(FTM_STATE_INIT);
+        EnterMainState(FTM_MAIN_INIT);
     }
 }
 
@@ -488,40 +565,40 @@ uint8_t RunWuqiquRoutePoint(uint8_t waypoint_index)
 
 bool RunWuqiquAndMechanismSequence(void)
 {
-    if (g_wuqiqu_sequence_step_index < 3U)
+    if (g_wuqiqu_route_sequence_step_index < 3U)
     {
-        const uint8_t waypoint_index = static_cast<uint8_t>(g_wuqiqu_sequence_step_index + 1U);
+        const uint8_t waypoint_index = static_cast<uint8_t>(g_wuqiqu_route_sequence_step_index + 1U);
         if (RunWuqiquRoutePoint(waypoint_index) == 0U)
         {
             return false;
         }
 
-        ++g_wuqiqu_sequence_step_index;
+        ++g_wuqiqu_route_sequence_step_index;
         return false;
     }
 
-    return RunMechanismSequence(kSequence139, static_cast<uint8_t>(sizeof(kSequence139) / sizeof(kSequence139[0])));
+    return RunMechanismSequence(kSequenceBackturnRs05, static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
 }
 
 bool RunRouteAndMechanismSequence(void)
 {
-    switch (g_route_mechanism_sequence_step_index)
+    switch (g_route_action_sequence_step_index)
     {
     case 0:
         if (RunWuqiquRoutePoint(0U) == 0U)
         {
             return false;
         }
-        ++g_route_mechanism_sequence_step_index;
+        ++g_route_action_sequence_step_index;
         return false;
 
     case 1:
-        if (RunMechanismSequence(kSequence67, static_cast<uint8_t>(sizeof(kSequence67) / sizeof(kSequence67[0]))) == false)
+        if (RunMechanismSequence(kSequenceGrabClose, static_cast<uint8_t>(sizeof(kSequenceGrabClose) / sizeof(kSequenceGrabClose[0]))) == false)
         {
             return false;
         }
-        ++g_route_mechanism_sequence_step_index;
-        g_sequence_step_index = 0U;
+        ++g_route_action_sequence_step_index;
+        g_action_sequence_step_index = 0U;
         ResetMechanismStep();
         return false;
 
@@ -531,6 +608,80 @@ bool RunRouteAndMechanismSequence(void)
     default:
         return true;
     }
+}
+
+bool RunActionState(uint8_t action_state)
+{
+    switch (action_state)
+    {
+    case FTM_ACTION_NONE:
+        return true;
+
+    case FTM_ACTION_RS05_TO_TARGET:
+    case FTM_ACTION_LIFT_UP_GRAB:
+    case FTM_ACTION_CLAW_OPEN:
+    case FTM_ACTION_CLAW_CLOSE:
+    case FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK:
+    case FTM_ACTION_M2006_TURN_180:
+    case FTM_ACTION_RS05_TO_RETURN:
+    case FTM_ACTION_LIFT_DOWN:
+    case FTM_ACTION_M2006_TURN_BACK_180:
+        return RunMechanismStep(action_state);
+
+    case FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05:
+        return RunMechanismSequence(kSequenceOpenLiftRs05,
+                                    static_cast<uint8_t>(sizeof(kSequenceOpenLiftRs05) / sizeof(kSequenceOpenLiftRs05[0])));
+
+    case FTM_ACTION_SEQUENCE_BACKTURN_RS05:
+        return RunMechanismSequence(kSequenceBackturnRs05,
+                                    static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
+
+    case FTM_ACTION_WUQIQU_ROUTE_2:
+        return (RunWuqiquRoutePoint(1U) != 0U);
+
+    case FTM_ACTION_WUQIQU_ROUTE_3:
+        return (RunWuqiquRoutePoint(2U) != 0U);
+
+    case FTM_ACTION_WUQIQU_ROUTE_4:
+        return (RunWuqiquRoutePoint(3U) != 0U);
+
+    case FTM_ACTION_SEQUENCE_ROUTE_BACKTURN:
+        return RunWuqiquAndMechanismSequence();
+
+    case FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT:
+        return RunRouteAndMechanismSequence();
+
+    case FTM_ACTION_SEQUENCE_OPEN_RS05_TURN:
+        return RunMechanismSequence(kSequenceOpenRs05Turn,
+                                    static_cast<uint8_t>(sizeof(kSequenceOpenRs05Turn) / sizeof(kSequenceOpenRs05Turn[0])));
+
+    default:
+        return true;
+    }
+}
+
+bool RunMainActionSequence(const uint8_t *sequence, uint8_t sequence_count)
+{
+    if (g_main_action_step_index >= sequence_count)
+    {
+        return true;
+    }
+
+    const uint8_t expected_action = sequence[g_main_action_step_index];
+    if (g_ftm_action_state != expected_action)
+    {
+        EnterActionState(expected_action);
+    }
+
+    if (RunActionState(expected_action) == false)
+    {
+        return false;
+    }
+
+    ++g_main_action_step_index;
+    EnterActionState(FTM_ACTION_NONE);
+
+    return (g_main_action_step_index >= sequence_count);
 }
 
 void ServiceWuqiquZero(void)
@@ -553,7 +704,7 @@ void ServiceWuqiquZero(void)
 
     if (HasElapsed(g_wuqiqu_zero_start_tick, kWuqiquZeroSettleMs))
     {
-        EnterState(FTM_STATE_IDLE);
+        EnterMainState(FTM_MAIN_IDLE);
     }
 }
 
@@ -573,21 +724,32 @@ void InitModules(void)
 }
 }
 
-extern "C" volatile uint8_t g_ftm_state = FTM_STATE_INIT;
+extern "C" volatile uint8_t g_ftm_main_state = FTM_MAIN_INIT;
+extern "C" volatile uint8_t g_ftm_action_state = FTM_ACTION_NONE;
 extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
 extern "C" volatile float g_ftm_lift_up_target_mm = 75.0f;
-extern "C" volatile float g_ftm_lift_up_210_target_mm = 210.0f;
+extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 210.0f;
 extern "C" volatile float g_ftm_lift_down_target_mm = 70.0f;
 extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
 
 extern "C" uint8_t FTM_GetState(void)
 {
-    return g_ftm_state;
+    return g_ftm_main_state;
+}
+
+extern "C" uint8_t FTM_GetMainState(void)
+{
+    return g_ftm_main_state;
+}
+
+extern "C" uint8_t FTM_GetActionState(void)
+{
+    return g_ftm_action_state;
 }
 
 extern "C" uint8_t FTM_IsWuqiquDone(void)
 {
-    return (g_ftm_state == FTM_STATE_DONE) ? 1U : 0U;
+    return (g_ftm_main_state == FTM_MAIN_DONE) ? 1U : 0U;
 }
 
 extern "C" uint8_t FTM_IsYawTargetCorrectionEnabled(void)
@@ -605,94 +767,42 @@ extern "C" void ftm_task(void *argument)
     {
         SyncExternalState();
 
-        if ((IsWuqiquRouteState(g_ftm_state) == 0U) && (WuqiquTask_IsActive() != 0U))
+        if ((IsWuqiquRouteActiveContext() == 0U) && (WuqiquTask_IsActive() != 0U))
         {
             WuqiquTask_Stop();
         }
 
-        switch (g_ftm_state)
+        switch (g_ftm_main_state)
         {
-        // 状态 0：初始化通信、电机和动作封装；初始化完成后保持空闲，等待外部写状态。
-        case FTM_STATE_INIT:
+        // 主状态 0：初始化通信、电机和动作封装；完成后进入主状态 1。
+        case FTM_MAIN_INIT:
             InitModules();
-            EnterState(FTM_STATE_IDLE);
+            EnterMainState(FTM_MAIN_IDLE);
             break;
 
-        // 状态 1：执行武器区跑点；跑点完成后回到状态 0。
-        case FTM_STATE_WUQIQU_ROUTE:
+        // 主状态 1：空闲/手动调试；写 g_ftm_action_state 可单独执行小动作。
+        case FTM_MAIN_IDLE:
+            if (g_ftm_action_state != FTM_ACTION_NONE)
+            {
+                if (RunActionState(g_ftm_action_state))
+                {
+                    EnterActionState(FTM_ACTION_NONE);
+                }
+            }
+            break;
+
+        // 主状态 2：独立执行武器区第 1 个跑点；完成后回到主状态 0。
+        case FTM_MAIN_WUQIQU_ROUTE:
             ServiceWuqiquRoutePoint(0U);
             break;
 
-        // 状态 2：手动调试等待状态；不执行动作，等待 Keil Watch 写入下一状态。
-        case FTM_STATE_IDLE:
+        // 主状态 3：向视觉发送置零命令；稳定后回到主状态 1。
+        case FTM_MAIN_WUQIQU_ZERO:
+            ServiceWuqiquZero();
             break;
 
-        // 状态 3：RS05 转到 Keil Watch 中 Angle 指定的角度；到位或超时后回到状态 2。
-        case FTM_STATE_RS05_TO_90:
-            if (RunRs05State(Angle))
-            {
-                EnterState(FTM_STATE_IDLE);
-            }
-            break;
-
-        // 状态 4：FTM 接管抬升机构，上升到 75mm；完成后回到状态 2。
-        case FTM_STATE_LIFT_UP:
-            if (RunLiftState(g_ftm_lift_up_target_mm))
-            {
-                EnterState(FTM_STATE_IDLE);
-            }
-            break;
-
-        // 状态 5：夹爪张开并等待动作稳定；完成后回到状态 2。
-        case FTM_STATE_CLAW_OPEN:
-            if (RunClawDelay(claw_open))
-            {
-                EnterState(FTM_STATE_IDLE);
-            }
-            break;
-
-        // 状态 6：夹爪闭合并等待动作稳定；完成后回到状态 2。
-        case FTM_STATE_CLAW_CLOSE:
-            if (RunClawDelay(claw_close))
-            {
-                EnterState(FTM_STATE_IDLE);
-            }
-            break;
-
-        // 状态 7：FTM 接管抬升机构，上升到调试高度，默认 210mm；完成后回到状态 2。
-        case FTM_STATE_LIFT_UP_210:
-            if (RunLiftState(g_ftm_lift_up_210_target_mm))
-            {
-                EnterState(FTM_STATE_IDLE);
-            }
-            break;
-
-        // 状态 8：M2006 以当前角度为起点相对翻转 180 度；完成后回到状态 2。
-        case FTM_STATE_M2006_TURN_180:
-            if (RunM2006Turn(kM2006TurnAngleDeg))
-            {
-                EnterState(FTM_STATE_IDLE);
-            }
-            break;
-
-        // 状态 9：RS05 回到可调目标角度；到位或超时后回到状态 2。
-        case FTM_STATE_RS05_TO_0:
-            if (RunRs05State(g_ftm_rs05_return_target_degree, 1U))
-            {
-                EnterState(FTM_STATE_IDLE);
-            }
-            break;
-
-        // 状态 10：FTM 接管抬升机构，下降到 70mm；完成后回到状态 2。
-        case FTM_STATE_LIFT_DOWN:
-            if (RunLiftState(g_ftm_lift_down_target_mm))
-            {
-                EnterState(FTM_STATE_IDLE);
-            }
-            break;
-
-        // 状态 11：全流程完成保持；M2006 停止，RS05 周期补发 0 度保持命令。
-        case FTM_STATE_DONE:
+        // 主状态 4：全流程完成保持；RS05 周期补发回位角度，底盘可开启航向保持。
+        case FTM_MAIN_DONE:
             if (g_m2006_angle_lock_active == 0U)
             {
                 g_m2006_angle_lock_active = 1U;
@@ -700,77 +810,31 @@ extern "C" void ftm_task(void *argument)
             (void)RunRs05State(g_ftm_rs05_return_target_degree, 1U);
             break;
 
-        // 状态 12：向视觉发送置零命令，稳定后回到状态 2。
-        case FTM_STATE_WUQIQU_ZERO:
-            ServiceWuqiquZero();
-            break;
-
-        // 状态 13：M2006 以当前角度为起点反向翻转 180 度；完成后回到状态 2。
-        case FTM_STATE_M2006_TURN_BACK_180:
-            if (RunM2006Turn(-kM2006TurnAngleDeg))
+        // 主状态 5：武器区综合取物流程；完成后回到主状态 1。
+        case FTM_MAIN_AUTO_PICK_ROUTE:
+            if (RunMainActionSequence(kMainSequencePickRoute,
+                                      static_cast<uint8_t>(sizeof(kMainSequencePickRoute) / sizeof(kMainSequencePickRoute[0]))))
             {
-                EnterState(FTM_STATE_IDLE);
+                EnterMainState(FTM_MAIN_IDLE);
             }
             break;
 
-        // 状态 14：组合执行 5 -> 4 -> 3；完成后回到状态 2。
-        case FTM_STATE_SEQUENCE_5_4_3:
-            if (RunMechanismSequence(kSequence543, static_cast<uint8_t>(sizeof(kSequence543) / sizeof(kSequence543[0]))))
+        // 主状态 6：武器区姿态准备流程；完成后回到主状态 1。
+        case FTM_MAIN_AUTO_TURN_READY:
+            if (RunMainActionSequence(kMainSequenceTurnReady,
+                                      static_cast<uint8_t>(sizeof(kMainSequenceTurnReady) / sizeof(kMainSequenceTurnReady[0]))))
             {
-                EnterState(FTM_STATE_IDLE);
+                EnterMainState(FTM_MAIN_IDLE);
             }
             break;
 
-        // 状态 15：组合执行 13 -> 9；完成后回到状态 2。
-        case FTM_STATE_SEQUENCE_13_9:
-            if (RunMechanismSequence(kSequence139, static_cast<uint8_t>(sizeof(kSequence139) / sizeof(kSequence139[0]))))
-            {
-                EnterState(FTM_STATE_IDLE);
-            }
-            break;
-
-        case FTM_STATE_WUQIQU_ROUTE_2:
-            ServiceWuqiquRoutePoint(1U);
-            break;
-
-        case FTM_STATE_WUQIQU_ROUTE_3:
-            ServiceWuqiquRoutePoint(2U);
-            break;
-
-        case FTM_STATE_WUQIQU_ROUTE_4:
-            ServiceWuqiquRoutePoint(3U);
-            break;
-
-        case FTM_STATE_SEQUENCE_16_17_18_15:
-            if (RunWuqiquAndMechanismSequence())
-            {
-                EnterState(FTM_STATE_IDLE);
-            }
-            break;
-
-        // 状态 20：组合执行 1 -> 6 -> 7 -> 19；完成后回到状态 2。
-        case FTM_STATE_SEQUENCE_1_6_7_19:
-            if (RunRouteAndMechanismSequence())
-            {
-                EnterState(FTM_STATE_IDLE);
-            }
-            break;
-
-        // 状态 21：组合执行 5 -> 3 -> 8；完成后回到状态 2。
-        case FTM_STATE_SEQUENCE_5_3_8:
-            if (RunMechanismSequence(kSequence538, static_cast<uint8_t>(sizeof(kSequence538) / sizeof(kSequence538[0]))))
-            {
-                EnterState(FTM_STATE_IDLE);
-            }
-            break;
-
-        // 异常状态：回到初始化/空闲状态，等待重新触发。
+        // 异常主状态：回到初始化，等待重新触发。
         default:
-            EnterState(FTM_STATE_INIT);
+            EnterMainState(FTM_MAIN_INIT);
             break;
         }
 
-        ServiceM2006AngleLock(g_ftm_state);
+        ServiceM2006AngleLock(g_ftm_action_state);
         osDelay(1);
     }
 }
