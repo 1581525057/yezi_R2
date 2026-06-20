@@ -23,7 +23,8 @@ enum FTMMainState
     FTM_MAIN_WUQIQU_ZERO = 3,      // 向视觉发送置零命令。
     FTM_MAIN_DONE = 4,             // 全流程完成保持状态。
     FTM_MAIN_AUTO_PICK_ROUTE = 5,  // 武器区综合取物流程：开爪、先到取出武器头对接高度、对位、跑点、到抓取高度、闭爪、再到取出武器头对接高度、继续跑点并回位。
-    FTM_MAIN_AUTO_TURN_READY = 6   // 武器区姿态准备流程：张爪、对位并让 M2006 翻转到预备姿态。
+    FTM_MAIN_AUTO_TURN_READY = 6,  // 武器区姿态准备流程：张爪、对位并让 M2006 翻转到预备姿态。
+    FTM_MAIN_DOCKING = 7           // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
 };
 
 enum FTMActionState
@@ -66,6 +67,7 @@ constexpr uint32_t kM2006TimeoutMs = 3000U;
 
 constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;
 constexpr uint32_t kWuqiquZeroSettleMs = 200U;
+constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;
 
 struct TimedStep
 {
@@ -89,6 +91,9 @@ uint8_t g_action_sequence_step_index = 0U;
 uint8_t g_wuqiqu_route_sequence_step_index = 0U;
 uint8_t g_route_action_sequence_step_index = 0U;
 uint8_t g_main_action_step_index = 0U;
+uint32_t g_last_minipc_control_seq = 0U;
+int16_t g_last_lift_adjust_unused_mark = 0;
+uint8_t g_docking_lift_adjust_active = 0U;
 
 const uint8_t kSequenceOpenLiftRs05[] = {
     FTM_ACTION_CLAW_OPEN,
@@ -310,6 +315,52 @@ void SyncExternalState(void)
     {
         g_active_action_state = action_state;
         PrepareActionState(action_state);
+    }
+}
+
+void ServiceMiniPcFtmCommands(void)
+{
+    if ((g_ftm_main_state != FTM_MAIN_DOCKING) || (vision.exec != 0))
+    {
+        g_last_minipc_control_seq = g_ftm_minipc_control_seq;
+        g_last_lift_adjust_unused_mark = g_ftm_minipc_unused_mark;
+        g_docking_lift_adjust_active = 0U;
+        return;
+    }
+
+    if (g_last_minipc_control_seq == g_ftm_minipc_control_seq)
+    {
+        return;
+    }
+    g_last_minipc_control_seq = g_ftm_minipc_control_seq;
+
+    if (g_ftm_minipc_unused_mark != g_last_lift_adjust_unused_mark)
+    {
+        g_last_lift_adjust_unused_mark = g_ftm_minipc_unused_mark;
+
+        const uint8_t lift_adjust_cmd = g_ftm_minipc_lift_dock_adjust_cmd;
+        uint8_t lift_adjust_valid = 0U;
+        if (lift_adjust_cmd == 1U)
+        {
+            g_ftm_lift_weapon_head_takeout_dock_target_mm += kMiniPcLiftDockAdjustStepMm;
+            lift_adjust_valid = 1U;
+        }
+        else if (lift_adjust_cmd == 2U)
+        {
+            g_ftm_lift_weapon_head_takeout_dock_target_mm -= kMiniPcLiftDockAdjustStepMm;
+            lift_adjust_valid = 1U;
+        }
+
+        if (lift_adjust_valid != 0U)
+        {
+            g_docking_lift_adjust_active = 1U;
+            ResetMechanismStep();
+        }
+    }
+
+    if (g_ftm_minipc_claw_release_cmd == 1U)
+    {
+        claw_open();
     }
 }
 
@@ -731,6 +782,10 @@ extern "C" volatile float g_ftm_lift_up_target_mm = 75.0f;
 extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 210.0f;
 extern "C" volatile float g_ftm_lift_down_target_mm = 70.0f;
 extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
+extern "C" volatile uint8_t g_ftm_minipc_claw_release_cmd = 0U;
+extern "C" volatile uint8_t g_ftm_minipc_lift_dock_adjust_cmd = 0U;
+extern "C" volatile int16_t g_ftm_minipc_unused_mark = 0;
+extern "C" volatile uint32_t g_ftm_minipc_control_seq = 0U;
 
 extern "C" uint8_t FTM_GetState(void)
 {
@@ -766,6 +821,7 @@ extern "C" void ftm_task(void *argument)
     for (;;)
     {
         SyncExternalState();
+        ServiceMiniPcFtmCommands();
 
         if ((IsWuqiquRouteActiveContext() == 0U) && (WuqiquTask_IsActive() != 0U))
         {
@@ -825,6 +881,18 @@ extern "C" void ftm_task(void *argument)
                                       static_cast<uint8_t>(sizeof(kMainSequenceTurnReady) / sizeof(kMainSequenceTurnReady[0]))))
             {
                 EnterMainState(FTM_MAIN_IDLE);
+            }
+            break;
+
+        // 主状态 7：对接调试；只处理 MiniPC 的松手和对接高度微调，状态保持不自动退出。
+        case FTM_MAIN_DOCKING:
+            if (g_docking_lift_adjust_active != 0U)
+            {
+                if (RunLiftState(g_ftm_lift_weapon_head_takeout_dock_target_mm))
+                {
+                    g_docking_lift_adjust_active = 0U;
+                    ResetMechanismStep();
+                }
             }
             break;
 

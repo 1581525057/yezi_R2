@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include "bsp_dwt.h"
 #include "chassis_task.h"
+#include "FTMTask.h"
 #include "PID.h"
 #include "route_task.h"
 /* ========================== 全局变量 ========================== */
@@ -120,6 +121,26 @@ static float fast_atof(const uint8_t **pp, const uint8_t *end)
 
     *pp = p;
     return v * sign;
+}
+
+static int fast_atoi_field(const uint8_t **pp, const uint8_t *end)
+{
+    return static_cast<int>(fast_atof(pp, end));
+}
+
+static uint8_t clamp_uint8_field(int value)
+{
+    if (value <= 0)
+    {
+        return 0U;
+    }
+
+    if (value >= 255)
+    {
+        return 255U;
+    }
+
+    return static_cast<uint8_t>(value);
 }
 
 /* 向视觉指令环形队列尾部压入一条 B 指令 */
@@ -329,10 +350,14 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
         if (*p == ',')
         {
             ++p;
+            if (p >= e)
+                break;
+            if (*p == 'A')
+                break;
             /* 逗号后面可能是数字或者直接到 E */
             if (p >= e)
                 return 0;
-            int block = static_cast<int>(fast_atof(&p, e));
+            int block = fast_atoi_field(&p, e);
             if (block != 0)
                 vision_block_push(block);
         }
@@ -340,6 +365,43 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
         {
             return 0;
         }
+    }
+
+    if (p < e && *p == 'A')
+    {
+        int release_cmd = 0;
+        int lift_adjust_cmd = 0;
+        int unused_mark = 0;
+
+        ++p;
+        if (p >= e || *p != ',')
+            return 0;
+        ++p;
+        release_cmd = fast_atoi_field(&p, e);
+
+        if (p >= e || *p != ',')
+            return 0;
+        ++p;
+        lift_adjust_cmd = fast_atoi_field(&p, e);
+
+        if (p >= e || *p != ',')
+            return 0;
+        ++p;
+        unused_mark = fast_atoi_field(&p, e);
+
+        if (p < e)
+        {
+            if (*p != ',')
+                return 0;
+            ++p;
+            if (p != e)
+                return 0;
+        }
+
+        g_ftm_minipc_claw_release_cmd = clamp_uint8_field(release_cmd);
+        g_ftm_minipc_lift_dock_adjust_cmd = clamp_uint8_field(lift_adjust_cmd);
+        g_ftm_minipc_unused_mark = static_cast<int16_t>(unused_mark);
+        ++g_ftm_minipc_control_seq;
     }
 
     return 1;
