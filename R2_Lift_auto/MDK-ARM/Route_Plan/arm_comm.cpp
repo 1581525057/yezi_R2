@@ -17,7 +17,7 @@ uint8_t ARM_COMM_PICK_KFS_STABLE_COUNT = 10U;
 // 未上台阶取 KFS 前沿当前 X 轴预走距离，单位 cm。
 float PICK_KFS_BEFORE_STEP_ADVANCE_CM = 42.0f;
 // 已上台阶取 KFS 前按当前 yaw 方向预走距离，单位 cm。
-float PICK_KFS_AFTER_STEP_ADVANCE_CM = 29.0f;
+float PICK_KFS_AFTER_STEP_ADVANCE_CM = 35.0f;
 
 namespace
 {
@@ -159,8 +159,8 @@ uint8_t ArmComm::pickKFS(uint8_t action_code,
                          float current_y_m,
                          float yaw_deg,
                          uint8_t finish_at_center,
-                         float finish_center_x_m,
-                         float finish_center_y_m)
+                         float center_x_m,
+                         float center_y_m)
 {
     const float before_step_x_m = PICK_KFS_BEFORE_STEP_ADVANCE_CM * 0.01f;
     const float after_step_x_m = PICK_KFS_AFTER_STEP_ADVANCE_CM * 0.01f;
@@ -205,20 +205,20 @@ uint8_t ArmComm::pickKFS(uint8_t action_code,
         {
             const float yaw = normalize_yaw_deg(yaw_deg);
 
-            pick_kfs_target_x_m_ = current_x_m;
-            pick_kfs_target_y_m_ = current_y_m;
+            pick_kfs_target_x_m_ = center_x_m;
+            pick_kfs_target_y_m_ = center_y_m;
 
             if (yaw >= 45.0f && yaw < 135.0f)
             {
-                pick_kfs_target_y_m_ = current_y_m + after_step_x_m;
+                pick_kfs_target_y_m_ = center_y_m + after_step_x_m;
             }
             else if (yaw <= -45.0f && yaw > -135.0f)
             {
-                pick_kfs_target_y_m_ = current_y_m - after_step_x_m;
+                pick_kfs_target_y_m_ = center_y_m - after_step_x_m;
             }
             else
             {
-                pick_kfs_target_x_m_ = current_x_m + after_step_x_m;
+                pick_kfs_target_x_m_ = center_x_m + after_step_x_m;
             }
 
             pick_kfs_state_ = PICK_KFS_MOVE;
@@ -276,8 +276,8 @@ uint8_t ArmComm::pickKFS(uint8_t action_code,
     {
         if (finish_at_center != 0U)
         {
-            pick_kfs_target_x_m_ = finish_center_x_m;
-            pick_kfs_target_y_m_ = finish_center_y_m;
+            pick_kfs_target_x_m_ = center_x_m;
+            pick_kfs_target_y_m_ = center_y_m;
             pick_kfs_vx_target_ = 0.0f;
             pick_kfs_vy_target_ = 0.0f;
             pick_kfs_stable_count_ = 0U;

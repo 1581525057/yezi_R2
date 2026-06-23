@@ -7,9 +7,11 @@ enum Route_state
 {
     PHASE_IDLE = 0,
     PHASE_VISION,
-    FIRST_RELOCATION,         // 1 号方块重定位
-    SECOND_RELOCATION,        // 2 号方块重定位
-    THIRD_RELOCATION,         // 3 号方块重定位
+    PHASE_FIRST_PATH,         // 1 区跑大概的点
+    FIRST_RELOCATION,         // 1区重定位 第一次重定位
+    SECOND_RELOCATION,        // 第二次重定位
+    THIRD_RELOCATION,         // 第三次重定位
+    PHASE_FIND_KFS,           // 寻找KFS的位置
     PHASE_STEP_UP,            // 上台阶
     PHASE_STEP_DOWN,          // 下台阶
     PHASE_PICK_KFS,           // 取 KFS
@@ -27,23 +29,35 @@ private:
     uint8_t flag_relocation;
     uint8_t relocation_number;
     uint16_t yaw_stable_count;
-    uint8_t yaw_target_valid_;       // 当前转向阶段是否已经锁存相对 yaw 目标。
-    int8_t last_turn_90_direction_;  // 根据雷达 yaw 分类的当前朝向：0 为 0 度，1 为 +90 度，-1 为 -90 度。
-    uint8_t last_turn_180_;          // 根据雷达 yaw 分类的当前朝向是否为 180 度。
-    float last_step_center_x_;       // 接线层记录的最近一次台阶中心 X 坐标。
-    float last_step_center_y_;       // 接线层记录的最近一次台阶中心 Y 坐标。
-    uint8_t last_step_center_valid_; // 最近一次台阶中心是否有效。
-    uint8_t already_step_up_;        // 是否已经完成过一次上台阶，用于取 KFS 前是否预走 Xcm。
-    float pick_kfs_center_x_;        // 取 KFS 所在方块中心 X 坐标。
-    float pick_kfs_center_y_;        // 取 KFS 所在方块中心 Y 坐标。
-    uint8_t pick_kfs_center_valid_;  // 取 KFS 方块中心是否有效。
-    float turn_final_yaw_;           // 当前转弯最终目标 yaw。
-    uint8_t kfs_slow_turn_pending_;  // 取 KFS 后接转弯时，下一次转弯启用慢速目标角。
-    uint8_t kfs_slow_turn_active_;   // 慢速目标角正在推进。
-    float kfs_slow_turn_start_yaw_;  // 慢速转弯起始 yaw。
+    uint8_t yaw_target_valid_;          // 当前转向阶段是否已经锁存相对 yaw 目标。
+    int8_t last_turn_90_direction_;     // 根据雷达 yaw 分类的当前朝向：0 为 0 度，1 为 +90 度，-1 为 -90 度。
+    uint8_t last_turn_180_;             // 根据雷达 yaw 分类的当前朝向是否为 180 度。
+    float last_step_center_x_;          // 接线层记录的最近一次台阶中心 X 坐标。
+    float last_step_center_y_;          // 接线层记录的最近一次台阶中心 Y 坐标。
+    uint8_t last_step_center_valid_;    // 最近一次台阶中心是否有效。
+    uint8_t already_step_up_;           // 是否已经完成过一次上台阶，用于取 KFS 前是否预走 Xcm。
+    float pick_kfs_center_x_;           // 取 KFS 所在方块中心 X 坐标。
+    float pick_kfs_center_y_;           // 取 KFS 所在方块中心 Y 坐标。
+    uint8_t pick_kfs_center_valid_;     // 取 KFS 方块中心是否有效。
+    float turn_final_yaw_;              // 当前转弯最终目标 yaw。
+    uint8_t kfs_slow_turn_pending_;     // 取 KFS 后接转弯时，下一次转弯启用慢速目标角。
+    uint8_t kfs_slow_turn_active_;      // 慢速目标角正在推进。
+    float kfs_slow_turn_start_yaw_;     // 慢速转弯起始 yaw。
     uint32_t kfs_slow_turn_start_tick_; // 慢速转弯起始时刻，单位 ms。
+    uint8_t path_active_;               // 1 区跑点是否正在接管底盘速度。
+    uint8_t path_loaded_;               // 当前阶段路径是否已经加载到跟随器。
+    float path_vx_target_;              // 1 区跑点底盘 X 速度目标，单位 m/s。
+    float path_vy_target_;              // 1 区跑点底盘 Y 速度目标，单位 m/s。
+    float path_wz_target_;              // 1 区跑点底盘旋转速度目标，单位 rad/s。
+    uint16_t entrence_KFS;              // KFS的入口对应的KFS位置
     void start_turn_target(float yaw_delta_deg);
     void update_slow_turn_target(void);
+    void clear_path_output(void);
+    uint8_t load_follow_plan(void);
+    uint8_t one_two_start();
+    uint8_t find_KFS1(void);
+    uint8_t find_KFS2(void);
+    uint8_t find_KFS3(void);
 
 public:
     Route_state state;
@@ -56,6 +70,12 @@ public:
     void meiling_route();
     void vision_choice();
     void update_number_KFS_by_cmd(); // 根据机械臂回传状态同步 KFS 数量。
+    uint8_t getPathChassisTarget(float manual_vx,
+                                 float manual_vy,
+                                 float manual_wz,
+                                 float *target_vx,
+                                 float *target_vy,
+                                 float *target_wz) const;
 
     uint8_t flag_start;
     uint8_t flag_vision; // 等待视觉数据。

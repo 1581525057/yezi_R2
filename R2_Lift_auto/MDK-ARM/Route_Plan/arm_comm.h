@@ -63,7 +63,7 @@ public:
     const RxData &getRxData(void) const;
 
     // 周期调用取 KFS：未上台阶按 0 度沿当前 X 轴走 PICK_KFS_BEFORE_STEP_ADVANCE_CM；
-    // 已上台阶按当前 yaw 方向走 PICK_KFS_AFTER_STEP_ADVANCE_CM。
+    // 已上台阶以当前方块中心为基准，按当前 yaw 方向走 PICK_KFS_AFTER_STEP_ADVANCE_CM。
     uint8_t pickKFS(uint8_t action_code,
                     uint8_t num_KFS,
                     uint8_t already_step_up,
@@ -71,8 +71,8 @@ public:
                     float current_y_m,
                     float yaw_deg,
                     uint8_t finish_at_center = 0U,
-                    float finish_center_x_m = 0.0f,
-                    float finish_center_y_m = 0.0f);
+                    float center_x_m = 0.0f,
+                    float center_y_m = 0.0f);
 
     // 取 KFS 流程接管底盘时返回内部目标速度，否则透传 manual_target。
     float getChassisVxTarget(float manual_target) const;
@@ -139,4 +139,3 @@ private:
 extern ArmComm arm_comm;
 
 #endif
-

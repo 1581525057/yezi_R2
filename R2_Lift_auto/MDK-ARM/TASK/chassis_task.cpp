@@ -27,13 +27,29 @@ typedef enum
     CHASSIS_AUTO_NONE = 0,
     CHASSIS_AUTO_MEILING,
     CHASSIS_AUTO_WUQIQU,
+    CHASSIS_AUTO_ROUTE_PATH,
     CHASSIS_AUTO_CONFLICT
 } ChassisAutoSource;
 
 // 底盘自动控制只允许一个来源生效，避免多个任务同时改写目标速度。
-static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, uint8_t meiling_area_active)
+static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, uint8_t meiling_area_active, uint8_t route_path_active)
 {
-    if (wuqiqu_active != 0U && meiling_area_active != 0U)
+    uint8_t active_count = 0U;
+
+    if (wuqiqu_active != 0U)
+    {
+        active_count++;
+    }
+    if (meiling_area_active != 0U)
+    {
+        active_count++;
+    }
+    if (route_path_active != 0U)
+    {
+        active_count++;
+    }
+
+    if (active_count > 1U)
     {
         return CHASSIS_AUTO_CONFLICT;
     }
@@ -44,6 +60,10 @@ static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, 
     if (meiling_area_active != 0U)
     {
         return CHASSIS_AUTO_MEILING;
+    }
+    if (route_path_active != 0U)
+    {
+        return CHASSIS_AUTO_ROUTE_PATH;
     }
     return CHASSIS_AUTO_NONE;
 }
@@ -65,7 +85,7 @@ static float target_vy_last = 0.0f;
 static float target_vz_last = 0.0f;
 float rpm, current;
 float yaw_target;
-
+float x_M;
 extern "C" void chassis_task(void *argument)
 {
     // 初始化底盘任务依赖的通信、计时和控制器模块。
@@ -111,9 +131,17 @@ extern "C" void chassis_task(void *argument)
         float target_vx = remove_dji.chassis_.Vx;
         float target_vy = remove_dji.chassis_.Vy;
         float target_vz = VZ_OUT;
+        float route_path_vx = target_vx;
+        float route_path_vy = target_vy;
+        float route_path_vz = target_vz;
+        uint8_t route_path_active = route_t.getPathChassisTarget(target_vx,
+                                                                 target_vy,
+                                                                 target_vz,
+                                                                 &route_path_vx,
+                                                                 &route_path_vy,
+                                                                 &route_path_vz);
 
-        const ChassisAutoSource auto_source = ChassisAuto_SelectSource(WuqiquTask_IsActive(), RouteTask_IsMeilingAreaActive());
-
+        const ChassisAutoSource auto_source = ChassisAuto_SelectSource(WuqiquTask_IsActive(), RouteTask_IsMeilingAreaActive(), route_path_active);
         switch (auto_source)
         {
         case CHASSIS_AUTO_WUQIQU:
@@ -127,6 +155,12 @@ extern "C" void chassis_task(void *argument)
             target_vx = meiling.getChassisVxTarget(target_vx);
             target_vy = meiling.getChassisVyTarget(target_vy);
             target_vz = meiling.getChassisVzTarget(target_vz);
+            break;
+        case CHASSIS_AUTO_ROUTE_PATH:
+            // 1 区跑点接管底盘速度。
+            target_vx = route_path_vx;
+            target_vy = route_path_vy;
+            target_vz = route_path_vz;
             break;
         case CHASSIS_AUTO_CONFLICT:
             // 两个自动任务同时生效时停车，避免底盘控制权冲突。
@@ -146,8 +180,8 @@ extern "C" void chassis_task(void *argument)
         target_vy = arm_comm.getChassisVyTarget(target_vy);
         target_vx = arm_comm.getChassisVxTarget(target_vx);
 
-        // 当前自转输出仍使用航向 PID 结果，target_vz 只保留自动任务仲裁值。
-        omni_chassis.setRemote(target_vx, target_vy, remove_dji.chassis_.Vz);
+        // 使用仲裁后的自转速度，允许自动任务接管 yaw 速度。
+        omni_chassis.setRemote(target_vx, target_vy, target_vz);
 
         // 速度环：根据当前速度和目标速度的误差计算 x/y 方向驱动力。
         float Fx = pid_F_chassis_linear_x.PID_Calculate(omni_chassis.now.Vx, omni_chassis.target.Vx);
@@ -193,5 +227,5 @@ static void chassis_pid_init(void)
     pid_F_chassis_linear_y.Init(OUTPUT_CHASSIS_LINEAR, INTERLIMIT_CHASSIS_LINEAR, DEBAND_CHASSIS_LINEAR, KP_CHASSIS_LINEAR, KI_CHASSIS_LINEAR, KD_CHASSIS_LINEAR, 0, 0x00);
 
     // 航向保持 PID。
-    pid_yaw.Init(2.0, 0.8, 0.1, 0.12, 0.1, 0, 0, 0x00);
+    pid_yaw.Init(2.5, 0.8, 1.0, 0.10, 0.1, 0, 0, 0x00);
 }

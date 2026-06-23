@@ -21,6 +21,11 @@ extern "C" HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *huart, const 
     return HAL_OK;
 }
 
+extern "C" HAL_StatusTypeDef HAL_UART_Transmit_DMA(UART_HandleTypeDef *huart, const uint8_t *pData, uint16_t Size)
+{
+    return HAL_UART_Transmit(huart, pData, Size, 0U);
+}
+
 static int frameEquals(const uint8_t *actual, const uint8_t *expected)
 {
     return memcmp(actual, expected, ArmComm::FRAME_LENGTH) == 0;
@@ -133,102 +138,115 @@ static int expectInvalidReceiveFrameRejected(void)
 static int expectPickKFSBeforeStepSendsDirectly(void)
 {
     ArmComm comm;
+    const float old_before_advance_cm = PICK_KFS_BEFORE_STEP_ADVANCE_CM;
+
+    PICK_KFS_BEFORE_STEP_ADVANCE_CM = 0.0f;
 
     last_uart      = 0;
     last_uart_data = 0;
     last_uart_size = 0;
 
     if (comm.pickKFS(ArmComm::ACTION_PICK_HIGH_200, 0x02U, 0U, 1.0f, 2.0f, 0.0f) != 0U) {
+        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
         return 1;
     }
     if (last_uart != &huart7) {
+        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
         return 2;
     }
     if (comm.getChassisVxTarget(1.25f) != 0.0f) {
+        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
         return 3;
     }
     if (comm.getChassisVyTarget(-1.25f) != 0.0f) {
+        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
         return 4;
     }
 
     comm.rx_data_.event = 1U;
     if (comm.pickKFS(ArmComm::ACTION_PICK_HIGH_200, 0x02U, 0U, 1.0f, 2.0f, 0.0f) == 0U) {
+        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
         return 5;
     }
     if (comm.getChassisVxTarget(1.25f) != 1.25f) {
+        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
         return 6;
     }
     if (comm.getChassisVyTarget(-1.25f) != -1.25f) {
+        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
         return 7;
     }
 
+    PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
     return 0;
 }
 
-static int expectPickKFSAfterStepMovesBeforeSending(void)
+static int expectPickKFSAfterStepUsesCenterCoordinate(void)
 {
-    ArmComm comm;
     const uint8_t old_stable_count = ARM_COMM_PICK_KFS_STABLE_COUNT;
-    ARM_COMM_PICK_KFS_STABLE_COUNT = 1U;
     const float old_before_advance_cm = PICK_KFS_BEFORE_STEP_ADVANCE_CM;
-    const float old_after_advance_cm  = PICK_KFS_AFTER_STEP_ADVANCE_CM;
+    const float old_after_advance_cm = PICK_KFS_AFTER_STEP_ADVANCE_CM;
+    const float center_x_m = 10.0f;
+    const float center_y_m = 20.0f;
+    const struct
+    {
+        float yaw_deg;
+        float target_x_m;
+        float target_y_m;
+    } cases[] = {
+        {0.0f, 10.1f, 20.0f},
+        {90.0f, 10.0f, 20.1f},
+        {-90.0f, 10.0f, 19.9f},
+    };
+    int result = 0;
+
+    ARM_COMM_PICK_KFS_STABLE_COUNT = 1U;
     PICK_KFS_BEFORE_STEP_ADVANCE_CM = 10.0f;
-    PICK_KFS_AFTER_STEP_ADVANCE_CM  = 10.0f;
+    PICK_KFS_AFTER_STEP_ADVANCE_CM = 10.0f;
 
-    last_uart      = 0;
-    last_uart_data = 0;
-    last_uart_size = 0;
+    for (uint8_t index = 0U; index < (uint8_t)(sizeof(cases) / sizeof(cases[0])); ++index)
+    {
+        ArmComm comm;
 
-    if (comm.pickKFS(ArmComm::ACTION_PICK_HIGH_400, 0x01U, 1U, 1.0f, 2.0f, 0.0f) != 0U) {
-        ARM_COMM_PICK_KFS_STABLE_COUNT = old_stable_count;
-        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
-        PICK_KFS_AFTER_STEP_ADVANCE_CM  = old_after_advance_cm;
-        return 1;
-    }
-    if (last_uart != 0) {
-        ARM_COMM_PICK_KFS_STABLE_COUNT = old_stable_count;
-        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
-        PICK_KFS_AFTER_STEP_ADVANCE_CM  = old_after_advance_cm;
-        return 2;
-    }
-    if (comm.getChassisVxTarget(0.0f) <= 0.0f) {
-        ARM_COMM_PICK_KFS_STABLE_COUNT = old_stable_count;
-        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
-        PICK_KFS_AFTER_STEP_ADVANCE_CM  = old_after_advance_cm;
-        return 3;
-    }
-    if (comm.getChassisVyTarget(0.0f) != 0.0f) {
-        ARM_COMM_PICK_KFS_STABLE_COUNT = old_stable_count;
-        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
-        PICK_KFS_AFTER_STEP_ADVANCE_CM  = old_after_advance_cm;
-        return 4;
-    }
+        if (comm.pickKFS(ArmComm::ACTION_PICK_HIGH_400,
+                         0x01U,
+                         1U,
+                         1.0f,
+                         2.0f,
+                         cases[index].yaw_deg,
+                         0U,
+                         center_x_m,
+                         center_y_m) != 0U)
+        {
+            result = (int)(index * 10U) + 1;
+            break;
+        }
 
-    if (comm.pickKFS(ArmComm::ACTION_PICK_HIGH_400, 0x01U, 1U, 1.1f, 2.0f, 0.0f) != 0U) {
-        ARM_COMM_PICK_KFS_STABLE_COUNT = old_stable_count;
-        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
-        PICK_KFS_AFTER_STEP_ADVANCE_CM  = old_after_advance_cm;
-        return 5;
-    }
-    if (last_uart != &huart7) {
-        ARM_COMM_PICK_KFS_STABLE_COUNT = old_stable_count;
-        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
-        PICK_KFS_AFTER_STEP_ADVANCE_CM  = old_after_advance_cm;
-        return 6;
-    }
+        if (comm.pickKFS(ArmComm::ACTION_PICK_HIGH_400,
+                         0x01U,
+                         1U,
+                         cases[index].target_x_m,
+                         cases[index].target_y_m,
+                         cases[index].yaw_deg,
+                         0U,
+                         center_x_m,
+                         center_y_m) != 0U)
+        {
+            result = (int)(index * 10U) + 2;
+            break;
+        }
 
-    comm.rx_data_.event = 1U;
-    if (comm.pickKFS(ArmComm::ACTION_PICK_HIGH_400, 0x01U, 1U, 1.1f, 2.0f, 0.0f) == 0U) {
-        ARM_COMM_PICK_KFS_STABLE_COUNT = old_stable_count;
-        PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
-        PICK_KFS_AFTER_STEP_ADVANCE_CM  = old_after_advance_cm;
-        return 7;
+        if (comm.getChassisVxTarget(1.0f) != 0.0f || comm.getChassisVyTarget(1.0f) != 0.0f)
+        {
+            result = (int)(index * 10U) + 3;
+            break;
+        }
     }
 
     ARM_COMM_PICK_KFS_STABLE_COUNT = old_stable_count;
     PICK_KFS_BEFORE_STEP_ADVANCE_CM = old_before_advance_cm;
-    PICK_KFS_AFTER_STEP_ADVANCE_CM  = old_after_advance_cm;
-    return 0;
+    PICK_KFS_AFTER_STEP_ADVANCE_CM = old_after_advance_cm;
+    return result;
 }
 
 int main(void)
@@ -289,7 +307,7 @@ int main(void)
     if (expectPickKFSBeforeStepSendsDirectly() != 0) {
         return 15;
     }
-    if (expectPickKFSAfterStepMovesBeforeSending() != 0) {
+    if (expectPickKFSAfterStepUsesCenterCoordinate() != 0) {
         return 16;
     }
 

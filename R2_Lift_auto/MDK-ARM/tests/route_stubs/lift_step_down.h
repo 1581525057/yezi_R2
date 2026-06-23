@@ -10,6 +10,8 @@ public:
     float prepare_base_y;
     float finish_x;
     float finish_y;
+    int block_num;
+    uint16_t height_mode_mm;
     uint8_t turn_left_90;
     uint8_t turn_right_90;
     uint8_t turn_180;
@@ -19,13 +21,16 @@ public:
           prepare_base_y(0.0f),
           finish_x(0.0f),
           finish_y(0.0f),
+          block_num(0),
+          height_mode_mm(0U),
           turn_left_90(0U),
           turn_right_90(0U),
           turn_180(0U)
     {
     }
 
-    void setStepDownBlockNum(int) {}
+    void setStepDownBlockNum(int num) { block_num = num; }
+    void setStepDownHeightMode(uint16_t height_mm) { height_mode_mm = height_mm; }
 
     void setStepDownRadarTarget(float x_ref_prepare_base,
                                 float y_ref_prepare_base,

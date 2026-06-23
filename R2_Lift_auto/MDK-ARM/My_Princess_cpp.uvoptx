@@ -153,40 +153,7 @@
           <Name>-U37FF71064E573436FE5C1743 -O2254 -SF4000 -C0 -A0 -I0 -HNlocalhost -HP7184 -P1 -N00("ARM CoreSight SW-DP") -D00(6BA02477) -L00(0) -TO131090 -TC10000000 -TT10000000 -TP21 -TDS8004 -TDT0 -TDC1F -TIEFFFFFFFF -TIP8 -FO15 -FD20000000 -FC1000 -FN1 -FF0STM32H72x-73x_1024.FLM -FS08000000 -FL0100000 -FP0($$Device:STM32H723VGTx$CMSIS\Flash\STM32H72x-73x_1024.FLM) -WA0 -WE0 -WVCE4 -WS2710 -WM0 -WP2 -WK0-R0</Name>
         </SetRegEntry>
       </TargetDriverDllRegistry>
-      <Breakpoint>
-        <Bp>
-          <Number>0</Number>
-          <Type>0</Type>
-          <LineNumber>324</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>134348386</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
-          <Filename>.\Bsp\bsp_usart.cpp</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression>\\My_Princess_cpp\Bsp/bsp_usart.cpp\324</Expression>
-        </Bp>
-        <Bp>
-          <Number>1</Number>
-          <Type>0</Type>
-          <LineNumber>325</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>0</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>0</BreakIfRCount>
-          <Filename>.\Bsp\bsp_usart.cpp</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression></Expression>
-        </Bp>
-      </Breakpoint>
+      <Breakpoint/>
       <WatchWindow1>
         <Ww>
           <count>0</count>
@@ -268,50 +235,35 @@
         <Ww>
           <count>2</count>
           <WinNumber>2</WinNumber>
-          <ItemText>ele_target,0x0A</ItemText>
+          <ItemText>VescMotors,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>3</count>
           <WinNumber>2</WinNumber>
-          <ItemText>ele_target</ItemText>
+          <ItemText>hfdcan2,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>4</count>
           <WinNumber>2</WinNumber>
-          <ItemText>VescMotors,0x0A</ItemText>
+          <ItemText>DJI_Motor_Class::Chassis_Motor,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>5</count>
           <WinNumber>2</WinNumber>
-          <ItemText>hfdcan2,0x0A</ItemText>
+          <ItemText>vision</ItemText>
         </Ww>
         <Ww>
           <count>6</count>
           <WinNumber>2</WinNumber>
-          <ItemText>DJI_Motor_Class::Chassis_Motor,0x0A</ItemText>
+          <ItemText>dt35</ItemText>
         </Ww>
         <Ww>
           <count>7</count>
           <WinNumber>2</WinNumber>
-          <ItemText>vision</ItemText>
-        </Ww>
-        <Ww>
-          <count>8</count>
-          <WinNumber>2</WinNumber>
-          <ItemText>dt35</ItemText>
-        </Ww>
-        <Ww>
-          <count>9</count>
-          <WinNumber>2</WinNumber>
           <ItemText>lift_auto,0x0A</ItemText>
         </Ww>
         <Ww>
-          <count>10</count>
-          <WinNumber>2</WinNumber>
-          <ItemText>step_up_radar_climb_target_</ItemText>
-        </Ww>
-        <Ww>
-          <count>11</count>
+          <count>8</count>
           <WinNumber>2</WinNumber>
           <ItemText>arm_comm,0x0A</ItemText>
         </Ww>
@@ -1214,7 +1166,7 @@
 
   <Group>
     <GroupName>TASK</GroupName>
-    <tvExp>1</tvExp>
+    <tvExp>0</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -1294,7 +1246,7 @@
 
   <Group>
     <GroupName>DEVICE</GroupName>
-    <tvExp>1</tvExp>
+    <tvExp>0</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -1579,6 +1531,18 @@
       <bDave2>0</bDave2>
       <PathWithFileName>.\Route_Plan\arm_comm.h</PathWithFileName>
       <FilenameWithoutPath>arm_comm.h</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>14</GroupNumber>
+      <FileNumber>93</FileNumber>
+      <FileType>8</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>.\Route_Plan\path.cpp</PathWithFileName>
+      <FilenameWithoutPath>path.cpp</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

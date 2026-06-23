@@ -4,14 +4,17 @@
 #include "main.h"
 #include <stdint.h>
 
-/* 视觉数据结构体：存储上位机发送的视觉坐标偏差和角度信息 */
+/* 视觉数据结构体：存储上位机发送的视觉坐标、角度和标定位 */
 typedef struct
 {
-    int exec;      /* 执行程 */
-    float x_diff;  /* X 轴偏差 */
-    float y_diff;  /* Y 轴偏差 */
-    float angle_x; /* X 轴角度 */
-    int B;         /* 整数标志位（保留兼容） */
+    int exec;               /* 是否前往第二区标志 */
+    float x_diff;           /* X 坐标 */
+    float y_diff;           /* Y 坐标 */
+    float angle_x;          /* 航向角 */
+    int B;                  /* 当前梅花林动作，保留现有路线接口 */
+    int release_flag;       /* 是否松手标定位 */
+    int claw_vertical_flag; /* 夹爪上下标定位 */
+    int unused_flag;        /* 无用标定位 */
 } VisionData_t;
 
 typedef struct
@@ -31,8 +34,8 @@ extern VisionData_t vision;
 extern Block_Vision block_vision[10];
 extern Block_Vision block_vision_middle[13];
 /*
- * 解析视觉帧，提取坐标偏差和角度，并把不定长 B 指令压入队列。
- * 帧格式：S,<x_diff>,<y_diff>,<yaw>E 或 S,<x_diff>,<y_diff>,<yaw>,<B>[,<B>...]E
+ * 解析视觉帧，提取坐标、角度和标定位，并把不定长动作及格子编号压入队列。
+ * 帧格式：S,<exec>,<x>,<y>,<yaw>,C,<action...>,B,<block...>,A,<release>,<claw_vertical>,<unused>,E
  * 返回 1 成功，0 失败。
  */
 int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out);
@@ -51,4 +54,8 @@ uint8_t vision_block_has_pending(void);
 void vision_block_clear(void);
 
 void send_position_to_pc(int16_t behaivor, uint8_t p_diff, float X_diff, float Y_diff, float yaw);
+
 #endif
+
+
+

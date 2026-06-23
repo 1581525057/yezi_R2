@@ -5,6 +5,7 @@
 
 #define SENSOR_FRONT 0x01U
 #define SENSOR_LEFT  0x02U
+#define SENSOR_RIGHT 0x04U
 
 typedef struct {
     uint8_t preset_id;
@@ -25,8 +26,22 @@ public:
         TIMEOUT = 2
     };
 
-    void start(const MeilingTarget_t &) {}
+    MeilingLocator()
+        : start_count(0U),
+          last_target({})
+    {
+    }
+
+    void start(const MeilingTarget_t &target)
+    {
+        start_count++;
+        last_target = target;
+    }
+
     uint8_t update(void) { return 0U; }
+
+    uint8_t start_count;
+    MeilingTarget_t last_target;
 };
 
 extern MeilingLocator meiling;

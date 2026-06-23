@@ -61,8 +61,6 @@ LiftHeight_t lift_calulate = {0};
 // 调试数据缓存
 debug_lift lift_debug = {0};
 
-float left_sensor, right_sensor;
-
 extern float yaw_target;
 extern "C" void lift_task(void *argument)
 {
@@ -78,9 +76,6 @@ extern "C" void lift_task(void *argument)
 
     for (;;)
     {
-
-        left_sensor = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_15);
-        right_sensor = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3);
 
         // 读取当前机械位置并换算为左右两侧高度
         lift_cauclate_height();
@@ -112,13 +107,13 @@ extern "C" void lift_task(void *argument)
             else if (now_sw == 1U)
             {
                 // 1 档对应目标高度
-                lift_debug.height_target = 100.0f;
+                lift_debug.height_target = 215.0f;
                 lift_debug.flag = 1.0f;
             }
             else if (now_sw == 2U)
             {
                 // 2 档对应目标高度
-                lift_debug.height_target = -230.0f;
+                lift_debug.height_target = -260.0f;
                 lift_debug.flag = 1.0f;
             }
 
@@ -129,7 +124,7 @@ extern "C" void lift_task(void *argument)
         // 当标志位置位时，重新生成一条 0.7s 的线性轨迹
         if (lift_debug.flag == 1.0f)
         {
-            lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.6f);
+            lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.5f);
             lift_debug.flag = 0.0f;
         }
 
@@ -231,13 +226,13 @@ static void lift_cauclate_height(void)
 static float lift_position_input(float height)
 {
     // 对目标高度做限幅，避免超出机构行程
-    if (height > 220.0f)
+    if (height > 240.0f)
     {
-        height = 220.0f;
+        height = 240.0f;
     }
-    else if (height < -250.0f)
+    else if (height < -260.0f)
     {
-        height = -250.0f;
+        height = -260.0f;
     }
 
     // 将线高度换算为卷轮需要转过的弧度

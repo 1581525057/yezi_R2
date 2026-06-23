@@ -21,20 +21,17 @@
 PathFollower path_follow;
 
 /* 运行时可调参数默认值，调试时可通过串口或调试器直接修改。 */
-float PathFollower::SAFE_DISTANCE       = 1200.0f;  /* mm */
-float PathFollower::POINT_ALLOW_DIST    = 25.0f;    /* mm */
-float PathFollower::FINAL_ALLOW_DIST    = 10.0f;    /* mm */
-float PathFollower::FINAL_ALLOW_ANGLE   = 0.017f;   /* rad */
-float PathFollower::NORMAL_P            = 0.001f;
-float PathFollower::NORMAL_D            = 0.001f;
-float PathFollower::THETA_P             = 3.8f;
-float PathFollower::THETA_D             = 1.8f;
-float PathFollower::FINAL_XY_P          = 2.0f;
-float PathFollower::FINAL_XY_MIN_VEL    = 50.0f;    /* mm/s */
-float PathFollower::FINAL_XY_MAX_VEL    = 500.0f;   /* mm/s */
-float PathFollower::FINAL_YAW_P         = 2.5f;
-float PathFollower::FINAL_YAW_MAX_VEL   = 0.1f;     /* rad/s */
-const float PathFollower::FOLLOW_PI     = 3.14159265358979323846f;
+float PathFollower::SAFE_DISTANCE = 1200.0f;  /* mm */
+float PathFollower::POINT_ALLOW_DIST = 25.0f; /* mm */
+float PathFollower::FINAL_ALLOW_DIST = 35.0f; /* mm */
+float PathFollower::NORMAL_P = 0.001f;
+float PathFollower::NORMAL_D = 0.001f;
+float PathFollower::THETA_P = 3.8f;
+float PathFollower::THETA_D = 1.8f;
+float PathFollower::FINAL_XY_P = 2.0f;
+float PathFollower::FINAL_XY_MIN_VEL = 50.0f;  /* mm/s */
+float PathFollower::FINAL_XY_MAX_VEL = 500.0f; /* mm/s */
+const float PathFollower::FOLLOW_PI = 3.14159265358979323846f;
 
 /* ============================== 构造与重置 ============================== */
 
@@ -49,9 +46,7 @@ void PathFollower::reset(void)
     current_index_ = 0;
     state_ = STATE_IDLE;
     vel_enter_flag_ = 0U;
-    on_final_flag_ = 0U;
     final_xy_stable_cnt_ = 0U;
-    final_theta_stable_cnt_ = 0U;
 
     last_normal_x_ = 0.0f;
     last_normal_y_ = 0.0f;
@@ -287,93 +282,13 @@ void PathFollower::pointCalculate(const Pose &pose)
 /* ============================== 终点精定位 ============================== */
 
 /*
- * 终点精定位逻辑，两阶段分离：
- *
- * 阶段一（STATE_FINAL_POSITION）：
- *   只修正 XY 位置，yaw 暂不动。用 P 控制器生成速度，限幅后输出。
- *   XY 连续稳定 FINAL_XY_STABLE_COUNT 帧后，切换到阶段二。
- *
- * 阶段二（STATE_FINAL_YAW）：
- *   XY 锁定不动，只修正 yaw 角度。用 P 控制器生成角速度，限幅后输出。
- *   yaw 连续稳定 FINAL_THETA_STABLE_COUNT 帧后，判定 FINISHED。
- *
- * 两阶段分离的原因：同时修 XY 和 yaw 会互相干扰，导致收敛震荡。
+ * 终点逻辑：直接完成，不做精定位。
  */
 void PathFollower::finPointCalculate(const Pose &pose)
 {
-    const PathPoint &final_target = path_[current_index_];
-
-    if (on_final_flag_ == 0U)
-    {
-        /* ---- 阶段一：XY 位置收敛 ---- */
-        state_ = STATE_FINAL_POSITION;
-
-        float err_x = final_target.x - pose.x;
-        float err_y = final_target.y - pose.y;
-        float err_dist_sq = err_x * err_x + err_y * err_y;
-
-        if (err_dist_sq < FINAL_ALLOW_DIST * FINAL_ALLOW_DIST)
-        {
-            /* 进入允许半径，开始计数。 */
-            ++final_xy_stable_cnt_;
-            output_.world_vx = 0.0f;
-            output_.world_vy = 0.0f;
-            output_.wz = 0.0f;
-
-            if (final_xy_stable_cnt_ >= FINAL_XY_STABLE_COUNT)
-            {
-                on_final_flag_ = 1U;
-                final_xy_stable_cnt_ = 0U;
-            }
-            return;
-        }
-
-        /* 未到位：P 控制器计算速度。 */
-        final_xy_stable_cnt_ = 0U;
-
-        float vel_x = FINAL_XY_P * err_x;
-        float vel_y = FINAL_XY_P * err_y;
-        limitVelocity(vel_x, vel_y, FINAL_XY_MAX_VEL);
-
-        output_.world_vx = vel_x;
-        output_.world_vy = vel_y;
-        output_.wz = 0.0f;
-    }
-    else
-    {
-        /* ---- 阶段二：yaw 精定位 ---- */
-        state_ = STATE_FINAL_YAW;
-
-        float err_theta = normalizeAngle(final_target.theta - pose.yaw);
-
-        if (fabsf(err_theta) < FINAL_ALLOW_ANGLE)
-        {
-            output_.world_vx = 0.0f;
-            output_.world_vy = 0.0f;
-            output_.wz = 0.0f;
-
-            ++final_theta_stable_cnt_;
-            if (final_theta_stable_cnt_ >= FINAL_THETA_STABLE_COUNT)
-            {
-                reset();
-                state_ = STATE_FINISHED;
-            }
-            return;
-        }
-
-        /* 未到位：P 控制器计算角速度。 */
-        final_theta_stable_cnt_ = 0U;
-
-        float angle_vel = FINAL_YAW_P * err_theta;
-        if (fabsf(angle_vel) > FINAL_YAW_MAX_VEL)
-        {
-            angle_vel = (angle_vel > 0.0f) ? FINAL_YAW_MAX_VEL : -FINAL_YAW_MAX_VEL;
-        }
-
-        output_.world_vx = 0.0f;
-        output_.world_vy = 0.0f;
-        output_.wz = angle_vel;
-    }
+    (void)pose; // 参数保留以兼容调用接口
+    reset();
+    state_ = STATE_FINISHED;
 }
 
 /* ============================== 公开读取接口 ============================== */
@@ -391,6 +306,21 @@ PathFollower::State PathFollower::getState(void) const
 int PathFollower::getCurrentIndex(void) const
 {
     return current_index_;
+}
+
+void PathFollower::worldToBody(float world_x, float world_y, float yaw_rad, float *body_x, float *body_y)
+{
+    if (body_x == (void *)0 || body_y == (void *)0)
+    {
+        return;
+    }
+
+    const float cos_yaw = cosf(yaw_rad);
+    const float sin_yaw = sinf(yaw_rad);
+
+    // 世界系转车体系，相当于按 -yaw 旋转二维向量。
+    *body_x = cos_yaw * world_x + sin_yaw * world_y;
+    *body_y = -sin_yaw * world_x + cos_yaw * world_y;
 }
 
 /* ============================== 工具函数 ============================== */

@@ -156,6 +156,31 @@ static void cacheCurrentBlockCenterWithStepUp(void)
     route_t.state = PHASE_VISION;
 }
 
+static int expectStepUpSkipsMiddleBeforePickKFS(int step_cmd, int kfs_cmd, int result_base)
+{
+    route_t.route_reset();
+    clear_queues();
+    lift_auto.return_middle = 1U;
+
+    block_vision_middle[1].x = 1.0f;
+    block_vision_middle[1].y = 2.0f;
+
+    route_t.state = PHASE_VISION;
+    vision_command_push(step_cmd);
+    vision_command_push(kfs_cmd);
+    vision_block_push(1);
+    route_t.vision_choice();
+
+    if (route_t.state != PHASE_STEP_UP) {
+        return result_base + 1;
+    }
+    if (lift_auto.return_middle != 0U) {
+        return result_base + 2;
+    }
+
+    return 0;
+}
+
 static int expectPickKFSReturnsToCenterBeforeTurn(int cmd, Route_state kfs_state, int result_base)
 {
     const uint8_t old_stable_count = ARM_COMM_PICK_KFS_STABLE_COUNT;
@@ -315,7 +340,27 @@ static int expectPickKFSSlowTurnRampsYawTarget(void)
 
 int main(void)
 {
-    int result = expectPickKFSReturnsToCenterBeforeTurn(10, PHASE_GET_KFS_SHORT_200, 0);
+    int result = expectStepUpSkipsMiddleBeforePickKFS(3, 10, 100);
+    if (result != 0) {
+        return result;
+    }
+
+    result = expectStepUpSkipsMiddleBeforePickKFS(3, 11, 110);
+    if (result != 0) {
+        return result;
+    }
+
+    result = expectStepUpSkipsMiddleBeforePickKFS(3, 12, 120);
+    if (result != 0) {
+        return result;
+    }
+
+    result = expectStepUpSkipsMiddleBeforePickKFS(4, 11, 130);
+    if (result != 0) {
+        return result;
+    }
+
+    result = expectPickKFSReturnsToCenterBeforeTurn(10, PHASE_GET_KFS_SHORT_200, 0);
     if (result != 0) {
         return result;
     }

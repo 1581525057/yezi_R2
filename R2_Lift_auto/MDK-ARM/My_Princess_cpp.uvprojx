@@ -2119,6 +2119,11 @@
               <FileType>5</FileType>
               <FilePath>.\Route_Plan\arm_comm.h</FilePath>
             </File>
+            <File>
+              <FileName>path.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Route_Plan\path.cpp</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
