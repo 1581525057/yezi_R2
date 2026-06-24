@@ -1,7 +1,7 @@
 #include "FTMTask.h"
 #include "CommData.h"
-#include "M2006Follower.h"
-#include "StepMotorTask.h"
+#include "FTMLiftAction.h"
+#include "M2006AngleMotor.h"
 #include "RS05.h"
 #include "GripPush.h"
 #include "usart_task.h"
@@ -12,778 +12,1012 @@ extern "C" void WuqiquTask_Start(void);
 extern "C" void WuqiquTask_Stop(void);
 extern "C" uint8_t WuqiquTask_RunOnce(void);
 extern "C" uint8_t WuqiquTask_IsActive(void);
+extern "C" void WuqiquTask_AdvanceToNext(void);
+extern "C" uint8_t WuqiquTask_IsAllFinished(void);
+
+enum FTMMainState
+{
+    FTM_MAIN_INIT = 0,             // 初始化各功能模块，完成后进入空闲。
+    FTM_MAIN_IDLE = 1,             // 空闲/手动调试状态，等待 Watch 写入动作状态。
+    FTM_MAIN_WUQIQU_ROUTE = 2,     // 独立执行武器区第 1 个跑点。
+    FTM_MAIN_WUQIQU_ZERO = 3,      // 向视觉发送置零命令。
+    FTM_MAIN_DONE = 4,             // 全流程完成保持状态。
+    FTM_MAIN_AUTO_PICK_ROUTE = 5,  // 武器区综合取物流程：开爪、先到抓取高度+20、对位、跑第 1 点、下降到抓取高度闭爪、再到对接高度、继续跑点并回位。
+    FTM_MAIN_AUTO_TURN_READY = 6,  // 武器区姿态准备流程：张爪、对位并让 M2006 翻转到预备姿态。
+    FTM_MAIN_DOCKING = 7           // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
+};
+
+enum FTMActionState
+{
+    FTM_ACTION_NONE = 0,                         // 不执行小动作。
+    FTM_ACTION_RS05_TO_TARGET = 1,               // RS05 转到 Angle 指定角度。
+    FTM_ACTION_LIFT_UP_GRAB = 2,                 // 抬升机构上升到抓取高度。
+    FTM_ACTION_CLAW_OPEN = 3,                    // 夹爪张开。
+    FTM_ACTION_CLAW_CLOSE = 4,                   // 夹爪闭合。
+    FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK = 5, // 抬升机构上升到取出武器头对接高度。
+    FTM_ACTION_M2006_TURN_180 = 6,               // M2006 正向翻转 180 度。
+    FTM_ACTION_RS05_TO_RETURN = 7,               // RS05 回到可调目标角度。
+    FTM_ACTION_LIFT_DOWN = 8,                    // 抬升机构下降。
+    FTM_ACTION_M2006_TURN_BACK_180 = 9,          // M2006 反向翻转 180 度。
+    FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05 = 10,     // 夹爪张开、抬升到取出武器头对接高度、RS05 对位。
+    FTM_ACTION_SEQUENCE_BACKTURN_RS05 = 11,      // M2006 反向翻转 180 度、RS05 回位。
+    FTM_ACTION_WUQIQU_ROUTE_2 = 12,              // 武器区第 2 个跑点。
+    FTM_ACTION_WUQIQU_YAW_TURN_180 = 13,         // 武器区第 2 点到第 3 点之间原地转向 180 度。
+    FTM_ACTION_WUQIQU_ROUTE_3 = 14,              // 武器区第 3 个跑点。
+    FTM_ACTION_SEQUENCE_ROUTE_BACKTURN = 15,     // 完成武器区 2/3 号跑点和中间转向后，执行 M2006 反转和 RS05 回位。
+    FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT = 16,   // 先跑武器区 1 号点，再下降到抓取高度并闭爪，然后抬到取出武器头对接高度继续后续跑点和回位。
+    FTM_ACTION_SEQUENCE_OPEN_RS05_TURN = 17,     // 夹爪张开、RS05 对位、M2006 正向翻转 180 度。
+    FTM_ACTION_LIFT_UP_GRAB_APPROACH = 18,       // 抬升机构上升到抓取预备高度：抓取高度 + 20mm。
+    FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05 = 19 // 自动夹取专用：夹爪张开、抬升到抓取高度+20、RS05 对位。
+};
 
 namespace
 {
-    /* 微调机构状态枚举 */
-    enum FTMState
+constexpr float kDegToRad = 0.01745329251994329577f;
+constexpr float kRs05AngleToleranceRad = 0.02f;
+constexpr uint32_t kRs05CommandIntervalMs = 20U;
+constexpr uint32_t kRs05SettleMs = 300U;
+constexpr uint32_t kRs05TimeoutMs = 3500U;
+
+constexpr float kLiftToleranceMm = 5.0f;
+constexpr float kLiftMoveTimeS = 0.7f;
+constexpr float kLiftGrabApproachOffsetMm = 20.0f;
+
+constexpr uint32_t kClawActionDelayMs = 200U;
+constexpr float kM2006TurnAngleDeg = 180.0f;
+constexpr float kM2006ToleranceDeg = 3.0f;
+constexpr uint32_t kM2006TimeoutMs = 3000U;
+
+constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;
+constexpr uint32_t kWuqiquZeroSettleMs = 200U;
+constexpr float kWuqiquYawTurnAngleDeg = 180.0f;
+constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;
+constexpr uint16_t kWuqiquYawTurnStableCycles = 200U;
+constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;
+
+struct TimedStep
+{
+    uint8_t active;
+    uint8_t finished;
+    uint32_t start_tick;
+    uint32_t last_cmd_tick;
+};
+
+TimedStep g_step = {0U, 0U, 0U, 0U};
+uint8_t g_lift_commanded = 0U;
+float g_lift_last_target_height_mm = 0.0f;
+uint8_t g_wuqiqu_route_finished = 0U;
+uint8_t g_active_main_state = 0xFFU;
+uint8_t g_active_action_state = 0xFFU;
+uint8_t g_modules_initialized = 0U;
+uint8_t g_m2006_angle_lock_active = 1U;
+constexpr uint8_t kYawTargetCorrectionOff = 0U;
+constexpr uint8_t kYawTargetCorrectionZero = 1U;
+constexpr uint8_t kYawTargetCorrectionWuqiquTurn = 2U;
+uint8_t g_action_sequence_step_index = 0U;
+uint8_t g_wuqiqu_route_sequence_step_index = 0U;
+uint8_t g_route_action_sequence_step_index = 0U;
+uint8_t g_main_action_step_index = 0U;
+uint32_t g_last_minipc_control_seq = 0U;
+int16_t g_last_lift_adjust_unused_mark = 0;
+uint8_t g_docking_lift_adjust_active = 0U;
+uint8_t g_wuqiqu_yaw_turn_active = 0U;
+uint16_t g_wuqiqu_yaw_turn_stable_count = 0U;
+
+const uint8_t kSequenceOpenLiftRs05[] = {
+    FTM_ACTION_CLAW_OPEN,
+    FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK,
+    FTM_ACTION_RS05_TO_TARGET
+};
+
+const uint8_t kSequenceOpenGrabApproachRs05[] = {
+    FTM_ACTION_CLAW_OPEN,
+    FTM_ACTION_LIFT_UP_GRAB_APPROACH,
+    FTM_ACTION_RS05_TO_TARGET
+};
+
+const uint8_t kSequenceBackturnRs05[] = {
+    FTM_ACTION_M2006_TURN_BACK_180,
+    FTM_ACTION_RS05_TO_RETURN
+};
+
+const uint8_t kSequenceGrabClose[] = {
+    FTM_ACTION_LIFT_UP_GRAB,
+    FTM_ACTION_CLAW_CLOSE,
+    FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK
+};
+
+const uint8_t kSequenceOpenRs05Turn[] = {
+    FTM_ACTION_CLAW_OPEN,
+    FTM_ACTION_RS05_TO_TARGET,
+    FTM_ACTION_M2006_TURN_180
+};
+
+const uint8_t kMainSequencePickRoute[] = {
+    FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05,
+    FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT
+};
+
+const uint8_t kMainSequenceTurnReady[] = {
+    FTM_ACTION_SEQUENCE_OPEN_RS05_TURN
+};
+
+uint32_t g_wuqiqu_zero_start_tick = 0U;
+uint32_t g_wuqiqu_zero_last_send_tick = 0U;
+uint8_t g_wuqiqu_zero_active = 0U;
+
+bool HasElapsed(uint32_t start_tick, uint32_t duration_ms)
+{
+    return static_cast<uint32_t>(HAL_GetTick() - start_tick) >= duration_ms;
+}
+
+float NormalizeYawDeg(float yaw_deg)
+{
+    while (yaw_deg > 180.0f)
     {
-        FTM_STATE_INIT = 0,              // 初始化状态
-        FTM_STATE_MOVE = 1,              // 跟随移动状态
-        FTM_STATE_GRIP = 2,              // 抓取状态
-        FTM_STATE_RELEASE = 3,           // 释放状态
-        FTM_STATE_PLATFORM_FORWARD = 4,  // 推杆伸出状态（平台前进）
-        FTM_STATE_PLATFORM_BACKWARD = 5, // 推杆缩回状态（平台后退）
-        FTM_STATE_CLAW_OPEN = 6,         // 夹爪打开状态
-        FTM_STATE_CLAW_CLOSE = 7,        // 夹爪关闭状态
-        FTM_STATE_RELEASE_TO_ZERO = 8,   // 释放回零状态
-        FTM_STATE_PLATFORM_STOP = 9,     // 推杆停止状态
-        FTM_STATE_WUQIQU_ROUTE = 10,     // 武器区路径状态
-        FTM_STATE_WUQIQU_ZERO = 11       // 武器区路径前发送视觉置零
-    };
-
-    constexpr uint8_t kM2006StopDebounceCycles = 2U;                          // M2006 停止去抖周期数
-    constexpr uint16_t kGripLiftSpeedRpm = 60U;                               // 抓取抬升速度，单位：RPM
-    constexpr uint32_t kFollowerControlPeriodMs = 10U;                        // 随动控制周期，单位：ms
-    constexpr uint32_t kLiftMotionMarginMs = 200U;                            // 抬升动作容差时间，单位：ms
-    constexpr float kReleaseDropDistanceMm = 80.0f;                           // 释放时的下降距离，单位：mm
-    constexpr float kGripClawFinalAngleRad = 1.575f;                          // 夹爪最终角度，单位：rad
-    constexpr float kGripClawPreOpenAngleRad = kGripClawFinalAngleRad / 2.0f; // 夹爪预张开角度
-    constexpr float kGripClawReleaseFinalAngleRad = 0.0f;                     // 释放结束角度
-    constexpr float kRs05AngleToleranceRad = 0.05f;                           // RS05 角度容差，单位：rad
-    constexpr uint32_t kRs05CommandSettleMs = 200U;                           // RS05 指令稳定时间，单位：ms
-    constexpr uint32_t kRs05MoveTimeoutMs = 2000U;                            // RS05 动作超时时间，单位：ms
-    constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;
-    constexpr uint32_t kWuqiquZeroSettleMs = 200U;
-
-    /* 释放阶段的 RS05 参数 */
-    constexpr float kReleaseRs05Speed = 1.5f;
-    constexpr uint32_t kRs05ReinforceIntervalMs = 100U;
-    constexpr float kReleaseRs05LimitSpd = 1.5f;
-    constexpr float kReleaseRs05LimitCur = 1.0f;
-
-    /* 抓取翻转阶段的 RS05 参数 */
-    constexpr float kGripRs05Speed = 3.0f;
-    constexpr float kGripRs05LimitSpd = 3.0f;
-    constexpr float kGripRs05LimitCur = 1.5f;
-    constexpr float kRs05DefaultLimitSpd = 10.0f;
-    constexpr float kRs05DefaultLimitCur = 23.0f;
-
-    void RestoreRs05Limits(void);
-
-    uint8_t g_m2006_nonpositive_cycles = kM2006StopDebounceCycles; // M2006 非正向运动周期计数
-
-    /* 释放上下文 */
-    struct ReleaseContext
-    {
-        uint8_t phase;               // 当前阶段
-        uint32_t stage_start_tick;   // 阶段起始时刻
-        float release_target_mm;     // 释放目标距离，单位：mm
-        uint32_t last_rs05_cmd_tick; // 上次发送 RS05 指令的时刻
-    };
-
-    /* 释放回零上下文 */
-    struct ReleaseToZeroContext
-    {
-        uint8_t phase;             // 当前阶段
-        uint32_t stage_start_tick; // 阶段起始时刻
-        uint32_t last_rs05_cmd_tick;
-    };
-
-    /* 释放阶段枚举 */
-    enum ReleasePhase
-    {
-        RELEASE_PHASE_IDLE = 0,           // 空闲
-        RELEASE_PHASE_WAIT_RELEASE_ANGLE, // 等待释放角度到位
-        RELEASE_PHASE_DROP_PARTIAL        // 部分下降
-    };
-
-    /* 释放回零阶段枚举 */
-    enum ReleaseToZeroPhase
-    {
-        RELEASE_TO_ZERO_PHASE_IDLE = 0,           // 空闲
-        RELEASE_TO_ZERO_PHASE_WAIT_RELEASE_ANGLE, // 等待释放角度到位
-        RELEASE_TO_ZERO_PHASE_DROP_TO_ZERO        // 下降到零点
-    };
-
-    struct MoveEntryZeroContext
-    {
-        uint8_t phase;
-        uint32_t stage_start_tick;
-        uint32_t last_rs05_cmd_tick;
-    };
-
-    struct GripContext
-    {
-        uint8_t phase;
-        uint32_t stage_start_tick;
-        uint32_t last_rs05_cmd_tick;
-    };
-
-    enum MoveEntryZeroPhase
-    {
-        MOVE_ENTRY_ZERO_PHASE_IDLE = 0,
-        MOVE_ENTRY_ZERO_PHASE_SEND_COMMAND,
-        MOVE_ENTRY_ZERO_PHASE_WAIT_COMPLETED
-    };
-
-    enum GripPhase
-    {
-        GRIP_PHASE_IDLE = 0,
-        GRIP_PHASE_WAIT_PREOPEN,
-        GRIP_PHASE_WAIT_CLAW_OPEN,
-        GRIP_PHASE_WAIT_FINAL_ANGLE
-    };
-
-    ReleaseContext g_release = {RELEASE_PHASE_IDLE, 0U, 0.0f, 0U};
-    ReleaseToZeroContext g_release_to_zero = {RELEASE_TO_ZERO_PHASE_IDLE, 0U, 0U};
-    MoveEntryZeroContext g_move_entry_zero = {MOVE_ENTRY_ZERO_PHASE_IDLE, 0U, 0U};
-    GripContext g_grip = {GRIP_PHASE_IDLE, 0U, 0U};
-
-    struct WuqiquZeroContext
-    {
-        uint8_t active;
-        uint32_t start_tick;
-        uint32_t last_send_tick;
-    };
-
-    WuqiquZeroContext g_wuqiqu_zero = {0U, 0U, 0U};
-
-    void ResetWuqiquZeroContext(void)
-    {
-        g_wuqiqu_zero.active = 0U;
-        g_wuqiqu_zero.start_tick = 0U;
-        g_wuqiqu_zero.last_send_tick = 0U;
+        yaw_deg -= 360.0f;
     }
-
-    /**
-     * @brief 估算抓取抬升动作的执行时间
-     *
-     * @param distance_mm 抬升距离，单位：mm
-     * @return uint32_t 估算执行时间，单位：ms
-     */
-    uint32_t EstimateGripLiftMoveTimeMs(float distance_mm)
+    while (yaw_deg < -180.0f)
     {
-        if (distance_mm <= 0.0f)
-        {
-            return kLiftMotionMarginMs;
-        }
-
-        const float revolutions = distance_mm / (PI_VALUE * Z_ROLLER_DIAMETER);
-        const float move_time_minutes = revolutions / static_cast<float>(kGripLiftSpeedRpm);
-        const float move_time_ms = move_time_minutes * 60000.0f;
-
-        return static_cast<uint32_t>(move_time_ms + 0.5f) + kLiftMotionMarginMs;
+        yaw_deg += 360.0f;
     }
+    return yaw_deg;
+}
 
-    /**
-     * @brief 复位释放状态机
-     *
-     * @return 无
-     */
-    void ResetReleaseStateMachine(void)
+float GetLiftGrabApproachTargetMm(void)
+{
+    return g_ftm_lift_up_target_mm + kLiftGrabApproachOffsetMm;
+}
+
+void ResetTimedStep(void)
+{
+    g_step.active = 0U;
+    g_step.finished = 0U;
+    g_step.start_tick = 0U;
+    g_step.last_cmd_tick = 0U;
+}
+
+void ResetWuqiquZero(void)
+{
+    g_wuqiqu_zero_active = 0U;
+    g_wuqiqu_zero_start_tick = 0U;
+    g_wuqiqu_zero_last_send_tick = 0U;
+}
+
+void ResetMechanismStep(void)
+{
+    ResetTimedStep();
+    g_lift_commanded = 0U;
+    g_lift_last_target_height_mm = 0.0f;
+}
+
+void ResetYawTargetTurnRuntime(void)
+{
+    g_wuqiqu_yaw_turn_active = 0U;
+    g_wuqiqu_yaw_turn_stable_count = 0U;
+
+    if (g_ftm_yaw_target_correction_state == kYawTargetCorrectionWuqiquTurn)
     {
-        g_release.phase = RELEASE_PHASE_IDLE;
-        g_release.stage_start_tick = 0U;
-        g_release.release_target_mm = 0.0f;
-        g_release.last_rs05_cmd_tick = 0U;
-        g_release_to_zero.phase = RELEASE_TO_ZERO_PHASE_IDLE;
-        g_release_to_zero.stage_start_tick = 0U;
-        g_release_to_zero.last_rs05_cmd_tick = 0U;
-    }
-
-    void RequestMoveEntryZero(void)
-    {
-        g_move_entry_zero.phase = MOVE_ENTRY_ZERO_PHASE_SEND_COMMAND;
-        g_move_entry_zero.stage_start_tick = 0U;
-        g_move_entry_zero.last_rs05_cmd_tick = 0U;
-    }
-
-    void ResetGripStateMachine(void)
-    {
-        g_grip.phase = GRIP_PHASE_IDLE;
-        g_grip.stage_start_tick = 0U;
-        g_grip.last_rs05_cmd_tick = 0U;
-    }
-
-    /**
-     * @brief 判断指定时长是否已经过去
-     *
-     * @param start_tick 起始时刻
-     * @param duration_ms 持续时间，单位：ms
-     * @return bool 已超时返回 true
-     */
-    bool HasElapsed(uint32_t start_tick, uint32_t duration_ms)
-    {
-        return static_cast<uint32_t>(HAL_GetTick() - start_tick) >= duration_ms;
-    }
-
-    /**
-     * @brief 判断 RS05 是否到达目标角度
-     *
-     * @param target_angle_rad 目标角度，单位：rad
-     * @return bool 到达目标返回 true
-     */
-    bool IsRs05AtTarget(float target_angle_rad)
-    {
-        return fabsf(RS05_GetMotor().Pos_Info.Angle - target_angle_rad) <= kRs05AngleToleranceRad;
-    }
-
-    /**
-     * @brief 维护释放阶段的 M2006 跟随控制
-     *
-     * @return 无
-     */
-    void ServiceReleaseFollower(void)
-    {
-        if (StepMotor_IsRecoveryActive() != false)
-        {
-            StepMotor_ServiceRecovery();
-            g_m2006_nonpositive_cycles = 0U;
-            g_m2006.SetStepReference(StepMotor_GetRecoveryDirection(), StepMotor_GetRecoverySpeedRpm());
-            g_m2006.ControlTick(HAL_GetTick());
-        }
-        else
-        {
-            if (g_m2006_nonpositive_cycles < kM2006StopDebounceCycles)
-            {
-                ++g_m2006_nonpositive_cycles;
-                g_m2006.ControlTick(HAL_GetTick());
-            }
-            else
-            {
-                g_m2006.Stop();
-            }
-        }
-    }
-
-    /**
-     * @brief 执行释放状态机
-     *
-     * @return bool 状态机完成时返回 true
-     */
-    bool RunReleaseLoop(void)
-    {
-        ServiceReleaseFollower();
-
-        switch (g_release.phase)
-        {
-        case RELEASE_PHASE_IDLE:
-            g_m2006.Stop();
-            (void)StepMotorCommandDelayTimeout(20U);
-            g_release.release_target_mm =
-                (g_grip_distance_mm > kReleaseDropDistanceMm) ? (g_grip_distance_mm - kReleaseDropDistanceMm) : 0.0f;
-
-            // 限速并限流，降低带载释放时的翻转冲击。
-            g_rs05_motor.Set_RobStride_Motor_parameter(0x7017, kReleaseRs05LimitSpd, Set_parameter);
-            osDelay(5);
-            g_rs05_motor.Set_RobStride_Motor_parameter(0x7018, kReleaseRs05LimitCur, Set_parameter);
-            osDelay(5);
-            RS05_PositionControl(kReleaseRs05Speed, kGripClawPreOpenAngleRad);
-            g_release.stage_start_tick = HAL_GetTick();
-            g_release.last_rs05_cmd_tick = HAL_GetTick();
-            g_release.phase = RELEASE_PHASE_WAIT_RELEASE_ANGLE;
-            return false;
-
-        case RELEASE_PHASE_WAIT_RELEASE_ANGLE:
-            if (HasElapsed(g_release.stage_start_tick, kRs05CommandSettleMs) == false)
-            {
-                return false;
-            }
-
-            // 翻转过程中周期性补发指令，避免中途扰动导致角度偏离。
-            if (HasElapsed(g_release.last_rs05_cmd_tick, kRs05ReinforceIntervalMs))
-            {
-                RS05_PositionControl(kReleaseRs05Speed, kGripClawPreOpenAngleRad);
-                g_release.last_rs05_cmd_tick = HAL_GetTick();
-            }
-
-            if (IsRs05AtTarget(kGripClawPreOpenAngleRad) == false &&
-                HasElapsed(g_release.stage_start_tick, kRs05MoveTimeoutMs) == false)
-            {
-                return false;
-            }
-
-            ReturnLiftToPosition(g_release.release_target_mm, kReleaseDropDistanceMm);
-            g_release.phase = RELEASE_PHASE_DROP_PARTIAL;
-            return false;
-
-        case RELEASE_PHASE_DROP_PARTIAL:
-            // 下降过程中继续维持 RS05 的释放姿态。
-            if (HasElapsed(g_release.last_rs05_cmd_tick, kRs05ReinforceIntervalMs))
-            {
-                RS05_PositionControl(kReleaseRs05Speed, kGripClawPreOpenAngleRad);
-                g_release.last_rs05_cmd_tick = HAL_GetTick();
-            }
-
-            if (StepMotor_IsRecoveryActive() != false)
-            {
-                return false;
-            }
-
-            RestoreRs05Limits();
-            ResetReleaseStateMachine();
-            return true;
-
-        default:
-            ResetReleaseStateMachine();
-            g_m2006.Stop();
-            return true;
-        }
-    }
-
-    /**
-     * @brief 执行释放回零状态
-     *
-     * @return bool 状态机完成时返回 true
-     */
-    bool RunReleaseToZeroLoop(void)
-    {
-        ServiceReleaseFollower();
-
-        switch (g_release_to_zero.phase)
-        {
-        case RELEASE_TO_ZERO_PHASE_IDLE:
-            g_m2006.Stop();
-            (void)StepMotorCommandDelayTimeout(20U);
-            RS05_PositionControl(Speed, kGripClawReleaseFinalAngleRad);
-            g_release_to_zero.stage_start_tick = HAL_GetTick();
-            g_release_to_zero.last_rs05_cmd_tick = HAL_GetTick();
-            g_release_to_zero.phase = RELEASE_TO_ZERO_PHASE_WAIT_RELEASE_ANGLE;
-            return false;
-
-        case RELEASE_TO_ZERO_PHASE_WAIT_RELEASE_ANGLE:
-            // 等待期间持续维护 M2006 状态，避免丢失同步
-            g_m2006.ControlTick(HAL_GetTick());
-
-            if (HasElapsed(g_release_to_zero.last_rs05_cmd_tick, kRs05ReinforceIntervalMs))
-            {
-                RS05_PositionControl(Speed, kGripClawReleaseFinalAngleRad);
-                g_release_to_zero.last_rs05_cmd_tick = HAL_GetTick();
-            }
-
-            if (HasElapsed(g_release_to_zero.stage_start_tick, kRs05CommandSettleMs) == false)
-            {
-                return false;
-            }
-
-            if (IsRs05AtTarget(kGripClawReleaseFinalAngleRad) == false &&
-                HasElapsed(g_release_to_zero.stage_start_tick, kRs05MoveTimeoutMs) == false)
-            {
-                return false;
-            }
-
-            ReturnLiftToPosition(0.0f, g_grip_distance_mm);
-            g_release_to_zero.phase = RELEASE_TO_ZERO_PHASE_DROP_TO_ZERO;
-            return false;
-
-        case RELEASE_TO_ZERO_PHASE_DROP_TO_ZERO:
-            if (HasElapsed(g_release_to_zero.last_rs05_cmd_tick, kRs05ReinforceIntervalMs))
-            {
-                RS05_PositionControl(Speed, kGripClawReleaseFinalAngleRad);
-                g_release_to_zero.last_rs05_cmd_tick = HAL_GetTick();
-            }
-
-            if (StepMotor_IsRecoveryActive() != false)
-            {
-                return false;
-            }
-
-            ResetReleaseStateMachine();
-            return true;
-
-        default:
-            ResetReleaseStateMachine();
-            g_m2006.Stop();
-            return true;
-        }
-    }
-
-    /**
-     * @brief 在指定时长内持续维护步进电机恢复动作
-     *
-     * @param duration_ms 持续时间，单位：ms
-     * @return 无
-     */
-    /**
-     * @brief 执行 MOVE 状态入口的一次性 RS05 回零动作
-     *
-     * @return bool 回零完成时返回 true
-     */
-    bool RunMoveEntryZeroLoop(void)
-    {
-        switch (g_move_entry_zero.phase)
-        {
-        case MOVE_ENTRY_ZERO_PHASE_IDLE:
-            return true;
-
-        case MOVE_ENTRY_ZERO_PHASE_SEND_COMMAND:
-            g_m2006.Stop();
-            RS05_PositionControl(Speed, kGripClawReleaseFinalAngleRad);
-            g_move_entry_zero.stage_start_tick = HAL_GetTick();
-            g_move_entry_zero.last_rs05_cmd_tick = HAL_GetTick();
-            g_move_entry_zero.phase = MOVE_ENTRY_ZERO_PHASE_WAIT_COMPLETED;
-            return false;
-
-        case MOVE_ENTRY_ZERO_PHASE_WAIT_COMPLETED:
-            g_m2006.Stop();
-
-            if (HasElapsed(g_move_entry_zero.last_rs05_cmd_tick, kRs05ReinforceIntervalMs))
-            {
-                RS05_PositionControl(Speed, kGripClawReleaseFinalAngleRad);
-                g_move_entry_zero.last_rs05_cmd_tick = HAL_GetTick();
-            }
-
-            if (HasElapsed(g_move_entry_zero.stage_start_tick, kRs05CommandSettleMs) == false)
-            {
-                return false;
-            }
-
-            if (IsRs05AtTarget(kGripClawReleaseFinalAngleRad) == false &&
-                HasElapsed(g_move_entry_zero.stage_start_tick, kRs05MoveTimeoutMs) == false)
-            {
-                return false;
-            }
-
-            g_move_entry_zero.phase = MOVE_ENTRY_ZERO_PHASE_IDLE;
-            g_move_entry_zero.stage_start_tick = 0U;
-            g_move_entry_zero.last_rs05_cmd_tick = 0U;
-            return true;
-
-        default:
-            g_move_entry_zero.phase = MOVE_ENTRY_ZERO_PHASE_IDLE;
-            g_move_entry_zero.stage_start_tick = 0U;
-            g_move_entry_zero.last_rs05_cmd_tick = 0U;
-            g_m2006.Stop();
-            return true;
-        }
-    }
-
-    /**
-     * @brief 在指定时长内持续维护步进电机恢复动作
-     *
-     * @param duration_ms 持续时间，单位：ms
-     * @return 无
-     */
-    void StepMotorRecoveryDelay(uint32_t duration_ms)
-    {
-        const uint32_t start_tick = HAL_GetTick();
-
-        while ((HAL_GetTick() - start_tick) < duration_ms)
-        {
-            StepMotor_ServiceRecovery();
-            osDelay(kFollowerControlPeriodMs);
-        }
-    }
-
-    /**
-     * @brief 初始化微调机构相关模块
-     *
-     * @return 无
-     */
-    bool RunGripLoop(void)
-    {
-        switch (g_grip.phase)
-        {
-        case GRIP_PHASE_IDLE:
-            ResetReleaseStateMachine();
-            g_m2006.Stop();
-            (void)StepMotorCommandDelayTimeout(20U);
-            FineTuneLiftForWeaponGrip();
-            StepMotorRecoveryDelay(10000U);
-
-            RS05_PositionControl(Speed, kGripClawPreOpenAngleRad);
-            g_grip.stage_start_tick = HAL_GetTick();
-            g_grip.last_rs05_cmd_tick = HAL_GetTick();
-            g_grip.phase = GRIP_PHASE_WAIT_PREOPEN;
-            return false;
-
-        case GRIP_PHASE_WAIT_PREOPEN:
-            if (HasElapsed(g_grip.last_rs05_cmd_tick, kRs05ReinforceIntervalMs))
-            {
-                RS05_PositionControl(Speed, kGripClawPreOpenAngleRad);
-                g_grip.last_rs05_cmd_tick = HAL_GetTick();
-            }
-
-            if (HasElapsed(g_grip.stage_start_tick, 500U) == false)
-            {
-                return false;
-            }
-
-            claw_open();
-            g_grip.stage_start_tick = HAL_GetTick();
-            g_grip.phase = GRIP_PHASE_WAIT_CLAW_OPEN;
-            return false;
-
-        case GRIP_PHASE_WAIT_CLAW_OPEN:
-            if (HasElapsed(g_grip.stage_start_tick, 100U) == false)
-            {
-                return false;
-            }
-
-            RS05_PositionControl(Speed, kGripClawFinalAngleRad);
-            g_grip.stage_start_tick = HAL_GetTick();
-            g_grip.last_rs05_cmd_tick = HAL_GetTick();
-            g_grip.phase = GRIP_PHASE_WAIT_FINAL_ANGLE;
-            return false;
-
-        case GRIP_PHASE_WAIT_FINAL_ANGLE:
-            if (HasElapsed(g_grip.last_rs05_cmd_tick, kRs05ReinforceIntervalMs))
-            {
-                RS05_PositionControl(Speed, kGripClawFinalAngleRad);
-                g_grip.last_rs05_cmd_tick = HAL_GetTick();
-            }
-
-            if (HasElapsed(g_grip.stage_start_tick, kRs05CommandSettleMs) == false)
-            {
-                return false;
-            }
-
-            if (IsRs05AtTarget(kGripClawFinalAngleRad) == false &&
-                HasElapsed(g_grip.stage_start_tick, kRs05MoveTimeoutMs) == false)
-            {
-                return false;
-            }
-
-            ResetGripStateMachine();
-            return true;
-
-        default:
-            ResetGripStateMachine();
-            return true;
-        }
-    }
-
-    void FTM_InitModules(void)
-    {
-        cmd_init();
-        RS05_Init();
-        RequestMoveEntryZero();
-        StepMotor_Init();
-        g_m2006.Init();
-        g_m2006.SetDescendDirection(Z_MOTOR_DIR);
-        g_m2006_nonpositive_cycles = kM2006StopDebounceCycles;
-    }
-
-    /**
-     * @brief 执行移动跟随主循环
-     *
-     * @return 无
-     */
-    void FTM_RunMoveLoop(void)
-    {
-        int16_t visual_z = 0;
-
-        __disable_irq();
-        visual_z = g_visual_data.z;
-        __enable_irq();
-
-        StepMotor_Z.SetError(visual_z);
-
-        Motor_Ctrl(StepMotor_Z);
-        (void)StepMotorCommandDelayTimeout(5U);
-
-        if (StepMotor_Z.GetError() > 0)
-        {
-            g_m2006_nonpositive_cycles = 0U;
-            g_m2006.SetStepReference(StepMotor_Z.GetDirection(), StepMotor_Z.GetSpeedRpm());
-            g_m2006.ControlTick(HAL_GetTick());
-        }
-        else
-        {
-            if (g_m2006_nonpositive_cycles < kM2006StopDebounceCycles)
-            {
-                ++g_m2006_nonpositive_cycles;
-                g_m2006.ControlTick(HAL_GetTick());
-            }
-            else
-            {
-                g_m2006.Stop();
-            }
-        }
-
-        StepMotor_Z.QueueResetClogProtection();
-        StepMotor_Z.QueueEnable(true, false);
-    }
-
-    /**
-     * @brief 直接调整夹爪角度
-     *
-     * @param angle_rad 目标角度，单位：rad
-     * @return 无
-     */
-    void AdjustGripClawPosition(float angle_rad)
-    {
-        RS05_PositionControl(Speed, angle_rad);
-    }
-
-    /**
-     * @brief 以限速限流方式调整夹爪角度
-     *
-     * @param angle_rad 目标角度，单位：rad
-     * @return 无
-     */
-    void AdjustGripClawPositionDamped(float angle_rad)
-    {
-        g_rs05_motor.Set_RobStride_Motor_parameter(0x7017, kGripRs05LimitSpd, Set_parameter);
-        osDelay(5);
-        g_rs05_motor.Set_RobStride_Motor_parameter(0x7018, kGripRs05LimitCur, Set_parameter);
-        osDelay(5);
-        RS05_PositionControl(kGripRs05Speed, angle_rad);
-    }
-
-    /**
-     * @brief 恢复 RS05 默认速度和电流上限
-     *
-     * @return 无
-     */
-    void RestoreRs05Limits(void)
-    {
-        g_rs05_motor.Set_RobStride_Motor_parameter(0x7017, kRs05DefaultLimitSpd, Set_parameter);
-        osDelay(5);
-        g_rs05_motor.Set_RobStride_Motor_parameter(0x7018, kRs05DefaultLimitCur, Set_parameter);
-        osDelay(5);
+        g_ftm_yaw_target_correction_state = kYawTargetCorrectionOff;
+        g_ftm_yaw_target_degree = 0.0f;
     }
 }
 
-extern "C" volatile uint8_t g_ftm_state = FTM_STATE_INIT;
+void ResetActionRuntime(void)
+{
+    ResetMechanismStep();
+    ResetYawTargetTurnRuntime();
+    g_action_sequence_step_index = 0U;
+    g_wuqiqu_route_sequence_step_index = 0U;
+    g_route_action_sequence_step_index = 0U;
+}
 
-/**
- * @brief 获取当前微调机构状态
- *
- * @return uint8_t 当前状态值
- */
+uint8_t IsMechanismAction(uint8_t action_state)
+{
+    return (((action_state >= FTM_ACTION_RS05_TO_TARGET) &&
+             (action_state <= FTM_ACTION_M2006_TURN_BACK_180)) ||
+            (action_state == FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05) ||
+            (action_state == FTM_ACTION_SEQUENCE_BACKTURN_RS05) ||
+            (action_state == FTM_ACTION_SEQUENCE_ROUTE_BACKTURN) ||
+            (action_state == FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT) ||
+            (action_state == FTM_ACTION_SEQUENCE_OPEN_RS05_TURN) ||
+            (action_state == FTM_ACTION_LIFT_UP_GRAB_APPROACH) ||
+            (action_state == FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05)) ? 1U : 0U;
+}
+
+uint8_t IsWuqiquRouteMainState(uint8_t main_state)
+{
+    return ((main_state == FTM_MAIN_WUQIQU_ROUTE) ||
+            (main_state == FTM_MAIN_AUTO_PICK_ROUTE)) ? 1U : 0U;
+}
+
+uint8_t IsWuqiquRouteAction(uint8_t action_state)
+{
+    return ((action_state == FTM_ACTION_WUQIQU_ROUTE_2) ||
+            (action_state == FTM_ACTION_WUQIQU_YAW_TURN_180) ||
+            (action_state == FTM_ACTION_WUQIQU_ROUTE_3) ||
+            (action_state == FTM_ACTION_SEQUENCE_ROUTE_BACKTURN) ||
+            (action_state == FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT)) ? 1U : 0U;
+}
+
+uint8_t IsWuqiquRouteActiveContext(void)
+{
+    return ((IsWuqiquRouteMainState(g_ftm_main_state) != 0U) ||
+            (IsWuqiquRouteAction(g_ftm_action_state) != 0U)) ? 1U : 0U;
+}
+
+void UpdateYawTargetCorrectionState(uint8_t main_state)
+{
+    if (main_state == FTM_MAIN_DONE)
+    {
+        g_ftm_yaw_target_degree = 0.0f;
+        g_ftm_yaw_target_correction_state = kYawTargetCorrectionZero;
+    }
+    else
+    {
+        g_ftm_yaw_target_correction_state = kYawTargetCorrectionOff;
+    }
+}
+
+void ServiceM2006AngleLock(uint8_t action_state)
+{
+    if (g_m2006_angle_lock_active == 0U)
+    {
+        return;
+    }
+
+    if ((action_state == FTM_ACTION_M2006_TURN_180) ||
+        (action_state == FTM_ACTION_M2006_TURN_BACK_180))
+    {
+        return;
+    }
+
+    M2006Angle_ControlTick();
+}
+
+void PrepareActionState(uint8_t action_state)
+{
+    ResetActionRuntime();
+
+    if (IsWuqiquRouteAction(action_state) != 0U)
+    {
+        WuqiquTask_Stop();
+        g_wuqiqu_route_finished = 0U;
+    }
+
+    if ((IsMechanismAction(action_state) == 0U) &&
+        (g_ftm_main_state != FTM_MAIN_DONE))
+    {
+        FTMLiftAction_SetTakeover(0U);
+    }
+
+    if ((action_state != FTM_ACTION_M2006_TURN_180) &&
+        (action_state != FTM_ACTION_M2006_TURN_BACK_180))
+    {
+        g_m2006_angle_lock_active = 1U;
+    }
+}
+
+void PrepareMainState(uint8_t main_state)
+{
+    UpdateYawTargetCorrectionState(main_state);
+    ResetActionRuntime();
+    g_main_action_step_index = 0U;
+
+    if (main_state != FTM_MAIN_IDLE)
+    {
+        g_ftm_action_state = FTM_ACTION_NONE;
+        g_active_action_state = FTM_ACTION_NONE;
+    }
+
+    if (IsWuqiquRouteMainState(main_state) != 0U)
+    {
+        WuqiquTask_Stop();
+        g_wuqiqu_route_finished = 0U;
+    }
+
+    if (main_state != FTM_MAIN_WUQIQU_ZERO)
+    {
+        ResetWuqiquZero();
+    }
+
+    if ((main_state != FTM_MAIN_DONE) &&
+        (IsMechanismAction(g_ftm_action_state) == 0U))
+    {
+        FTMLiftAction_SetTakeover(0U);
+    }
+
+    if (main_state == FTM_MAIN_INIT)
+    {
+        M2006Angle_SetTarget(0.0f);
+    }
+
+    if ((main_state == FTM_MAIN_INIT) ||
+        (main_state == FTM_MAIN_WUQIQU_ROUTE) ||
+        (main_state == FTM_MAIN_WUQIQU_ZERO) ||
+        (main_state == FTM_MAIN_AUTO_PICK_ROUTE) ||
+        (main_state == FTM_MAIN_AUTO_TURN_READY))
+    {
+        g_m2006_angle_lock_active = 1U;
+    }
+}
+
+void EnterMainState(uint8_t main_state)
+{
+    g_ftm_main_state = main_state;
+    g_active_main_state = main_state;
+    PrepareMainState(main_state);
+}
+
+void EnterActionState(uint8_t action_state)
+{
+    g_ftm_action_state = action_state;
+    g_active_action_state = action_state;
+    PrepareActionState(action_state);
+}
+
+void SyncExternalState(void)
+{
+    const uint8_t main_state = g_ftm_main_state;
+    if (main_state != g_active_main_state)
+    {
+        g_active_main_state = main_state;
+        PrepareMainState(main_state);
+    }
+
+    const uint8_t action_state = g_ftm_action_state;
+    if (action_state != g_active_action_state)
+    {
+        g_active_action_state = action_state;
+        PrepareActionState(action_state);
+    }
+}
+
+void ServiceMiniPcFtmCommands(void)
+{
+    if (g_ftm_main_state != FTM_MAIN_DOCKING)
+    {
+        g_last_minipc_control_seq = g_ftm_minipc_control_seq;
+        g_last_lift_adjust_unused_mark = g_ftm_minipc_unused_mark;
+        g_docking_lift_adjust_active = 0U;
+        return;
+    }
+
+    if (g_last_minipc_control_seq == g_ftm_minipc_control_seq)
+    {
+        return;
+    }
+    g_last_minipc_control_seq = g_ftm_minipc_control_seq;
+
+    if (g_ftm_minipc_unused_mark != g_last_lift_adjust_unused_mark)
+    {
+        g_last_lift_adjust_unused_mark = g_ftm_minipc_unused_mark;
+
+        const uint8_t lift_adjust_cmd = g_ftm_minipc_lift_dock_adjust_cmd;
+        uint8_t lift_adjust_valid = 0U;
+        if (lift_adjust_cmd == 1U)
+        {
+            g_ftm_lift_weapon_head_takeout_dock_target_mm += kMiniPcLiftDockAdjustStepMm;
+            lift_adjust_valid = 1U;
+        }
+        else if (lift_adjust_cmd == 2U)
+        {
+            g_ftm_lift_weapon_head_takeout_dock_target_mm -= kMiniPcLiftDockAdjustStepMm;
+            lift_adjust_valid = 1U;
+        }
+
+        if (lift_adjust_valid != 0U)
+        {
+            g_docking_lift_adjust_active = 1U;
+            ResetMechanismStep();
+        }
+    }
+
+    if (g_ftm_minipc_claw_release_cmd == 1U)
+    {
+        claw_open();
+    }
+}
+
+float DegToRad(float degree)
+{
+    return degree * kDegToRad;
+}
+
+bool IsRs05AtTarget(float target_rad)
+{
+    return fabsf(RS05_GetMotor().Pos_Info.Angle - target_rad) <= kRs05AngleToleranceRad;
+}
+
+void SendRs05Target(float target_rad, uint8_t zero_lock_enabled)
+{
+    RS05_SetZeroLock(zero_lock_enabled);
+    RS05_PositionControl(Speed, target_rad);
+}
+
+bool RunRs05State(float target_degree, uint8_t zero_lock_enabled = 0U)
+{
+    const float target_rad = DegToRad(target_degree);
+
+    if (g_step.finished != 0U)
+    {
+        if (HasElapsed(g_step.last_cmd_tick, kRs05CommandIntervalMs))
+        {
+            SendRs05Target(target_rad, zero_lock_enabled);
+            g_step.last_cmd_tick = HAL_GetTick();
+        }
+        return true;
+    }
+
+    if (g_step.active == 0U)
+    {
+        SendRs05Target(target_rad, zero_lock_enabled);
+        g_step.active = 1U;
+        g_step.start_tick = HAL_GetTick();
+        g_step.last_cmd_tick = g_step.start_tick;
+        return false;
+    }
+
+    if (HasElapsed(g_step.last_cmd_tick, kRs05CommandIntervalMs))
+    {
+        SendRs05Target(target_rad, zero_lock_enabled);
+        g_step.last_cmd_tick = HAL_GetTick();
+    }
+
+    if (HasElapsed(g_step.start_tick, kRs05SettleMs) == false)
+    {
+        return false;
+    }
+
+    if ((IsRs05AtTarget(target_rad) != false) || HasElapsed(g_step.start_tick, kRs05TimeoutMs))
+    {
+        g_step.finished = 1U;
+        return true;
+    }
+
+    return false;
+}
+
+bool RunLiftState(float target_height_mm)
+{
+    if (g_step.finished != 0U)
+    {
+        return true;
+    }
+
+    if ((g_lift_commanded == 0U) ||
+        (fabsf(target_height_mm - g_lift_last_target_height_mm) > 0.001f))
+    {
+        FTMLiftAction_MoveTo(target_height_mm, kLiftMoveTimeS);
+        g_lift_commanded = 1U;
+        g_lift_last_target_height_mm = target_height_mm;
+        return false;
+    }
+
+    if (FTMLiftAction_IsFinished(kLiftToleranceMm) != 0U)
+    {
+        g_step.finished = 1U;
+        return true;
+    }
+
+    return false;
+}
+
+bool RunClawDelay(void (*action)(void))
+{
+    if (g_step.finished != 0U)
+    {
+        return true;
+    }
+
+    if (g_step.active == 0U)
+    {
+        action();
+        g_step.active = 1U;
+        g_step.start_tick = HAL_GetTick();
+        return false;
+    }
+
+    if (HasElapsed(g_step.start_tick, kClawActionDelayMs))
+    {
+        g_step.finished = 1U;
+        return true;
+    }
+
+    return false;
+}
+
+bool RunM2006Turn(float relative_angle_degree)
+{
+    if (g_step.finished != 0U)
+    {
+        g_m2006_angle_lock_active = 1U;
+        M2006Angle_ControlTick();
+        return true;
+    }
+
+    if (g_step.active == 0U)
+    {
+        const float start_angle = M2006Angle_GetAngleDegree();
+        g_m2006_angle_lock_active = 0U;
+        M2006Angle_SetTarget(start_angle + relative_angle_degree);
+        M2006Angle_ControlTick();
+        g_step.active = 1U;
+        g_step.start_tick = HAL_GetTick();
+        return false;
+    }
+
+    M2006Angle_ControlTick();
+    if ((M2006Angle_IsAtTarget(kM2006ToleranceDeg) != 0U) || HasElapsed(g_step.start_tick, kM2006TimeoutMs))
+    {
+        g_m2006_angle_lock_active = 1U;
+        g_step.finished = 1U;
+        return true;
+    }
+
+    return false;
+}
+
+bool RunMechanismStep(uint8_t action_state)
+{
+    switch (action_state)
+    {
+    case FTM_ACTION_RS05_TO_TARGET:
+        return RunRs05State(Angle);
+
+    case FTM_ACTION_LIFT_UP_GRAB:
+        return RunLiftState(g_ftm_lift_up_target_mm);
+
+    case FTM_ACTION_LIFT_UP_GRAB_APPROACH:
+        return RunLiftState(GetLiftGrabApproachTargetMm());
+
+    case FTM_ACTION_CLAW_OPEN:
+        return RunClawDelay(claw_open);
+
+    case FTM_ACTION_CLAW_CLOSE:
+        return RunClawDelay(claw_close);
+
+    case FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK:
+        return RunLiftState(g_ftm_lift_weapon_head_takeout_dock_target_mm);
+
+    case FTM_ACTION_M2006_TURN_180:
+        return RunM2006Turn(kM2006TurnAngleDeg);
+
+    case FTM_ACTION_RS05_TO_RETURN:
+        return RunRs05State(g_ftm_rs05_return_target_degree, 1U);
+
+    case FTM_ACTION_LIFT_DOWN:
+        return RunLiftState(g_ftm_lift_down_target_mm);
+
+    case FTM_ACTION_M2006_TURN_BACK_180:
+        return RunM2006Turn(-kM2006TurnAngleDeg);
+
+    default:
+        return true;
+    }
+}
+
+bool RunMechanismSequence(const uint8_t *sequence, uint8_t sequence_count)
+{
+    if (g_action_sequence_step_index >= sequence_count)
+    {
+        return true;
+    }
+
+    if (RunMechanismStep(sequence[g_action_sequence_step_index]) == false)
+    {
+        return false;
+    }
+
+    g_action_sequence_step_index++;
+    ResetMechanismStep();
+
+    return (g_action_sequence_step_index >= sequence_count);
+}
+
+void StartWuqiquRoutePoint(uint8_t waypoint_index)
+{
+    WuqiquTask_Start();
+    for (uint8_t i = 0U; i < waypoint_index; ++i)
+    {
+        WuqiquTask_AdvanceToNext();
+    }
+}
+
+void ServiceWuqiquRoutePoint(uint8_t waypoint_index)
+{
+    if (g_wuqiqu_route_finished != 0U)
+    {
+        return;
+    }
+
+    if (WuqiquTask_IsActive() == 0U)
+    {
+        StartWuqiquRoutePoint(waypoint_index);
+        if (WuqiquTask_IsAllFinished() != 0U)
+        {
+            WuqiquTask_Stop();
+            g_wuqiqu_route_finished = 1U;
+            EnterMainState(FTM_MAIN_INIT);
+            return;
+        }
+    }
+
+    if (WuqiquTask_RunOnce() != 0U)
+    {
+        WuqiquTask_Stop();
+        g_wuqiqu_route_finished = 1U;
+        EnterMainState(FTM_MAIN_INIT);
+    }
+}
+
+uint8_t RunWuqiquRoutePoint(uint8_t waypoint_index)
+{
+    if (WuqiquTask_IsActive() == 0U)
+    {
+        StartWuqiquRoutePoint(waypoint_index);
+        if (WuqiquTask_IsAllFinished() != 0U)
+        {
+            WuqiquTask_Stop();
+            return 1U;
+        }
+    }
+
+    if (WuqiquTask_RunOnce() != 0U)
+    {
+        WuqiquTask_Stop();
+        return 1U;
+    }
+
+    return 0U;
+}
+
+uint8_t RunWuqiquYawTurn180(void)
+{
+    if (g_wuqiqu_yaw_turn_active == 0U)
+    {
+        WuqiquTask_Stop();
+        g_ftm_yaw_target_degree = NormalizeYawDeg(vision.angle_x + kWuqiquYawTurnAngleDeg);
+        g_ftm_yaw_target_correction_state = kYawTargetCorrectionWuqiquTurn;
+        g_wuqiqu_yaw_turn_stable_count = 0U;
+        g_wuqiqu_yaw_turn_active = 1U;
+    }
+
+    const float yaw_error_deg = NormalizeYawDeg(g_ftm_yaw_target_degree - vision.angle_x);
+    if (fabsf(yaw_error_deg) < kWuqiquYawTurnToleranceDeg)
+    {
+        if (g_wuqiqu_yaw_turn_stable_count < kWuqiquYawTurnStableCycles)
+        {
+            ++g_wuqiqu_yaw_turn_stable_count;
+        }
+    }
+    else
+    {
+        g_wuqiqu_yaw_turn_stable_count = 0U;
+    }
+
+    if (g_wuqiqu_yaw_turn_stable_count >= kWuqiquYawTurnStableCycles)
+    {
+        ResetYawTargetTurnRuntime();
+        return 1U;
+    }
+
+    return 0U;
+}
+
+bool RunWuqiquAndMechanismSequence(void)
+{
+    switch (g_wuqiqu_route_sequence_step_index)
+    {
+    case 0:
+        if (RunWuqiquRoutePoint(1U) == 0U)
+        {
+            return false;
+        }
+        ++g_wuqiqu_route_sequence_step_index;
+        return false;
+
+    case 1:
+        if (RunWuqiquYawTurn180() == 0U)
+        {
+            return false;
+        }
+        ++g_wuqiqu_route_sequence_step_index;
+        return false;
+
+    default:
+        return RunMechanismSequence(kSequenceBackturnRs05, static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
+    }
+}
+
+bool RunRouteAndMechanismSequence(void)
+{
+    switch (g_route_action_sequence_step_index)
+    {
+    case 0:
+        if (RunWuqiquRoutePoint(0U) == 0U)
+        {
+            return false;
+        }
+        ++g_route_action_sequence_step_index;
+        return false;
+
+    case 1:
+        if (RunMechanismSequence(kSequenceGrabClose, static_cast<uint8_t>(sizeof(kSequenceGrabClose) / sizeof(kSequenceGrabClose[0]))) == false)
+        {
+            return false;
+        }
+        ++g_route_action_sequence_step_index;
+        g_action_sequence_step_index = 0U;
+        ResetMechanismStep();
+        return false;
+
+    case 2:
+        return RunWuqiquAndMechanismSequence();
+
+    default:
+        return true;
+    }
+}
+
+bool RunActionState(uint8_t action_state)
+{
+    switch (action_state)
+    {
+    case FTM_ACTION_NONE:
+        return true;
+
+    case FTM_ACTION_RS05_TO_TARGET:
+    case FTM_ACTION_LIFT_UP_GRAB:
+    case FTM_ACTION_CLAW_OPEN:
+    case FTM_ACTION_CLAW_CLOSE:
+    case FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK:
+    case FTM_ACTION_M2006_TURN_180:
+    case FTM_ACTION_RS05_TO_RETURN:
+    case FTM_ACTION_LIFT_DOWN:
+    case FTM_ACTION_M2006_TURN_BACK_180:
+    case FTM_ACTION_LIFT_UP_GRAB_APPROACH:
+        return RunMechanismStep(action_state);
+
+    case FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05:
+        return RunMechanismSequence(kSequenceOpenLiftRs05,
+                                    static_cast<uint8_t>(sizeof(kSequenceOpenLiftRs05) / sizeof(kSequenceOpenLiftRs05[0])));
+
+    case FTM_ACTION_SEQUENCE_BACKTURN_RS05:
+        return RunMechanismSequence(kSequenceBackturnRs05,
+                                    static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
+
+    case FTM_ACTION_WUQIQU_ROUTE_2:
+        return (RunWuqiquRoutePoint(1U) != 0U);
+
+    case FTM_ACTION_WUQIQU_YAW_TURN_180:
+        return (RunWuqiquYawTurn180() != 0U);
+
+    case FTM_ACTION_WUQIQU_ROUTE_3:
+        return (RunWuqiquRoutePoint(2U) != 0U);
+
+    case FTM_ACTION_SEQUENCE_ROUTE_BACKTURN:
+        return RunWuqiquAndMechanismSequence();
+
+    case FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT:
+        return RunRouteAndMechanismSequence();
+
+    case FTM_ACTION_SEQUENCE_OPEN_RS05_TURN:
+        return RunMechanismSequence(kSequenceOpenRs05Turn,
+                                    static_cast<uint8_t>(sizeof(kSequenceOpenRs05Turn) / sizeof(kSequenceOpenRs05Turn[0])));
+
+    case FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05:
+        return RunMechanismSequence(kSequenceOpenGrabApproachRs05,
+                                    static_cast<uint8_t>(sizeof(kSequenceOpenGrabApproachRs05) / sizeof(kSequenceOpenGrabApproachRs05[0])));
+
+    default:
+        return true;
+    }
+}
+
+bool RunMainActionSequence(const uint8_t *sequence, uint8_t sequence_count)
+{
+    if (g_main_action_step_index >= sequence_count)
+    {
+        return true;
+    }
+
+    const uint8_t expected_action = sequence[g_main_action_step_index];
+    if (g_ftm_action_state != expected_action)
+    {
+        EnterActionState(expected_action);
+    }
+
+    if (RunActionState(expected_action) == false)
+    {
+        return false;
+    }
+
+    ++g_main_action_step_index;
+    EnterActionState(FTM_ACTION_NONE);
+
+    return (g_main_action_step_index >= sequence_count);
+}
+
+void ServiceWuqiquZero(void)
+{
+    WuqiquTask_Stop();
+
+    if (g_wuqiqu_zero_active == 0U)
+    {
+        g_wuqiqu_zero_active = 1U;
+        g_wuqiqu_zero_start_tick = HAL_GetTick();
+        g_wuqiqu_zero_last_send_tick = 0U;
+    }
+
+    if ((g_wuqiqu_zero_last_send_tick == 0U) ||
+        HasElapsed(g_wuqiqu_zero_last_send_tick, kWuqiquZeroSendIntervalMs))
+    {
+        send_position_to_pc(0, 1, 0, 0, 0);
+        g_wuqiqu_zero_last_send_tick = HAL_GetTick();
+    }
+
+    if (HasElapsed(g_wuqiqu_zero_start_tick, kWuqiquZeroSettleMs))
+    {
+        EnterMainState(FTM_MAIN_IDLE);
+    }
+}
+
+void InitModules(void)
+{
+    if (g_modules_initialized != 0U)
+    {
+        return;
+    }
+
+    vis_init();
+    cmd_init();
+    RS05_Init();
+    M2006Angle_Init();
+    FTMLiftAction_Reset();
+    g_modules_initialized = 1U;
+}
+}
+
+extern "C" volatile uint8_t g_ftm_main_state = FTM_MAIN_INIT;
+extern "C" volatile uint8_t g_ftm_action_state = FTM_ACTION_NONE;
+extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
+extern "C" volatile float g_ftm_yaw_target_degree = 0.0f;
+extern "C" volatile float g_ftm_lift_up_target_mm = 70.0f;
+extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 210.0f;
+extern "C" volatile float g_ftm_lift_down_target_mm = 68.0f;
+extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
+extern "C" volatile uint8_t g_ftm_minipc_claw_release_cmd = 0U;
+extern "C" volatile uint8_t g_ftm_minipc_lift_dock_adjust_cmd = 0U;
+extern "C" volatile int16_t g_ftm_minipc_unused_mark = 0;
+extern "C" volatile uint32_t g_ftm_minipc_control_seq = 0U;
+
 extern "C" uint8_t FTM_GetState(void)
 {
-    return g_ftm_state;
+    return g_ftm_main_state;
 }
 
-/**
- * @brief 微调机构主控制任务
- *
- * @param argument 任务参数
- * @return 无
- */
+extern "C" uint8_t FTM_GetMainState(void)
+{
+    return g_ftm_main_state;
+}
+
+extern "C" uint8_t FTM_GetActionState(void)
+{
+    return g_ftm_action_state;
+}
+
+extern "C" uint8_t FTM_IsWuqiquDone(void)
+{
+    return (g_ftm_main_state == FTM_MAIN_DONE) ? 1U : 0U;
+}
+
+extern "C" uint8_t FTM_IsYawTargetCorrectionEnabled(void)
+{
+    return (g_ftm_yaw_target_correction_state != kYawTargetCorrectionOff) ? 1U : 0U;
+}
+
+extern "C" uint8_t FTM_IsYawTargetTurnActive(void)
+{
+    return (g_ftm_yaw_target_correction_state == kYawTargetCorrectionWuqiquTurn) ? 1U : 0U;
+}
+
+extern "C" float FTM_GetYawTargetDegree(void)
+{
+    return g_ftm_yaw_target_degree;
+}
+
 extern "C" void ftm_task(void *argument)
 {
     (void)argument;
 
+    InitModules();
+
     for (;;)
     {
-        if (g_ftm_state != FTM_STATE_WUQIQU_ROUTE && WuqiquTask_IsActive() != 0U)
+        SyncExternalState();
+        ServiceMiniPcFtmCommands();
+
+        if ((IsWuqiquRouteActiveContext() == 0U) && (WuqiquTask_IsActive() != 0U))
         {
             WuqiquTask_Stop();
         }
 
-        if (g_ftm_state != FTM_STATE_WUQIQU_ZERO && g_wuqiqu_zero.active != 0U)
+        switch (g_ftm_main_state)
         {
-            ResetWuqiquZeroContext();
-        }
+        // 主状态 0：初始化通信、电机和动作封装；完成后进入主状态 1。
+        case FTM_MAIN_INIT:
+            InitModules();
+            EnterMainState(FTM_MAIN_IDLE);
+            break;
 
-        switch (g_ftm_state)
-        {
-        /* 初始化状态 */
-        case FTM_STATE_INIT:
-            ResetReleaseStateMachine();
-            FTM_InitModules();
-            g_ftm_state = FTM_STATE_MOVE;
-            break;
-        /* 微调机构调整状态 */
-        case FTM_STATE_MOVE:
-            if (RunMoveEntryZeroLoop() == false)
+        // 主状态 1：空闲/手动调试；写 g_ftm_action_state 可单独执行小动作。
+        case FTM_MAIN_IDLE:
+            if (g_ftm_action_state != FTM_ACTION_NONE)
             {
-                break;
-            }
-            FTM_RunMoveLoop();
-            break;
-        /* 抓取武器头状态 */
-        case FTM_STATE_GRIP:
-            if (RunGripLoop() != false)
-            {
-                g_ftm_state = FTM_STATE_MOVE;
+                if (RunActionState(g_ftm_action_state))
+                {
+                    EnterActionState(FTM_ACTION_NONE);
+                }
             }
             break;
 
-            // 先翻转到半开位，减小后续夹持时的瞬态冲击。
-            RS05_PositionControl(Speed, kGripClawPreOpenAngleRad);
+        // 主状态 2：独立执行武器区第 1 个跑点；完成后回到主状态 0。
+        case FTM_MAIN_WUQIQU_ROUTE:
+            ServiceWuqiquRoutePoint(0U);
+            break;
 
-            // 再翻转到最终角度。
-            RS05_PositionControl(Speed, kGripClawFinalAngleRad);
-        /* 抓取武器头后回收爪子一半 平台下降80状态 */
-        case FTM_STATE_RELEASE:
-            if (RunReleaseLoop() != false)
-            {
-                g_ftm_state = FTM_STATE_RELEASE_TO_ZERO;
-            }
+        // 主状态 3：向视觉发送置零命令；稳定后回到主状态 1。
+        case FTM_MAIN_WUQIQU_ZERO:
+            ServiceWuqiquZero();
             break;
-        /* 抓取武器头后回收爪子 平台下降到零点状态 */
-        case FTM_STATE_RELEASE_TO_ZERO:
-            if (RunReleaseToZeroLoop() != false)
-            {
-                g_ftm_state = FTM_STATE_MOVE;
-            }
-            break;
-        /* 推杆伸出状态 */
-        case FTM_STATE_PLATFORM_FORWARD:
-            ResetReleaseStateMachine();
-            platform_forward();
-            osDelay(3750); // 30mm / 8mm/s = 3.75s
-            g_ftm_state = FTM_STATE_PLATFORM_STOP;
-            break;
-        /* 推杆缩回状态 */
-        case FTM_STATE_PLATFORM_BACKWARD:
-            ResetReleaseStateMachine();
-            platform_backward();
-            osDelay(3750); // 30mm / 8mm/s = 3.75s
-            g_ftm_state = FTM_STATE_PLATFORM_STOP;
-            break;
-        /* 推杆停止状态 */
-        case FTM_STATE_PLATFORM_STOP:
-            ResetReleaseStateMachine();
-            platform_stop();
-            break;
-        /* 夹爪打开状态 */
-        case FTM_STATE_CLAW_OPEN:
-            ResetReleaseStateMachine();
-            claw_open();
-            break;
-        /* 夹爪关闭状态 */
-        case FTM_STATE_CLAW_CLOSE:
-            ResetReleaseStateMachine();
-            claw_close();
-            break;
-        case FTM_STATE_WUQIQU_ZERO:
-            ResetReleaseStateMachine();
-            WuqiquTask_Stop();
-            if (g_wuqiqu_zero.active == 0U)
-            {
-                g_wuqiqu_zero.active = 1U;
-                g_wuqiqu_zero.start_tick = HAL_GetTick();
-                g_wuqiqu_zero.last_send_tick = 0U;
-            }
 
-            if (g_wuqiqu_zero.last_send_tick == 0U ||
-                HasElapsed(g_wuqiqu_zero.last_send_tick, kWuqiquZeroSendIntervalMs))
+        // 主状态 4：全流程完成保持；RS05 周期补发回位角度，底盘可开启航向保持。
+        case FTM_MAIN_DONE:
+            if (g_m2006_angle_lock_active == 0U)
             {
-                send_position_to_pc(0, 1, 0, 0, 0);
-                g_wuqiqu_zero.last_send_tick = HAL_GetTick();
+                g_m2006_angle_lock_active = 1U;
             }
+            (void)RunRs05State(g_ftm_rs05_return_target_degree, 1U);
+            break;
 
-            if (HasElapsed(g_wuqiqu_zero.start_tick, kWuqiquZeroSettleMs))
+        // 主状态 5：武器区综合取物流程；完成后回到主状态 1。
+        case FTM_MAIN_AUTO_PICK_ROUTE:
+            if (RunMainActionSequence(kMainSequencePickRoute,
+                                      static_cast<uint8_t>(sizeof(kMainSequencePickRoute) / sizeof(kMainSequencePickRoute[0]))))
             {
-                ResetWuqiquZeroContext();
-                // g_ftm_state = FTM_STATE_WUQIQU_ROUTE;
+                EnterMainState(FTM_MAIN_DOCKING);
             }
             break;
-        case FTM_STATE_WUQIQU_ROUTE:
-            if (WuqiquTask_IsActive() == 0U)
-            {
-                WuqiquTask_Start();
-            }
 
-            if (WuqiquTask_RunOnce() != 0U)
+        // 主状态 6：武器区姿态准备流程；完成后回到主状态 1。
+        case FTM_MAIN_AUTO_TURN_READY:
+            if (RunMainActionSequence(kMainSequenceTurnReady,
+                                      static_cast<uint8_t>(sizeof(kMainSequenceTurnReady) / sizeof(kMainSequenceTurnReady[0]))))
             {
-                WuqiquTask_Stop();
-                g_ftm_state = FTM_STATE_MOVE;
+                EnterMainState(FTM_MAIN_IDLE);
             }
             break;
-        /* 默认状态 */
+
+        // 主状态 7：对接调试；只处理 MiniPC 的松手和对接高度微调，状态保持不自动退出。
+        case FTM_MAIN_DOCKING:
+            if (g_docking_lift_adjust_active != 0U)
+            {
+                if (RunLiftState(g_ftm_lift_weapon_head_takeout_dock_target_mm))
+                {
+                    g_docking_lift_adjust_active = 0U;
+                    ResetMechanismStep();
+                }
+            }
+            break;
+
+        // 异常主状态：回到初始化，等待重新触发。
         default:
-            ResetReleaseStateMachine();
-            g_m2006.Stop();
-            g_ftm_state = FTM_STATE_INIT;
+            EnterMainState(FTM_MAIN_INIT);
             break;
         }
+
+        ServiceM2006AngleLock(g_ftm_action_state);
         osDelay(1);
     }
 }

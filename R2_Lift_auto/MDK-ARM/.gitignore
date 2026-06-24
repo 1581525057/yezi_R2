@@ -1,0 +1,42 @@
+# dot files
+/.vscode/launch.json
+/.vscode/keil-assistant.log
+
+# log files
+*.log
+
+# vscode workspace
+*.code-workspace
+/.settings
+/.eide/log
+/.eide.usr.ctx.json
+
+# project out
+/build
+/bin
+/obj
+/out
+
+# eide template
+*.ept
+*.eide-template
+tests/
+
+# Keil MDK-ARM intermediate files
+My_Princess_cpp/*.o
+My_Princess_cpp/*.d
+My_Princess_cpp/*.axf
+My_Princess_cpp/*.elf
+My_Princess_cpp/*.hex
+My_Princess_cpp/*.map
+My_Princess_cpp/*.htm
+My_Princess_cpp/*.dep
+My_Princess_cpp/*.lnp
+My_Princess_cpp/*.lst
+My_Princess_cpp/*.crf
+My_Princess_cpp/*.build_log.htm
+My_Princess_cpp/*.uvproj
+*.uvguix.*
+keil_build.log
+AGENTS.md
+.claude/

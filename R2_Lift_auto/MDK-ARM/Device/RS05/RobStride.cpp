@@ -9,19 +9,17 @@
 
 #include "RobStride.h"
 #include "string.h"
-#define P_MIN -12.5f     // 位置最小值，单位：弧度
-#define P_MAX 12.5f      // 位置最大值，单位：弧度
-#define V_MIN -44.0f     // 速度最小值，单位：rad/s
-#define V_MAX 44.0f      // 速度最大值，单位：rad/s
+#define P_MIN -12.57f    // 位置最小值，单位：弧度
+#define P_MAX 12.57f     // 位置最大值，单位：弧度
+#define V_MIN -50.0f     // 速度最小值，单位：rad/s
+#define V_MAX 50.0f      // 速度最大值，单位：rad/s
 #define KP_MIN 0.0f      // 比例系数最小值
 #define KP_MAX 500.0f    // 比例系数最大值
 #define KD_MIN 0.0f      // 微分系数最小值
 #define KD_MAX 5.0f      // 微分系数最大值
-#define T_MIN -17.0f     // 转矩最小值，单位：Nm
-#define T_MAX 17.0f      // 转矩最大值，单位：Nm
+#define T_MIN -5.5f      // 转矩最小值，单位：Nm
+#define T_MAX 5.5f       // 转矩最大值，单位：Nm
 
-namespace
-{
 void RobStride_Send(FDCAN_HandleTypeDef *can_handle, FTM_CanTxHeaderTypeDef *tx_header, uint8_t *tx_data)
 {
 	FDCAN_TxHeaderTypeDef fdcan_header = {0};
@@ -42,7 +40,6 @@ void RobStride_Send(FDCAN_HandleTypeDef *can_handle, FTM_CanTxHeaderTypeDef *tx_
 	fdcan_header.MessageMarker = 0U;
 
 	(void)HAL_FDCAN_AddMessageToTxFifoQ(can_handle, &fdcan_header, tx_data);
-}
 }
 
 /**
@@ -539,10 +536,11 @@ void RobStride_Motor::RobStride_Motor_CSP_control(float Angle, float limit_spd)
 	else{
 		Motor_Set_All.set_angle = Angle;
 		Motor_Set_All.set_limit_speed = limit_spd;
-		if (drw.run_mode.data != 1)
+		if (Motor_Set_All.set_motor_mode != CSP_control_mode)
 		{
 			Set_RobStride_Motor_parameter(0X7005, CSP_control_mode, Set_mode);
 			Get_RobStride_Motor_parameter(0x7005);
+			Motor_Set_All.set_motor_mode = CSP_control_mode;
 			Enable_Motor();
 			Set_RobStride_Motor_parameter(0X7017, Motor_Set_All.set_limit_speed, Set_parameter);
 		}
@@ -729,11 +727,10 @@ void RobStride_Motor::Set_CAN_ID(uint8_t Set_CAN_ID)
 * @功能     		: RobStride电机设置机械零点 （通信类型6）
 * @参数         : 无
 * @返回值 			: void
-* @概述  				: 会把当前电机位置设为机械零位， 会先失能电机, 再使能电机
+* @概述  				: 会把当前电机位置设为机械零位，调用前需确保电机已失能且不在 PP 模式
 *******************************************************************************/
 void RobStride_Motor::Set_ZeroPos()
 {
-	Disenable_Motor(0);							//失能电机
 	uint8_t txdata[8] = {0};						   	//发送数据
 	FTM_CanTxHeaderTypeDef TxMessage; 	//发送邮箱
 	TxMessage.IDE = CAN_ID_EXT;
@@ -742,7 +739,6 @@ void RobStride_Motor::Set_ZeroPos()
 	TxMessage.ExtId = Communication_Type_SetPosZero<<24|Master_CAN_ID<<8|CAN_ID;
 	txdata[0] = 1;
   RobStride_Send(can, &TxMessage, txdata); // 发送CAN消息
-	Enable_Motor();
 }
 
 /*******************************************************************************

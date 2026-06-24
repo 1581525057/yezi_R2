@@ -8,6 +8,7 @@
 #include "MiniPC.h"
 #include "bsp_dwt.h"
 #include "chassis_task.h"
+#include "FTMTask.h"
 #include "PID.h"
 #include "route_task.h"
 #include <string.h>
@@ -124,6 +125,26 @@ static float fast_atof(const uint8_t **pp, const uint8_t *end)
 
     *pp = p;
     return v * sign;
+}
+
+static int fast_atoi_field(const uint8_t **pp, const uint8_t *end)
+{
+    return static_cast<int>(fast_atof(pp, end));
+}
+
+static uint8_t clamp_uint8_field(int value)
+{
+    if (value <= 0)
+    {
+        return 0U;
+    }
+
+    if (value >= 255)
+    {
+        return 255U;
+    }
+
+    return static_cast<uint8_t>(value);
 }
 
 /* 向视觉指令环形队列尾部压入一条 B 指令 */
@@ -356,23 +377,37 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
     if (p >= e || *p != ',')
         return 0;
     ++p;
+    if (p >= e)
+        return 0;
     parsed.release_flag = static_cast<int>(fast_atof(&p, e));
 
     if (p >= e || *p != ',')
         return 0;
     ++p;
+    if (p >= e)
+        return 0;
     parsed.claw_vertical_flag = static_cast<int>(fast_atof(&p, e));
 
     if (p >= e || *p != ',')
         return 0;
     ++p;
+    if (p >= e)
+        return 0;
     parsed.unused_flag = static_cast<int>(fast_atof(&p, e));
 
-    if (p >= e || *p != ',')
-        return 0;
-    ++p;
-    if (p != e)
-        return 0;
+    if (p < e)
+    {
+        if (*p != ',')
+            return 0;
+        ++p;
+        if (p != e)
+            return 0;
+    }
+
+    g_ftm_minipc_claw_release_cmd = clamp_uint8_field(parsed.release_flag);
+    g_ftm_minipc_lift_dock_adjust_cmd = clamp_uint8_field(parsed.claw_vertical_flag);
+    g_ftm_minipc_unused_mark = static_cast<int16_t>(parsed.unused_flag);
+    ++g_ftm_minipc_control_seq;
 
     *out = parsed;
     return 1;

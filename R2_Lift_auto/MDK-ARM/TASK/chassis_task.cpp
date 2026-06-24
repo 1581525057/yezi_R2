@@ -16,6 +16,7 @@
 #include "usart_task.h"
 #include "route_task.h"
 #include "arm_comm.h"
+#include "FTMTask.h"
 
 extern "C" float WuqiquTask_GetChassisVxTarget(float manual);
 extern "C" float WuqiquTask_GetChassisVyTarget(float manual);
@@ -66,6 +67,18 @@ static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, 
         return CHASSIS_AUTO_ROUTE_PATH;
     }
     return CHASSIS_AUTO_NONE;
+}
+
+static inline uint8_t Chassis_IsRouteYawTurnActive(void)
+{
+    if (route_t.flag_start != 1U)
+    {
+        return 0U;
+    }
+
+    return ((route_t.state == PHASE_TURN_LEFT90) ||
+            (route_t.state == PHASE_TURN_RIGHT90) ||
+            (route_t.state == PHASE_TURN180)) ? 1U : 0U;
 }
 
 // 初始化底盘任务中使用的全部 PID。
@@ -123,13 +136,10 @@ extern "C" void chassis_task(void *argument)
         // 正运动学：由轮速反推底盘当前速度。
         omni_chassis.forwardKinematics();
 
-        float VZ_OUT = 0.0f;
-        // 航向保持：视觉角度偏差越大，输出的底盘自转速度越大。
-        VZ_OUT = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
-
         // 先取遥控器目标速度；自动任务生效时会覆盖对应目标。
         float target_vx = remove_dji.chassis_.Vx;
         float target_vy = remove_dji.chassis_.Vy;
+        float VZ_OUT = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
         float target_vz = VZ_OUT;
         float route_path_vx = target_vx;
         float route_path_vy = target_vy;
@@ -172,6 +182,19 @@ extern "C" void chassis_task(void *argument)
             break;
         }
 
+        if (((auto_source == CHASSIS_AUTO_WUQIQU) || (auto_source == CHASSIS_AUTO_NONE)) &&
+            (FTM_IsYawTargetCorrectionEnabled() != 0U))
+        {
+            yaw_target = FTM_GetYawTargetDegree();
+            if (FTM_IsYawTargetTurnActive() != 0U)
+            {
+                target_vx = 0.0f;
+                target_vy = 0.0f;
+            }
+            // FTM 完成后保持指定 yaw；武器区中间转向时使用同一套航向 PID 原地转向。
+            target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
+        }
+
         // 抬升机构根据自身状态继续限制底盘平移速度。
         target_vy = lift_auto.getChassisVyTarget(target_vy);
         target_vx = lift_auto.getChassisVxTarget(target_vx);
@@ -180,7 +203,7 @@ extern "C" void chassis_task(void *argument)
         target_vy = arm_comm.getChassisVyTarget(target_vy);
         target_vx = arm_comm.getChassisVxTarget(target_vx);
 
-        // 使用仲裁后的自转速度，允许自动任务接管 yaw 速度。
+        // 自转输出统一走 target_vz：默认 VZ_OUT，武器区 FTM yaw 和自动任务可覆盖。
         omni_chassis.setRemote(target_vx, target_vy, target_vz);
 
         // 速度环：根据当前速度和目标速度的误差计算 x/y 方向驱动力。

@@ -3,59 +3,30 @@
 
 #include <stdint.h>
 
-typedef struct
-{
-    uint8_t state;
-    uint8_t deviation_flag;
-    uint8_t on_final_point_flag;
-    uint16_t final_xy_stable_count;
-    uint16_t final_theta_stable_count;
-    int current_index;
-    int deviation_index;
-    float pose_x;
-    float pose_y;
-    float pose_yaw;
-    float target_x;
-    float target_y;
-    float target_yaw;
-    float err_x;
-    float err_y;
-    float err_distance;
-    float safe_distance;
-    float dot_product;
-    float normal_vector_x;
-    float normal_vector_y;
-    float normal_vel_x;
-    float normal_vel_y;
-    float err_theta;
-    float out_vx;
-    float out_vy;
-    float out_wz;
-} WuqiquDebug_t;
-
 class WuqiquPathPlanner
 {
 public:
-    static const uint16_t PATH_POINT_COUNT = 14U;
+    static const uint8_t MAX_WAYPOINTS = 10;
 
     enum PlannerState
     {
         STATE_IDLE = 0,
-        STATE_RUNNING,
-        STATE_FINAL_POSITION,
-        STATE_FINAL_YAW,
-        STATE_FINISHED,
-        STATE_DEVIATED
+        STATE_APPROACH,
+        STATE_SLOW_APPROACH,
+        STATE_SOFT_CONTACT,
+        STATE_FINISHED
     };
 
-    class Point
+    class TargetPoint
     {
     public:
-        float vx;
-        float vy;
-        float x;
-        float y;
-        float yaw;
+        float x_m;
+        float y_m;
+        float yaw_deg;
+        float yaw_kp_scale;
+        float yaw_wz_max;
+        float xy_tolerance_m;
+        float yaw_tolerance_deg;
     };
 
     class Pose
@@ -75,58 +46,78 @@ public:
     class Output
     {
     public:
-        float world_vx_set;
-        float world_vy_set;
-        float wz_set;
+        float world_vx_mps;
+        float world_vy_mps;
+        float wz_radps;
     };
 
     WuqiquPathPlanner();
 
     int follow(const Pose &current_pose);
     void reset(void);
+    void resetRoute(void);
+
+    void advanceToNext(void);
+    bool isAllFinished(void) const;
+    uint8_t getCurrentIndex(void) const;
+    uint8_t getWaypointCount(void) const;
 
     const Output &getOutput(void) const;
-    int getCurrentIndex(void) const;
     PlannerState getState(void) const;
-    uint8_t getDeviationFlag(void) const;
-    int getDeviationIndex(void) const;
-    const Point *getPath(void) const;
-    uint16_t getPathPointCount(void) const;
-
-    float slewRateLimit(float target_vel, float current_vel, float max_acc_step, float max_dec_step) const;
+    bool isFinished(void) const;
 
 private:
-    static const Point action_path_[PATH_POINT_COUNT];
-
-    int current_path_index_;
-    uint8_t vel_calculate_enter_flag_;
-    uint8_t final_point_xy_correct_flag_;
-    uint8_t final_point_theta_correct_flag_;
-    uint8_t on_final_point_flag_;
-    uint16_t point_stable_count_;
-    uint16_t final_xy_stable_count_;
-    uint16_t final_theta_stable_count_;
-    PlannerState state_;
-    uint8_t deviation_flag_;
-    int deviation_index_;
-
-    float last_err_theta_normal_;
-    float last_vector4_[2];
-    float last_err_x_;
-    float last_err_y_;
-    float last_err_theta_final_;
+    TargetPoint waypoints_[MAX_WAYPOINTS];
+    TargetPoint target_;
+    uint8_t waypoint_count_;
+    uint8_t current_index_;
 
     Output output_;
+    PlannerState state_;
 
-    uint8_t safeCheck(const Point &cur_tar_point, const Pose &current_pose) const;
-    void pointCalculate(const Pose &current_pose);
-    int finPointCalculate(const Pose &current_pose);
-    float normalizeAngle(float angle) const;
+    float approach_v_max_;
+    float slow_v_max_;
+    float contact_v_max_;
+    float finish_v_max_;
+    float min_move_v_;
+
+    float slow_dist_;
+    float contact_dist_;
+    float finish_dist_;
+    float decel_;
+
+    float kp_approach_;
+    float kd_approach_;
+    float kp_slow_;
+    float kd_slow_;
+    float kp_contact_;
+    float kd_contact_;
+
+    float yaw_sign_;
+    float yaw_kp_;
+    float min_yaw_wz_;
+    float strong_yaw_wz_;
+    float strong_yaw_error_deg_;
+    float moving_wz_max_;
+    float settle_wz_max_;
+    float yaw_tolerance_deg_;
+
+    uint16_t stable_cycles_;
+    uint32_t contact_hold_ms_;
+    uint32_t contact_timeout_ms_;
+    uint32_t soft_contact_start_tick_;
+    uint16_t soft_contact_stable_count_;
+
+    void loadCurrentWaypoint(void);
+    void setZeroOutput(void);
+    void updateState(float distance_m, uint8_t xy_in_tolerance, uint32_t now_tick);
+    void limitVector(float &vx, float &vy, float max_speed) const;
+    void raiseVectorToMin(float &vx, float &vy, float min_speed) const;
+    float limitFloat(float value, float min_value, float max_value) const;
+    float normalizeAngleDeg(float angle) const;
     float safeSqrt(float value) const;
-    float safeInvSqrt(float value) const;
 };
 
 extern WuqiquPathPlanner wuqiqu;
-extern WuqiquDebug_t wuqiqu_debug;
 
 #endif
