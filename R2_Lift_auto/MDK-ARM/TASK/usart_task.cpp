@@ -6,19 +6,22 @@
 // #include "AS5047.h"
 #include "DT35.h"
 #include "MiniPC.h"
-#include <string.h>
-#include <stdio.h>
 #include "bsp_dwt.h"
 #include "chassis_task.h"
 #include "FTMTask.h"
 #include "PID.h"
 #include "route_task.h"
+#include <string.h>
+#include <stdio.h>
+
 /* ========================== 全局变量 ========================== */
 
 /* USB 串口接收缓冲区 */
 uint8_t data_usb[USB_RX_BUFFER_SIZE];
-uint16_t usb_rx_idx = 0;          /* USB接收缓冲区写指针，CDC_Receive_HS追加写入，usart_task消费后清零 */
+uint16_t usb_rx_idx = 0;
+
 static uint8_t posi_conputer[40]; // usb单片机发送给电脑
+
 /* 视觉数据，由 parse_vision_frame_computer() 写入 */
 VisionData_t vision;
 
@@ -38,10 +41,11 @@ uint8_t vision_block_tail = 0U;
 
 // 每个方块的中心坐标
 Block_Vision block_vision_middle[13];
-float block_middle_x = 1.02f;
-float block_middle_y = -1.49f;
+float block_middle_x = 3.39f;
+float block_middle_y = 1.61f;
 
 // 通过第2个方块来计算得到其他8个的坐标位置
+
 static void Block_claulate_Middle(void)
 {
     float Block_Size = 1.2f;
@@ -49,29 +53,29 @@ static void Block_claulate_Middle(void)
     float y = block_middle_y;
     block_vision_middle[0] = {0.0, 0.0};
 
-    block_vision_middle[1] = {x, y - Block_Size};
+    block_vision_middle[1] = {x, y + Block_Size};
 
     block_vision_middle[2] = {x, y};
 
-    block_vision_middle[3] = {x, y + Block_Size};
+    block_vision_middle[3] = {x, y - Block_Size};
 
-    block_vision_middle[4] = {x + Block_Size, y - Block_Size};
+    block_vision_middle[4] = {x + Block_Size, y + Block_Size};
 
     block_vision_middle[5] = {x + Block_Size, y};
 
-    block_vision_middle[6] = {x + Block_Size, y + Block_Size};
+    block_vision_middle[6] = {x + Block_Size, y - Block_Size};
 
-    block_vision_middle[7] = {x + Block_Size * 2.0f, y - Block_Size};
+    block_vision_middle[7] = {x + Block_Size * 2.0f, y + Block_Size};
 
     block_vision_middle[8] = {x + Block_Size * 2.0f, y};
 
-    block_vision_middle[9] = {x + Block_Size * 2.0f, y + Block_Size};
+    block_vision_middle[9] = {x + Block_Size * 2.0f, y - Block_Size};
 
-    block_vision_middle[10] = {x + Block_Size * 3.0f, y - Block_Size};
+    block_vision_middle[10] = {x + Block_Size * 3.0f, y + Block_Size};
 
     block_vision_middle[11] = {x + Block_Size * 3.0f, y};
 
-    block_vision_middle[12] = {x + Block_Size * 3.0f, y + Block_Size};
+    block_vision_middle[12] = {x + Block_Size * 3.0f, y - Block_Size};
 }
 
 /* ===================== 内部工具函数 ===================== */
@@ -171,6 +175,16 @@ uint8_t vision_command_pop(int *out)
     return 1U;
 }
 
+/* 查看队头视觉指令但不弹出，用于路线层判断下一步动作。 */
+uint8_t vision_command_peek(int *out)
+{
+    if (out == nullptr || vision_command_head == vision_command_tail)
+        return 0U;
+
+    *out = vision_command_queue[vision_command_head];
+    return 1U;
+}
+
 /* 检查队列中是否有待处理的视觉指令：head != tail 即非空 */
 uint8_t vision_command_has_pending(void)
 {
@@ -225,11 +239,12 @@ void vision_block_clear(void)
 /**
  * @brief  解析视觉帧
  *
- * 帧格式：S,<exec>,<x>,<y>,<yaw>,C,<action...>,B,<block...>,E
- * - exec：执行程（整数）
- * - x, y, yaw：坐标和角度（浮点数）
- * - C：固定字母，后面是不定长的动作数字，存入动作队列
- * - B：固定字母，后面是不定长的方块编号，存入方块队列
+ * 帧格式：S,<exec>,<x>,<y>,<yaw>,C,<action...>,B,<block...>,A,<release>,<claw_vertical>,<unused>,E
+ * - exec：是否前往第二区标志（整数）
+ * - x、y、yaw：坐标和角度（浮点数）
+ * - C：后接不定长梅花林动作，存入动作队列
+ * - B：后接不定长梅花林格子编号，存入方块队列
+ * - A：后接是否松手、夹爪上下和无用标定位三个整数
  *
  * @param  data  输入字节数组
  * @param  len   数组长度
@@ -241,7 +256,7 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
     if (data == nullptr || out == nullptr || len == 0)
         return 0;
 
-    VisionData_t parsed = {0, 0.0f, 0.0f, 0.0f, 0};
+    VisionData_t parsed = {};
 
     /* 查找帧头 'S' */
     const uint8_t *s = nullptr;
@@ -301,14 +316,8 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
     /* 解析 angle_x (yaw) */
     parsed.angle_x = fast_atof(&p, e);
 
-    *out = parsed;
-
-    /* 如果已经到帧尾，直接返回 */
-    if (p >= e)
-        return 1;
-
     /* 跳过逗号，准备解析 C 后面的动作 */
-    if (*p != ',')
+    if (p >= e || *p != ',')
         return 0;
     ++p;
 
@@ -330,8 +339,7 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
             if (p >= e)
                 return 0;
             int action = static_cast<int>(fast_atof(&p, e));
-            if (action != 0)
-                vision_command_push(action);
+            vision_command_push(action);
         }
         else
         {
@@ -347,66 +355,65 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
     /* 解析 B 后面的不定长方块编号，压入方块队列 */
     while (p < e)
     {
-        if (*p == ',')
-        {
-            ++p;
-            if (p >= e)
-                break;
-            if (*p == 'A')
-                break;
-            /* 逗号后面可能是数字或者直接到 E */
-            if (p >= e)
-                return 0;
-            int block = fast_atoi_field(&p, e);
-            if (block != 0)
-                vision_block_push(block);
-        }
-        else
-        {
+        if (*p != ',')
             return 0;
-        }
+
+        ++p;
+        /* A 标记表示格子序列结束 */
+        if (p < e && *p == 'A')
+            break;
+        if (p >= e)
+            return 0;
+
+        int block = static_cast<int>(fast_atof(&p, e));
+        vision_block_push(block);
     }
 
-    if (p < e && *p == 'A')
+    /* 解析 A 后面的三个固定标定位 */
+    if (p >= e || *p != 'A')
+        return 0;
+    ++p;
+
+    if (p >= e || *p != ',')
+        return 0;
+    ++p;
+    if (p >= e)
+        return 0;
+    parsed.release_flag = static_cast<int>(fast_atof(&p, e));
+
+    if (p >= e || *p != ',')
+        return 0;
+    ++p;
+    if (p >= e)
+        return 0;
+    parsed.claw_vertical_flag = static_cast<int>(fast_atof(&p, e));
+
+    if (p >= e || *p != ',')
+        return 0;
+    ++p;
+    if (p >= e)
+        return 0;
+    parsed.unused_flag = static_cast<int>(fast_atof(&p, e));
+
+    if (p < e)
     {
-        int release_cmd = 0;
-        int lift_adjust_cmd = 0;
-        int unused_mark = 0;
-
-        ++p;
-        if (p >= e || *p != ',')
+        if (*p != ',')
             return 0;
         ++p;
-        release_cmd = fast_atoi_field(&p, e);
-
-        if (p >= e || *p != ',')
+        if (p != e)
             return 0;
-        ++p;
-        lift_adjust_cmd = fast_atoi_field(&p, e);
-
-        if (p >= e || *p != ',')
-            return 0;
-        ++p;
-        unused_mark = fast_atoi_field(&p, e);
-
-        if (p < e)
-        {
-            if (*p != ',')
-                return 0;
-            ++p;
-            if (p != e)
-                return 0;
-        }
-
-        g_ftm_minipc_claw_release_cmd = clamp_uint8_field(release_cmd);
-        g_ftm_minipc_lift_dock_adjust_cmd = clamp_uint8_field(lift_adjust_cmd);
-        g_ftm_minipc_unused_mark = static_cast<int16_t>(unused_mark);
-        ++g_ftm_minipc_control_seq;
     }
 
+    g_ftm_minipc_claw_release_cmd = clamp_uint8_field(parsed.release_flag);
+    g_ftm_minipc_lift_dock_adjust_cmd = clamp_uint8_field(parsed.claw_vertical_flag);
+    g_ftm_minipc_unused_mark = static_cast<int16_t>(parsed.unused_flag);
+    ++g_ftm_minipc_control_seq;
+
+    *out = parsed;
     return 1;
 }
 
+#ifndef VISION_FRAME_PARSER_HOST_TEST
 /**
  * @brief  通过 USB 向上位机发送位置信息
  *
@@ -471,17 +478,7 @@ extern "C" void usart_task(void *argument)
             Flag1 = 0;
         }
 
-        if (Flag1 == 2)
-        {
-            send_position_to_pc(1, 0, 0, 0, 0);
-            Flag1 = 0;
-        }
-
-        if (Flag1 == 3)
-        {
-            dt35.init(&hspi3);
-            Flag1 = 0;
-        }
         osDelay(1);
     }
 }
+#endif

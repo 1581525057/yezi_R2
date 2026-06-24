@@ -150,10 +150,12 @@ virtualFolder:
       files:
         - path: Route_Plan/meiling.cpp
         - path: Route_Plan/plan_route.cpp
-        - path: Route_Plan/lift_auto.cpp
         - path: Route_Plan/lift_step_down.cpp
+        - path: Route_Plan/lift_step_up.cpp
         - path: Route_Plan/wuqiqu.cpp
         - path: Route_Plan/arm_comm.cpp
+        - path: Route_Plan/path_follow.cpp
+        - path: Route_Plan/path.cpp
       folders: []
     - name: ::CMSIS
       files: []

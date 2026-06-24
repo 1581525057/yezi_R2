@@ -28,13 +28,29 @@ typedef enum
     CHASSIS_AUTO_NONE = 0,
     CHASSIS_AUTO_MEILING,
     CHASSIS_AUTO_WUQIQU,
+    CHASSIS_AUTO_ROUTE_PATH,
     CHASSIS_AUTO_CONFLICT
 } ChassisAutoSource;
 
 // 底盘自动控制只允许一个来源生效，避免多个任务同时改写目标速度。
-static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, uint8_t meiling_area_active)
+static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, uint8_t meiling_area_active, uint8_t route_path_active)
 {
-    if (wuqiqu_active != 0U && meiling_area_active != 0U)
+    uint8_t active_count = 0U;
+
+    if (wuqiqu_active != 0U)
+    {
+        active_count++;
+    }
+    if (meiling_area_active != 0U)
+    {
+        active_count++;
+    }
+    if (route_path_active != 0U)
+    {
+        active_count++;
+    }
+
+    if (active_count > 1U)
     {
         return CHASSIS_AUTO_CONFLICT;
     }
@@ -45,6 +61,10 @@ static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, 
     if (meiling_area_active != 0U)
     {
         return CHASSIS_AUTO_MEILING;
+    }
+    if (route_path_active != 0U)
+    {
+        return CHASSIS_AUTO_ROUTE_PATH;
     }
     return CHASSIS_AUTO_NONE;
 }
@@ -78,7 +98,7 @@ static float target_vy_last = 0.0f;
 static float target_vz_last = 0.0f;
 float rpm, current;
 float yaw_target;
-
+float x_M;
 extern "C" void chassis_task(void *argument)
 {
     // 初始化底盘任务依赖的通信、计时和控制器模块。
@@ -119,26 +139,19 @@ extern "C" void chassis_task(void *argument)
         // 先取遥控器目标速度；自动任务生效时会覆盖对应目标。
         float target_vx = remove_dji.chassis_.Vx;
         float target_vy = remove_dji.chassis_.Vy;
-        float target_vz = remove_dji.chassis_.Vz;
+        float VZ_OUT = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
+        float target_vz = VZ_OUT;
+        float route_path_vx = target_vx;
+        float route_path_vy = target_vy;
+        float route_path_vz = target_vz;
+        uint8_t route_path_active = route_t.getPathChassisTarget(target_vx,
+                                                                 target_vy,
+                                                                 target_vz,
+                                                                 &route_path_vx,
+                                                                 &route_path_vy,
+                                                                 &route_path_vz);
 
-        const ChassisAutoSource auto_source = ChassisAuto_SelectSource(WuqiquTask_IsActive(), RouteTask_IsMeilingAreaActive());
-
-        if (FTM_IsYawTargetCorrectionEnabled() != 0U)
-        {
-            yaw_target = FTM_GetYawTargetDegree();
-            if (FTM_IsYawTargetTurnActive() != 0U)
-            {
-                target_vx = 0.0f;
-                target_vy = 0.0f;
-            }
-            // FTM 完成后保持指定 yaw；武器区中间转向时使用同一套航向 PID 原地转向。
-            target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
-        }
-        else if (Chassis_IsRouteYawTurnActive() != 0U)
-        {
-            target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
-        }
-
+        const ChassisAutoSource auto_source = ChassisAuto_SelectSource(WuqiquTask_IsActive(), RouteTask_IsMeilingAreaActive(), route_path_active);
         switch (auto_source)
         {
         case CHASSIS_AUTO_WUQIQU:
@@ -153,6 +166,12 @@ extern "C" void chassis_task(void *argument)
             target_vy = meiling.getChassisVyTarget(target_vy);
             target_vz = meiling.getChassisVzTarget(target_vz);
             break;
+        case CHASSIS_AUTO_ROUTE_PATH:
+            // 1 区跑点接管底盘速度。
+            target_vx = route_path_vx;
+            target_vy = route_path_vy;
+            target_vz = route_path_vz;
+            break;
         case CHASSIS_AUTO_CONFLICT:
             // 两个自动任务同时生效时停车，避免底盘控制权冲突。
             target_vx = 0.0f;
@@ -163,6 +182,19 @@ extern "C" void chassis_task(void *argument)
             break;
         }
 
+        if (((auto_source == CHASSIS_AUTO_WUQIQU) || (auto_source == CHASSIS_AUTO_NONE)) &&
+            (FTM_IsYawTargetCorrectionEnabled() != 0U))
+        {
+            yaw_target = FTM_GetYawTargetDegree();
+            if (FTM_IsYawTargetTurnActive() != 0U)
+            {
+                target_vx = 0.0f;
+                target_vy = 0.0f;
+            }
+            // FTM 完成后保持指定 yaw；武器区中间转向时使用同一套航向 PID 原地转向。
+            target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
+        }
+
         // 抬升机构根据自身状态继续限制底盘平移速度。
         target_vy = lift_auto.getChassisVyTarget(target_vy);
         target_vx = lift_auto.getChassisVxTarget(target_vx);
@@ -171,7 +203,7 @@ extern "C" void chassis_task(void *argument)
         target_vy = arm_comm.getChassisVyTarget(target_vy);
         target_vx = arm_comm.getChassisVxTarget(target_vx);
 
-        // 自转输出统一走 target_vz：默认遥控，FTM 完成/路线转向时由航向 PID 生成，自动任务可覆盖。
+        // 自转输出统一走 target_vz：默认 VZ_OUT，武器区 FTM yaw 和自动任务可覆盖。
         omni_chassis.setRemote(target_vx, target_vy, target_vz);
 
         // 速度环：根据当前速度和目标速度的误差计算 x/y 方向驱动力。
@@ -218,5 +250,5 @@ static void chassis_pid_init(void)
     pid_F_chassis_linear_y.Init(OUTPUT_CHASSIS_LINEAR, INTERLIMIT_CHASSIS_LINEAR, DEBAND_CHASSIS_LINEAR, KP_CHASSIS_LINEAR, KI_CHASSIS_LINEAR, KD_CHASSIS_LINEAR, 0, 0x00);
 
     // 航向保持 PID。
-    pid_yaw.Init(2.5, 0.2, 0.1, 0.1, 0.02, 0, 0, 0x00);
+    pid_yaw.Init(2.5, 0.8, 1.0, 0.10, 0.1, 0, 0, 0x00);
 }

@@ -48,7 +48,6 @@ public:
         STATE_IDLE = 0,
         STATE_RUNNING,
         STATE_FINAL_POSITION,
-        STATE_FINAL_YAW,
         STATE_FINISHED,
         STATE_DEVIATED
     };
@@ -76,13 +75,18 @@ public:
     int getCurrentIndex(void) const;
 
     /*
+     * 将世界系二维向量转换到车体系。
+     * yaw_rad 为车体相对世界系的当前朝向，单位 rad；输入和输出单位保持一致。
+     */
+    static void worldToBody(float world_x, float world_y, float yaw_rad, float *body_x, float *body_y);
+
+    /*
      * 运行时可调参数，方便串口或调试器实时修改。
      * 声明为 static 成员，定义和默认值在 cpp 文件中。
      */
     static float SAFE_DISTANCE;        /* 安全距离阈值，超出则判定偏离。单位 mm。 */
     static float POINT_ALLOW_DIST;     /* 中间段点切换允许距离。单位 mm。 */
     static float FINAL_ALLOW_DIST;     /* 终点 XY 到位判定距离。单位 mm。 */
-    static float FINAL_ALLOW_ANGLE;    /* 终点 yaw 到位判定角度。单位 rad。 */
     static float NORMAL_P;             /* 中间段法向纠偏 P 增益。 */
     static float NORMAL_D;             /* 中间段法向纠偏 D 增益。 */
     static float THETA_P;              /* 航向角 P 增益。 */
@@ -90,8 +94,6 @@ public:
     static float FINAL_XY_P;           /* 终点 XY 精定位 P 增益。 */
     static float FINAL_XY_MIN_VEL;     /* 终点 XY 最小速度。单位 mm/s。 */
     static float FINAL_XY_MAX_VEL;     /* 终点 XY 最大速度。单位 mm/s。 */
-    static float FINAL_YAW_P;          /* 终点 yaw 精定位 P 增益。 */
-    static float FINAL_YAW_MAX_VEL;    /* 终点 yaw 最大角速度。单位 rad/s。 */
 
 private:
     static const uint16_t MAX_PATH_POINTS = 256U;
@@ -111,10 +113,7 @@ private:
     float last_normal_y_;
     uint8_t vel_enter_flag_;
 
-    /* 终点精定位状态。 */
-    uint8_t on_final_flag_;
     uint16_t final_xy_stable_cnt_;
-    uint16_t final_theta_stable_cnt_;
     float last_err_x_;
     float last_err_y_;
     float last_err_theta_;

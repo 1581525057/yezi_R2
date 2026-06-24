@@ -20,6 +20,7 @@
 # eide template
 *.ept
 *.eide-template
+tests/
 
 # Keil MDK-ARM intermediate files
 My_Princess_cpp/*.o

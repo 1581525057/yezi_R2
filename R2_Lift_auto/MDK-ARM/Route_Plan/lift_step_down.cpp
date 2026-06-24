@@ -1,7 +1,17 @@
 #include "lift_step_down.h"
+#include "lift_class.h"
 #include "usart_task.h"
 #include <math.h>
 
+#ifndef STEP_DOWN_CYLINDER_OPEN
+#define STEP_DOWN_CYLINDER_OPEN() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
+#endif
+
+#ifndef STEP_DOWN_CYLINDER_CLOSE
+#define STEP_DOWN_CYLINDER_CLOSE() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
+#endif
+
+// 下四百：1.先走到一定位置 2. 抬升抬到-200，同时打开气缸 3.动2006到指定位置 4.抬升到+200，等待+200抬升完毕后，关闭气缸  5.然后到中心点 6.然后抬升到+100
 extern VisionData_t vision;
 
 static void step_down_world_error_to_body_error(float x_world, float y_world, float yaw_deg, float *x_body, float *y_body)
@@ -16,14 +26,14 @@ static void step_down_world_error_to_body_error(float x_world, float y_world, fl
 }
 
 // 第 1、3 阶段底盘移动时允许输出的最大速度，单位为 m/s。
-float STEP_DOWN_AUTO_CHASSIS_SPEED_MPS = 0.5f;
+float STEP_DOWN_AUTO_CHASSIS_SPEED_MPS = 0.6f;
 // 底盘速度计算使用的制动包络参数。数值越大，距离目标较远时允许的速度越高。
-float STEP_DOWN_CHASSIS_ACC_SPEED = 0.3f;
+float STEP_DOWN_CHASSIS_ACC_SPEED = 0.35f;
 
 // 第 2 阶段升降轮带动车辆离开台阶时允许输出的最大线速度，单位为 m/s。
-float STEP_DOWN_AUTO_LIFT_SPEED_MPS = 0.55f;
+float STEP_DOWN_AUTO_LIFT_SPEED_MPS = 1.05f;
 // 升降轮速度计算使用的制动包络参数。数值越大，离开台阶时允许的速度越高。
-float STEP_DOWN_LIFT_ACC_SPEED = 0.4f;
+float STEP_DOWN_LIFT_ACC_SPEED = 0.6f;
 
 // 雷达坐标必须连续满足目标条件 10 个周期，状态机才允许进入下一阶段。
 uint8_t STEP_DOWN_AUTO_STABLE_COUNT = 10U;
@@ -112,6 +122,7 @@ void LiftStepDown::resetStepDown(void)
     lift_linear_speed_target_ = 0.0f;
     chassis_vx_target_ = 0.0f;
     chassis_vy_target_ = 0.0f;
+    step_down_height_mode_mm_ = 200U;
     step_down_stable_count_ = 0U;
     step_down_block_num_ = 0;
     step_down_radar_x_ref_prepare_base_ = 0.0f;
@@ -126,6 +137,8 @@ void LiftStepDown::resetStepDown(void)
     step_down_turn_right_90_ = 0U;
     step_down_turn_180_ = 1U;
     step_down_descend_target_valid_ = 0U;
+    step_down_pre_lift_command_seq_ = 0U;
+    step_down_post_lift_command_seq_ = 0U;
 }
 
 void LiftStepDown::startStepDown(void)
@@ -173,7 +186,7 @@ void LiftStepDown::update(void)
          * 此时车辆仍由底盘支撑，先根据上一个转向动作推导准备点。
          * 准备点误差是世界系坐标，输出底盘速度前需要转换到车体系。
          */
-        lift_switch_target_ = 1U;
+        lift_switch_target_ = 3U;
         lift_linear_speed_target_ = 0.0f;
 
         step_down_radar_x_ref_prepare_ = step_down_radar_x_ref_prepare_base_;
@@ -225,15 +238,45 @@ void LiftStepDown::update(void)
             chassis_vy_target_ = 0.0f;
             step_down_stable_count_ = 0U;
             step_down_descend_target_valid_ = 0U;
-            step_down_state_ = STEP_DOWN_DESCEND;
+            if (step_down_height_mode_mm_ == 400U)
+            {
+                step_down_pre_lift_command_seq_ = lift_calulate.command_seq;
+                STEP_DOWN_CYLINDER_OPEN();
+                step_down_state_ = STEP_DOWN_WAIT_PRE_LIFT_HEIGHT;
+            }
+            else
+            {
+                step_down_state_ = STEP_DOWN_DESCEND;
+            }
         }
         break;
     }
 
+    case STEP_DOWN_WAIT_PRE_LIFT_HEIGHT:
+        /*
+         * 第 2 阶段：切到 2 档下降到下 400 准备高度。
+         *
+         * 这里学习上 400 流程，先记录进入等待前的高度命令序号。
+         * 只有 lift_task 接收到新档位并完成这条高度轨迹后，才允许 2006 开始移动。
+         */
+        lift_switch_target_ = 2U;
+        lift_linear_speed_target_ = 0.0f;
+        chassis_vx_target_ = 0.0f;
+        chassis_vy_target_ = 0.0f;
+
+        if (lift_calulate.command_seq != step_down_pre_lift_command_seq_ &&
+            lift_calulate.finished == 1U)
+        {
+            step_down_stable_count_ = 0U;
+            step_down_descend_target_valid_ = 0U;
+            step_down_state_ = STEP_DOWN_DESCEND;
+        }
+        break;
+
     case STEP_DOWN_DESCEND:
     {
         /*
-         * 第 2 阶段：升降轮带动车辆离开当前台阶。
+         * 第 3 阶段：升降轮带动车辆离开当前台阶。
          *
          * 切换到 2 档后，底盘处于悬空状态，底盘轮无法可靠驱动车辆。
          * 因此强制将底盘 Vx/Vy 置零，仅使用升降轮目标线速度离开台阶。
@@ -273,26 +316,54 @@ void LiftStepDown::update(void)
         }
         lift_linear_speed_target_ = lift_speed;
 
-        if (step_down_stable_confirm((fabsf(lift_err) < 0.030f) ? 1U : 0U) != 0U)
+        if (step_down_stable_confirm((fabsf(lift_err) < 0.040f) ? 1U : 0U) != 0U)
         {
-            lift_switch_target_ = 1U;
             lift_linear_speed_target_ = 0.0f;
             step_down_stable_count_ = 0U;
             step_down_descend_target_valid_ = 0U;
-            step_down_state_ = STEP_DOWN_MOVE_TO_FINISH;
+            if (step_down_height_mode_mm_ == 400U)
+            {
+                step_down_post_lift_command_seq_ = lift_calulate.command_seq;
+                step_down_state_ = STEP_DOWN_WAIT_POST_LIFT_HEIGHT;
+            }
+            else
+            {
+                lift_switch_target_ = 3U;
+                step_down_state_ = STEP_DOWN_MOVE_TO_FINISH;
+            }
         }
         break;
     }
 
+    case STEP_DOWN_WAIT_POST_LIFT_HEIGHT:
+        /*
+         * 第 4 阶段：切到 1 档上升到释放高度。
+         *
+         * 1 档高度轨迹完成后再关闭气缸，然后立即允许底盘回中心。
+         */
+        lift_switch_target_ = 1U;
+        lift_linear_speed_target_ = 0.0f;
+        chassis_vx_target_ = 0.0f;
+        chassis_vy_target_ = 0.0f;
+
+        if (lift_calulate.command_seq != step_down_post_lift_command_seq_ &&
+            lift_calulate.finished == 1U)
+        {
+            STEP_DOWN_CYLINDER_CLOSE();
+            step_down_stable_count_ = 0U;
+            step_down_state_ = STEP_DOWN_MOVE_TO_FINISH;
+        }
+        break;
+
     case STEP_DOWN_MOVE_TO_FINISH:
     {
         /*
-         * 第 3 阶段：底盘移动到下一台阶终点。
+         * 第 5 阶段：底盘移动到下一台阶终点。
          *
-         * 本阶段不等待 1 档高度轨迹执行完成，进入状态后立即允许底盘移动。
+         * 本阶段切回 3 档后不等待高度轨迹执行完成，直接边抬升到 +100 边回中心。
          * 升降轮保持停止，底盘同时修正 X 和 Y 坐标，走到配置的终点。
          */
-        lift_switch_target_ = 1U;
+        lift_switch_target_ = 3U;
         lift_linear_speed_target_ = 0.0f;
 
         // X/Y 两个方向分别计算误差，使底盘能够同时完成纵向和横向收敛。
@@ -310,8 +381,8 @@ void LiftStepDown::update(void)
                                              STEP_DOWN_AUTO_CHASSIS_SPEED_MPS);
 
         // 只有 X、Y 误差都连续 10 个周期小于 5 cm，才认为下台阶流程完成。
-        if (step_down_stable_confirm((fabsf(x_err) < 0.030f &&
-                                      fabsf(y_err) < 0.030f)
+        if (step_down_stable_confirm((fabsf(x_err) < 0.020f &&
+                                      fabsf(y_err) < 0.020f)
                                          ? 1U
                                          : 0U) != 0U)
         {
@@ -327,10 +398,10 @@ void LiftStepDown::update(void)
         /*
          * 结束保持阶段：不立即恢复手动透传。
          *
-         * 保持 1 档和全部零速度，直到外部确认流程结束并调用 stopStepDown()。
+         * 保持 3 档和全部零速度，直到外部确认流程结束并调用 stopStepDown()。
          * 这样可以避免结束瞬间重新接入手动输入，导致车辆突然运动。
          */
-        lift_switch_target_ = 1U;
+        lift_switch_target_ = 3U;
         lift_linear_speed_target_ = 0.0f;
         chassis_vx_target_ = 0.0f;
         chassis_vy_target_ = 0.0f;
@@ -429,4 +500,10 @@ void LiftStepDown::setStepDownBlockNum(int num)
 {
     // 仅保存编号，方便外部调试和后续扩展；当前状态机不根据编号分支。
     step_down_block_num_ = num;
+}
+
+void LiftStepDown::setStepDownHeightMode(uint16_t height_mm)
+{
+    // 只有 400 需要融合气缸流程，其余输入按下 200 旧流程处理。
+    step_down_height_mode_mm_ = (height_mm == 400U) ? 400U : 200U;
 }
