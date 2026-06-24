@@ -25,6 +25,8 @@
 .eide.usr.ctx.json
 *eide*
 *EIDE*
+/MDK-ARM/tests/
+/docs/
 *.ept
 *.eide-template
 

@@ -1,3 +1,0 @@
-#ifndef ROUTE_TEST_STUB_BSP_CAN_H
-#define ROUTE_TEST_STUB_BSP_CAN_H
-#endif

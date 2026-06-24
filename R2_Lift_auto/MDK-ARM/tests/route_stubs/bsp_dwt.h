@@ -1,3 +1,0 @@
-#ifndef ROUTE_TEST_STUB_BSP_DWT_H
-#define ROUTE_TEST_STUB_BSP_DWT_H
-#endif
