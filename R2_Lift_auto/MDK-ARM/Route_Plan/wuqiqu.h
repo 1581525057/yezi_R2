@@ -23,10 +23,10 @@ public:
         float x_m;
         float y_m;
         float yaw_deg;
-        float move_speed_scale;
         float yaw_kp_scale;
         float yaw_wz_max;
         float xy_tolerance_m;
+        float yaw_tolerance_deg;
     };
 
     class Pose
@@ -107,17 +107,10 @@ private:
     uint32_t contact_timeout_ms_;
     uint32_t soft_contact_start_tick_;
     uint16_t soft_contact_stable_count_;
-    uint8_t pure_yaw_pid_initialized_;
-    uint32_t pure_yaw_pid_last_tick_;
-    float pure_yaw_pid_last_err_deg_;
-    float pure_yaw_pid_iout_;
 
     void loadCurrentWaypoint(void);
     void setZeroOutput(void);
-    void resetPureYawPid(void);
     void updateState(float distance_m, uint8_t xy_in_tolerance, uint32_t now_tick);
-    uint8_t isPureYawPidTarget(uint8_t xy_in_tolerance) const;
-    float calculatePureYawPid(float current_yaw_deg, float target_yaw_deg, uint32_t now_tick);
     void limitVector(float &vx, float &vy, float max_speed) const;
     void raiseVectorToMin(float &vx, float &vy, float min_speed) const;
     float limitFloat(float value, float min_value, float max_value) const;

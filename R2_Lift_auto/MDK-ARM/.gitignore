@@ -1,5 +1,12 @@
 # dot files
 /.vscode/launch.json
+/.vscode/keil-assistant.log
+
+# log files
+*.log
+
+# vscode workspace
+*.code-workspace
 /.settings
 /.eide/log
 /.eide.usr.ctx.json

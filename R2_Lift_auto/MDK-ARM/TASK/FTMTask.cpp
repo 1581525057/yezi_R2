@@ -22,7 +22,7 @@ enum FTMMainState
     FTM_MAIN_WUQIQU_ROUTE = 2,     // 独立执行武器区第 1 个跑点。
     FTM_MAIN_WUQIQU_ZERO = 3,      // 向视觉发送置零命令。
     FTM_MAIN_DONE = 4,             // 全流程完成保持状态。
-    FTM_MAIN_AUTO_PICK_ROUTE = 5,  // 武器区综合取物流程：开爪、先到取出武器头对接高度、对位、跑点、到抓取高度、闭爪、再到取出武器头对接高度、继续跑点并回位。
+    FTM_MAIN_AUTO_PICK_ROUTE = 5,  // 武器区综合取物流程：开爪、先到抓取高度+20、对位、跑第 1 点、下降到抓取高度闭爪、再到对接高度、继续跑点并回位。
     FTM_MAIN_AUTO_TURN_READY = 6,  // 武器区姿态准备流程：张爪、对位并让 M2006 翻转到预备姿态。
     FTM_MAIN_DOCKING = 7           // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
 };
@@ -42,11 +42,13 @@ enum FTMActionState
     FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05 = 10,     // 夹爪张开、抬升到取出武器头对接高度、RS05 对位。
     FTM_ACTION_SEQUENCE_BACKTURN_RS05 = 11,      // M2006 反向翻转 180 度、RS05 回位。
     FTM_ACTION_WUQIQU_ROUTE_2 = 12,              // 武器区第 2 个跑点。
-    FTM_ACTION_WUQIQU_ROUTE_3 = 13,              // 武器区第 3 个跑点。
-    FTM_ACTION_WUQIQU_ROUTE_4 = 14,              // 武器区第 4 个跑点。
-    FTM_ACTION_SEQUENCE_ROUTE_BACKTURN = 15,     // 完成武器区 2/3/4 号跑点后，执行 M2006 反转和 RS05 回位。
-    FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT = 16,   // 先跑武器区 1 号点，再到抓取高度并闭爪，然后抬到取出武器头对接高度继续后续跑点和回位。
-    FTM_ACTION_SEQUENCE_OPEN_RS05_TURN = 17      // 夹爪张开、RS05 对位、M2006 正向翻转 180 度。
+    FTM_ACTION_WUQIQU_YAW_TURN_180 = 13,         // 武器区第 2 点到第 3 点之间原地转向 180 度。
+    FTM_ACTION_WUQIQU_ROUTE_3 = 14,              // 武器区第 3 个跑点。
+    FTM_ACTION_SEQUENCE_ROUTE_BACKTURN = 15,     // 完成武器区 2/3 号跑点和中间转向后，执行 M2006 反转和 RS05 回位。
+    FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT = 16,   // 先跑武器区 1 号点，再下降到抓取高度并闭爪，然后抬到取出武器头对接高度继续后续跑点和回位。
+    FTM_ACTION_SEQUENCE_OPEN_RS05_TURN = 17,     // 夹爪张开、RS05 对位、M2006 正向翻转 180 度。
+    FTM_ACTION_LIFT_UP_GRAB_APPROACH = 18,       // 抬升机构上升到抓取预备高度：抓取高度 + 20mm。
+    FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05 = 19 // 自动夹取专用：夹爪张开、抬升到抓取高度+20、RS05 对位。
 };
 
 namespace
@@ -59,6 +61,7 @@ constexpr uint32_t kRs05TimeoutMs = 3500U;
 
 constexpr float kLiftToleranceMm = 5.0f;
 constexpr float kLiftMoveTimeS = 0.7f;
+constexpr float kLiftGrabApproachOffsetMm = 20.0f;
 
 constexpr uint32_t kClawActionDelayMs = 200U;
 constexpr float kM2006TurnAngleDeg = 180.0f;
@@ -67,6 +70,9 @@ constexpr uint32_t kM2006TimeoutMs = 3000U;
 
 constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;
 constexpr uint32_t kWuqiquZeroSettleMs = 200U;
+constexpr float kWuqiquYawTurnAngleDeg = 180.0f;
+constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;
+constexpr uint16_t kWuqiquYawTurnStableCycles = 200U;
 constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;
 
 struct TimedStep
@@ -87,6 +93,7 @@ uint8_t g_modules_initialized = 0U;
 uint8_t g_m2006_angle_lock_active = 1U;
 constexpr uint8_t kYawTargetCorrectionOff = 0U;
 constexpr uint8_t kYawTargetCorrectionZero = 1U;
+constexpr uint8_t kYawTargetCorrectionWuqiquTurn = 2U;
 uint8_t g_action_sequence_step_index = 0U;
 uint8_t g_wuqiqu_route_sequence_step_index = 0U;
 uint8_t g_route_action_sequence_step_index = 0U;
@@ -94,10 +101,18 @@ uint8_t g_main_action_step_index = 0U;
 uint32_t g_last_minipc_control_seq = 0U;
 int16_t g_last_lift_adjust_unused_mark = 0;
 uint8_t g_docking_lift_adjust_active = 0U;
+uint8_t g_wuqiqu_yaw_turn_active = 0U;
+uint16_t g_wuqiqu_yaw_turn_stable_count = 0U;
 
 const uint8_t kSequenceOpenLiftRs05[] = {
     FTM_ACTION_CLAW_OPEN,
     FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK,
+    FTM_ACTION_RS05_TO_TARGET
+};
+
+const uint8_t kSequenceOpenGrabApproachRs05[] = {
+    FTM_ACTION_CLAW_OPEN,
+    FTM_ACTION_LIFT_UP_GRAB_APPROACH,
     FTM_ACTION_RS05_TO_TARGET
 };
 
@@ -119,7 +134,7 @@ const uint8_t kSequenceOpenRs05Turn[] = {
 };
 
 const uint8_t kMainSequencePickRoute[] = {
-    FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05,
+    FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05,
     FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT
 };
 
@@ -134,6 +149,24 @@ uint8_t g_wuqiqu_zero_active = 0U;
 bool HasElapsed(uint32_t start_tick, uint32_t duration_ms)
 {
     return static_cast<uint32_t>(HAL_GetTick() - start_tick) >= duration_ms;
+}
+
+float NormalizeYawDeg(float yaw_deg)
+{
+    while (yaw_deg > 180.0f)
+    {
+        yaw_deg -= 360.0f;
+    }
+    while (yaw_deg < -180.0f)
+    {
+        yaw_deg += 360.0f;
+    }
+    return yaw_deg;
+}
+
+float GetLiftGrabApproachTargetMm(void)
+{
+    return g_ftm_lift_up_target_mm + kLiftGrabApproachOffsetMm;
 }
 
 void ResetTimedStep(void)
@@ -158,9 +191,22 @@ void ResetMechanismStep(void)
     g_lift_last_target_height_mm = 0.0f;
 }
 
+void ResetYawTargetTurnRuntime(void)
+{
+    g_wuqiqu_yaw_turn_active = 0U;
+    g_wuqiqu_yaw_turn_stable_count = 0U;
+
+    if (g_ftm_yaw_target_correction_state == kYawTargetCorrectionWuqiquTurn)
+    {
+        g_ftm_yaw_target_correction_state = kYawTargetCorrectionOff;
+        g_ftm_yaw_target_degree = 0.0f;
+    }
+}
+
 void ResetActionRuntime(void)
 {
     ResetMechanismStep();
+    ResetYawTargetTurnRuntime();
     g_action_sequence_step_index = 0U;
     g_wuqiqu_route_sequence_step_index = 0U;
     g_route_action_sequence_step_index = 0U;
@@ -174,7 +220,9 @@ uint8_t IsMechanismAction(uint8_t action_state)
             (action_state == FTM_ACTION_SEQUENCE_BACKTURN_RS05) ||
             (action_state == FTM_ACTION_SEQUENCE_ROUTE_BACKTURN) ||
             (action_state == FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT) ||
-            (action_state == FTM_ACTION_SEQUENCE_OPEN_RS05_TURN)) ? 1U : 0U;
+            (action_state == FTM_ACTION_SEQUENCE_OPEN_RS05_TURN) ||
+            (action_state == FTM_ACTION_LIFT_UP_GRAB_APPROACH) ||
+            (action_state == FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05)) ? 1U : 0U;
 }
 
 uint8_t IsWuqiquRouteMainState(uint8_t main_state)
@@ -186,8 +234,8 @@ uint8_t IsWuqiquRouteMainState(uint8_t main_state)
 uint8_t IsWuqiquRouteAction(uint8_t action_state)
 {
     return ((action_state == FTM_ACTION_WUQIQU_ROUTE_2) ||
+            (action_state == FTM_ACTION_WUQIQU_YAW_TURN_180) ||
             (action_state == FTM_ACTION_WUQIQU_ROUTE_3) ||
-            (action_state == FTM_ACTION_WUQIQU_ROUTE_4) ||
             (action_state == FTM_ACTION_SEQUENCE_ROUTE_BACKTURN) ||
             (action_state == FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT)) ? 1U : 0U;
 }
@@ -200,8 +248,15 @@ uint8_t IsWuqiquRouteActiveContext(void)
 
 void UpdateYawTargetCorrectionState(uint8_t main_state)
 {
-    g_ftm_yaw_target_correction_state =
-        (main_state == FTM_MAIN_DONE) ? kYawTargetCorrectionZero : kYawTargetCorrectionOff;
+    if (main_state == FTM_MAIN_DONE)
+    {
+        g_ftm_yaw_target_degree = 0.0f;
+        g_ftm_yaw_target_correction_state = kYawTargetCorrectionZero;
+    }
+    else
+    {
+        g_ftm_yaw_target_correction_state = kYawTargetCorrectionOff;
+    }
 }
 
 void ServiceM2006AngleLock(uint8_t action_state)
@@ -320,7 +375,7 @@ void SyncExternalState(void)
 
 void ServiceMiniPcFtmCommands(void)
 {
-    if ((g_ftm_main_state != FTM_MAIN_DOCKING) || (vision.exec != 0))
+    if (g_ftm_main_state != FTM_MAIN_DOCKING)
     {
         g_last_minipc_control_seq = g_ftm_minipc_control_seq;
         g_last_lift_adjust_unused_mark = g_ftm_minipc_unused_mark;
@@ -513,6 +568,9 @@ bool RunMechanismStep(uint8_t action_state)
     case FTM_ACTION_LIFT_UP_GRAB:
         return RunLiftState(g_ftm_lift_up_target_mm);
 
+    case FTM_ACTION_LIFT_UP_GRAB_APPROACH:
+        return RunLiftState(GetLiftGrabApproachTargetMm());
+
     case FTM_ACTION_CLAW_OPEN:
         return RunClawDelay(claw_open);
 
@@ -614,21 +672,62 @@ uint8_t RunWuqiquRoutePoint(uint8_t waypoint_index)
     return 0U;
 }
 
+uint8_t RunWuqiquYawTurn180(void)
+{
+    if (g_wuqiqu_yaw_turn_active == 0U)
+    {
+        WuqiquTask_Stop();
+        g_ftm_yaw_target_degree = NormalizeYawDeg(vision.angle_x + kWuqiquYawTurnAngleDeg);
+        g_ftm_yaw_target_correction_state = kYawTargetCorrectionWuqiquTurn;
+        g_wuqiqu_yaw_turn_stable_count = 0U;
+        g_wuqiqu_yaw_turn_active = 1U;
+    }
+
+    const float yaw_error_deg = NormalizeYawDeg(g_ftm_yaw_target_degree - vision.angle_x);
+    if (fabsf(yaw_error_deg) < kWuqiquYawTurnToleranceDeg)
+    {
+        if (g_wuqiqu_yaw_turn_stable_count < kWuqiquYawTurnStableCycles)
+        {
+            ++g_wuqiqu_yaw_turn_stable_count;
+        }
+    }
+    else
+    {
+        g_wuqiqu_yaw_turn_stable_count = 0U;
+    }
+
+    if (g_wuqiqu_yaw_turn_stable_count >= kWuqiquYawTurnStableCycles)
+    {
+        ResetYawTargetTurnRuntime();
+        return 1U;
+    }
+
+    return 0U;
+}
+
 bool RunWuqiquAndMechanismSequence(void)
 {
-    if (g_wuqiqu_route_sequence_step_index < 3U)
+    switch (g_wuqiqu_route_sequence_step_index)
     {
-        const uint8_t waypoint_index = static_cast<uint8_t>(g_wuqiqu_route_sequence_step_index + 1U);
-        if (RunWuqiquRoutePoint(waypoint_index) == 0U)
+    case 0:
+        if (RunWuqiquRoutePoint(1U) == 0U)
         {
             return false;
         }
-
         ++g_wuqiqu_route_sequence_step_index;
         return false;
-    }
 
-    return RunMechanismSequence(kSequenceBackturnRs05, static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
+    case 1:
+        if (RunWuqiquYawTurn180() == 0U)
+        {
+            return false;
+        }
+        ++g_wuqiqu_route_sequence_step_index;
+        return false;
+
+    default:
+        return RunMechanismSequence(kSequenceBackturnRs05, static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
+    }
 }
 
 bool RunRouteAndMechanismSequence(void)
@@ -677,6 +776,7 @@ bool RunActionState(uint8_t action_state)
     case FTM_ACTION_RS05_TO_RETURN:
     case FTM_ACTION_LIFT_DOWN:
     case FTM_ACTION_M2006_TURN_BACK_180:
+    case FTM_ACTION_LIFT_UP_GRAB_APPROACH:
         return RunMechanismStep(action_state);
 
     case FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05:
@@ -690,11 +790,11 @@ bool RunActionState(uint8_t action_state)
     case FTM_ACTION_WUQIQU_ROUTE_2:
         return (RunWuqiquRoutePoint(1U) != 0U);
 
+    case FTM_ACTION_WUQIQU_YAW_TURN_180:
+        return (RunWuqiquYawTurn180() != 0U);
+
     case FTM_ACTION_WUQIQU_ROUTE_3:
         return (RunWuqiquRoutePoint(2U) != 0U);
-
-    case FTM_ACTION_WUQIQU_ROUTE_4:
-        return (RunWuqiquRoutePoint(3U) != 0U);
 
     case FTM_ACTION_SEQUENCE_ROUTE_BACKTURN:
         return RunWuqiquAndMechanismSequence();
@@ -705,6 +805,10 @@ bool RunActionState(uint8_t action_state)
     case FTM_ACTION_SEQUENCE_OPEN_RS05_TURN:
         return RunMechanismSequence(kSequenceOpenRs05Turn,
                                     static_cast<uint8_t>(sizeof(kSequenceOpenRs05Turn) / sizeof(kSequenceOpenRs05Turn[0])));
+
+    case FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05:
+        return RunMechanismSequence(kSequenceOpenGrabApproachRs05,
+                                    static_cast<uint8_t>(sizeof(kSequenceOpenGrabApproachRs05) / sizeof(kSequenceOpenGrabApproachRs05[0])));
 
     default:
         return true;
@@ -778,9 +882,10 @@ void InitModules(void)
 extern "C" volatile uint8_t g_ftm_main_state = FTM_MAIN_INIT;
 extern "C" volatile uint8_t g_ftm_action_state = FTM_ACTION_NONE;
 extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
-extern "C" volatile float g_ftm_lift_up_target_mm = 75.0f;
+extern "C" volatile float g_ftm_yaw_target_degree = 0.0f;
+extern "C" volatile float g_ftm_lift_up_target_mm = 70.0f;
 extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 210.0f;
-extern "C" volatile float g_ftm_lift_down_target_mm = 70.0f;
+extern "C" volatile float g_ftm_lift_down_target_mm = 68.0f;
 extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
 extern "C" volatile uint8_t g_ftm_minipc_claw_release_cmd = 0U;
 extern "C" volatile uint8_t g_ftm_minipc_lift_dock_adjust_cmd = 0U;
@@ -809,7 +914,17 @@ extern "C" uint8_t FTM_IsWuqiquDone(void)
 
 extern "C" uint8_t FTM_IsYawTargetCorrectionEnabled(void)
 {
-    return (g_ftm_yaw_target_correction_state == kYawTargetCorrectionZero) ? 1U : 0U;
+    return (g_ftm_yaw_target_correction_state != kYawTargetCorrectionOff) ? 1U : 0U;
+}
+
+extern "C" uint8_t FTM_IsYawTargetTurnActive(void)
+{
+    return (g_ftm_yaw_target_correction_state == kYawTargetCorrectionWuqiquTurn) ? 1U : 0U;
+}
+
+extern "C" float FTM_GetYawTargetDegree(void)
+{
+    return g_ftm_yaw_target_degree;
 }
 
 extern "C" void ftm_task(void *argument)
@@ -871,7 +986,7 @@ extern "C" void ftm_task(void *argument)
             if (RunMainActionSequence(kMainSequencePickRoute,
                                       static_cast<uint8_t>(sizeof(kMainSequencePickRoute) / sizeof(kMainSequencePickRoute[0]))))
             {
-                EnterMainState(FTM_MAIN_IDLE);
+                EnterMainState(FTM_MAIN_DOCKING);
             }
             break;
 

@@ -125,8 +125,13 @@ extern "C" void chassis_task(void *argument)
 
         if (FTM_IsYawTargetCorrectionEnabled() != 0U)
         {
-            yaw_target = 0.0f;
-            // FTM 完成后才开启 0 度航向保持，避免上电立即修 0 度。
+            yaw_target = FTM_GetYawTargetDegree();
+            if (FTM_IsYawTargetTurnActive() != 0U)
+            {
+                target_vx = 0.0f;
+                target_vy = 0.0f;
+            }
+            // FTM 完成后保持指定 yaw；武器区中间转向时使用同一套航向 PID 原地转向。
             target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
         }
         else if (Chassis_IsRouteYawTurnActive() != 0U)
