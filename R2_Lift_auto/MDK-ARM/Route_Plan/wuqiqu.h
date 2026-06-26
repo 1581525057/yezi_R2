@@ -61,6 +61,7 @@ public:
     bool isAllFinished(void) const;
     uint8_t getCurrentIndex(void) const;
     uint8_t getWaypointCount(void) const;
+    float getWaypointYawDeg(uint8_t waypoint_index) const;
 
     const Output &getOutput(void) const;
     PlannerState getState(void) const;

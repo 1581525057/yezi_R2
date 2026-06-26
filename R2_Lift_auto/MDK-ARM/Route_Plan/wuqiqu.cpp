@@ -14,9 +14,10 @@ static const float kMinMoveSpeedMps =
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {-0.91f, -0.47f, 0.0f, 1.0f, 0.0f, 0.010f, 2.0f},
-    {-0.56f, -0.47f, 0.0f, 1.0f, 0.0f, 0.020f, 2.0f},
-    {-0.87f, -0.47f, -179.0f, 1.0f, 0.0f, 0.020f, 2.0f},
+    {0.05f, 0.89f, -90.0f, 1.0f, 0.0f, 0.010f, 2.0f},
+    {0.05f, 0.64f, -90.0f, 1.0f, 0.0f, 0.020f, 2.0f},
+    {0.05f, 0.64f, 90.0f, 1.0f, 0.0f, 0.020f, 2.0f},
+    {0.96f, -1.64f, 0.0f, 1.0f, 0.0f, 0.020f, 2.0f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 
@@ -118,6 +119,16 @@ uint8_t WuqiquPathPlanner::getCurrentIndex(void) const
 uint8_t WuqiquPathPlanner::getWaypointCount(void) const
 {
     return waypoint_count_;
+}
+
+float WuqiquPathPlanner::getWaypointYawDeg(uint8_t waypoint_index) const
+{
+    if (waypoint_index < waypoint_count_)
+    {
+        return waypoints_[waypoint_index].yaw_deg;
+    }
+
+    return 0.0f;
 }
 
 int WuqiquPathPlanner::follow(const Pose &current_pose)

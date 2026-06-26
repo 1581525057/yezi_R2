@@ -139,8 +139,7 @@ extern "C" void chassis_task(void *argument)
         // 先取遥控器目标速度；自动任务生效时会覆盖对应目标。
         float target_vx = remove_dji.chassis_.Vx;
         float target_vy = remove_dji.chassis_.Vy;
-        float VZ_OUT = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
-        float target_vz = VZ_OUT;
+        float target_vz = remove_dji.chassis_.Vz;
         float route_path_vx = target_vx;
         float route_path_vy = target_vy;
         float route_path_vz = target_vz;
@@ -182,7 +181,8 @@ extern "C" void chassis_task(void *argument)
             break;
         }
 
-        if (((auto_source == CHASSIS_AUTO_WUQIQU) || (auto_source == CHASSIS_AUTO_NONE)) &&
+        if ((FTM_IsWuqiquDone() != 0U) &&
+            ((auto_source == CHASSIS_AUTO_WUQIQU) || (auto_source == CHASSIS_AUTO_NONE)) &&
             (FTM_IsYawTargetCorrectionEnabled() != 0U))
         {
             yaw_target = FTM_GetYawTargetDegree();
@@ -191,7 +191,7 @@ extern "C" void chassis_task(void *argument)
                 target_vx = 0.0f;
                 target_vy = 0.0f;
             }
-            // FTM 完成后保持指定 yaw；武器区中间转向时使用同一套航向 PID 原地转向。
+            // 只有 FTM_MAIN_DONE 后才使用航向 PID 锁定指定 yaw。
             target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
         }
 
@@ -203,7 +203,7 @@ extern "C" void chassis_task(void *argument)
         target_vy = arm_comm.getChassisVyTarget(target_vy);
         target_vx = arm_comm.getChassisVxTarget(target_vx);
 
-        // 自转输出统一走 target_vz：默认 VZ_OUT，武器区 FTM yaw 和自动任务可覆盖。
+        // 自转输出统一走 target_vz：默认遥控器 Vz，FTM_MAIN_DONE 锁角和自动任务可覆盖。
         omni_chassis.setRemote(target_vx, target_vy, target_vz);
 
         // 速度环：根据当前速度和目标速度的误差计算 x/y 方向驱动力。

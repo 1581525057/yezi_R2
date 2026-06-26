@@ -128,6 +128,11 @@ public:
         return wuqiqu.isAllFinished() ? 1U : 0U;
     }
 
+    float getWaypointYawDeg(uint8_t waypoint_index) const
+    {
+        return wuqiqu.getWaypointYawDeg(waypoint_index);
+    }
+
     float getChassisVxTarget(float manual) const
     {
         /* 任务激活时覆盖遥控/上层给定速度，否则透传原速度。 */
@@ -276,4 +281,9 @@ extern "C" void WuqiquTask_AdvanceToNext(void)
 extern "C" uint8_t WuqiquTask_IsAllFinished(void)
 {
     return wuqiqu_task.isAllFinished();
+}
+
+extern "C" float WuqiquTask_GetWaypointYawDeg(uint8_t waypoint_index)
+{
+    return wuqiqu_task.getWaypointYawDeg(waypoint_index);
 }

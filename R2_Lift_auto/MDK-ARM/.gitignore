@@ -1,4 +1,5 @@
 # dot files
+/.vscode/
 /.vscode/launch.json
 /.vscode/keil-assistant.log
 
@@ -9,6 +10,7 @@
 *.code-workspace
 /.settings
 /.eide/log
+/.eide/eide.yml
 /.eide.usr.ctx.json
 
 # project out

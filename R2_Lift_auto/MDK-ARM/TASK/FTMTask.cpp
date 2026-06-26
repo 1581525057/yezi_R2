@@ -14,6 +14,7 @@ extern "C" uint8_t WuqiquTask_RunOnce(void);
 extern "C" uint8_t WuqiquTask_IsActive(void);
 extern "C" void WuqiquTask_AdvanceToNext(void);
 extern "C" uint8_t WuqiquTask_IsAllFinished(void);
+extern "C" float WuqiquTask_GetWaypointYawDeg(uint8_t waypoint_index);
 
 enum FTMMainState
 {
@@ -24,7 +25,8 @@ enum FTMMainState
     FTM_MAIN_DONE = 4,             // 全流程完成保持状态。
     FTM_MAIN_AUTO_PICK_ROUTE = 5,  // 武器区综合取物流程：开爪、先到抓取高度+20、对位、跑第 1 点、下降到抓取高度闭爪、再到对接高度、继续跑点并回位。
     FTM_MAIN_AUTO_TURN_READY = 6,  // 武器区姿态准备流程：张爪、对位并让 M2006 翻转到预备姿态。
-    FTM_MAIN_DOCKING = 7           // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
+    FTM_MAIN_DOCKING = 7,          // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
+    FTM_MAIN_GO_MEILIN = 8         // 前往梅林：先修正航向到 0 度，再跑梅林目标点。
 };
 
 enum FTMActionState
@@ -70,9 +72,11 @@ constexpr uint32_t kM2006TimeoutMs = 3000U;
 
 constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;
 constexpr uint32_t kWuqiquZeroSettleMs = 200U;
-constexpr float kWuqiquYawTurnAngleDeg = 180.0f;
 constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;
 constexpr uint16_t kWuqiquYawTurnStableCycles = 200U;
+constexpr uint8_t kWuqiquSecondWaypointIndex = 1U;
+constexpr uint8_t kWuqiquYawTargetWaypointIndex = 2U;
+constexpr uint8_t kWuqiquMeilinWaypointIndex = 3U;
 constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;
 
 struct TimedStep
@@ -97,6 +101,7 @@ constexpr uint8_t kYawTargetCorrectionWuqiquTurn = 2U;
 uint8_t g_action_sequence_step_index = 0U;
 uint8_t g_wuqiqu_route_sequence_step_index = 0U;
 uint8_t g_route_action_sequence_step_index = 0U;
+uint8_t g_go_meilin_step_index = 0U;
 uint8_t g_main_action_step_index = 0U;
 uint32_t g_last_minipc_control_seq = 0U;
 int16_t g_last_lift_adjust_unused_mark = 0;
@@ -210,6 +215,7 @@ void ResetActionRuntime(void)
     g_action_sequence_step_index = 0U;
     g_wuqiqu_route_sequence_step_index = 0U;
     g_route_action_sequence_step_index = 0U;
+    g_go_meilin_step_index = 0U;
 }
 
 uint8_t IsMechanismAction(uint8_t action_state)
@@ -228,7 +234,8 @@ uint8_t IsMechanismAction(uint8_t action_state)
 uint8_t IsWuqiquRouteMainState(uint8_t main_state)
 {
     return ((main_state == FTM_MAIN_WUQIQU_ROUTE) ||
-            (main_state == FTM_MAIN_AUTO_PICK_ROUTE)) ? 1U : 0U;
+            (main_state == FTM_MAIN_AUTO_PICK_ROUTE) ||
+            (main_state == FTM_MAIN_GO_MEILIN)) ? 1U : 0U;
 }
 
 uint8_t IsWuqiquRouteAction(uint8_t action_state)
@@ -336,7 +343,8 @@ void PrepareMainState(uint8_t main_state)
         (main_state == FTM_MAIN_WUQIQU_ROUTE) ||
         (main_state == FTM_MAIN_WUQIQU_ZERO) ||
         (main_state == FTM_MAIN_AUTO_PICK_ROUTE) ||
-        (main_state == FTM_MAIN_AUTO_TURN_READY))
+        (main_state == FTM_MAIN_AUTO_TURN_READY) ||
+        (main_state == FTM_MAIN_GO_MEILIN))
     {
         g_m2006_angle_lock_active = 1U;
     }
@@ -677,7 +685,7 @@ uint8_t RunWuqiquYawTurn180(void)
     if (g_wuqiqu_yaw_turn_active == 0U)
     {
         WuqiquTask_Stop();
-        g_ftm_yaw_target_degree = NormalizeYawDeg(vision.angle_x + kWuqiquYawTurnAngleDeg);
+        g_ftm_yaw_target_degree = NormalizeYawDeg(WuqiquTask_GetWaypointYawDeg(kWuqiquYawTargetWaypointIndex));
         g_ftm_yaw_target_correction_state = kYawTargetCorrectionWuqiquTurn;
         g_wuqiqu_yaw_turn_stable_count = 0U;
         g_wuqiqu_yaw_turn_active = 1U;
@@ -705,12 +713,70 @@ uint8_t RunWuqiquYawTurn180(void)
     return 0U;
 }
 
+uint8_t RunGoMeilinYawZero(void)
+{
+    if (g_wuqiqu_yaw_turn_active == 0U)
+    {
+        WuqiquTask_Stop();
+        g_ftm_yaw_target_degree = 0.0f;
+        g_ftm_yaw_target_correction_state = kYawTargetCorrectionWuqiquTurn;
+        g_wuqiqu_yaw_turn_stable_count = 0U;
+        g_wuqiqu_yaw_turn_active = 1U;
+    }
+
+    const float yaw_error_deg = NormalizeYawDeg(g_ftm_yaw_target_degree - vision.angle_x);
+    if (fabsf(yaw_error_deg) < kWuqiquYawTurnToleranceDeg)
+    {
+        if (g_wuqiqu_yaw_turn_stable_count < kWuqiquYawTurnStableCycles)
+        {
+            ++g_wuqiqu_yaw_turn_stable_count;
+        }
+    }
+    else
+    {
+        g_wuqiqu_yaw_turn_stable_count = 0U;
+    }
+
+    if (g_wuqiqu_yaw_turn_stable_count >= kWuqiquYawTurnStableCycles)
+    {
+        ResetYawTargetTurnRuntime();
+        return 1U;
+    }
+
+    return 0U;
+}
+
+uint8_t RunGoMeilinSequence(void)
+{
+    switch (g_go_meilin_step_index)
+    {
+    case 0:
+        if (RunGoMeilinYawZero() == 0U)
+        {
+            return 0U;
+        }
+        ++g_go_meilin_step_index;
+        return 0U;
+
+    case 1:
+        if (RunWuqiquRoutePoint(kWuqiquMeilinWaypointIndex) == 0U)
+        {
+            return 0U;
+        }
+        ++g_go_meilin_step_index;
+        return 1U;
+
+    default:
+        return 1U;
+    }
+}
+
 bool RunWuqiquAndMechanismSequence(void)
 {
     switch (g_wuqiqu_route_sequence_step_index)
     {
     case 0:
-        if (RunWuqiquRoutePoint(1U) == 0U)
+        if (RunWuqiquRoutePoint(kWuqiquSecondWaypointIndex) == 0U)
         {
             return false;
         }
@@ -719,6 +785,14 @@ bool RunWuqiquAndMechanismSequence(void)
 
     case 1:
         if (RunWuqiquYawTurn180() == 0U)
+        {
+            return false;
+        }
+        ++g_wuqiqu_route_sequence_step_index;
+        return false;
+
+    case 2:
+        if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) == 0U)
         {
             return false;
         }
@@ -909,7 +983,9 @@ extern "C" uint8_t FTM_GetActionState(void)
 
 extern "C" uint8_t FTM_IsWuqiquDone(void)
 {
-    return (g_ftm_main_state == FTM_MAIN_DONE) ? 1U : 0U;
+    return ((g_ftm_main_state == FTM_MAIN_DONE) ||
+            (g_ftm_main_state == FTM_MAIN_GO_MEILIN) ||
+            (g_ftm_yaw_target_correction_state == kYawTargetCorrectionWuqiquTurn)) ? 1U : 0U;
 }
 
 extern "C" uint8_t FTM_IsYawTargetCorrectionEnabled(void)
@@ -1008,6 +1084,14 @@ extern "C" void ftm_task(void *argument)
                     g_docking_lift_adjust_active = 0U;
                     ResetMechanismStep();
                 }
+            }
+            break;
+
+        // 主状态 8：前往梅林；先修正航向到 0 度，再跑梅林目标点。
+        case FTM_MAIN_GO_MEILIN:
+            if (RunGoMeilinSequence() != 0U)
+            {
+                EnterMainState(FTM_MAIN_DONE);
             }
             break;
 
