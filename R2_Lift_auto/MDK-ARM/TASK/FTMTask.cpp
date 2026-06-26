@@ -9,11 +9,10 @@
 #include <math.h>
 
 extern "C" void WuqiquTask_Start(void);
+extern "C" void WuqiquTask_StartAt(uint8_t waypoint_index);
 extern "C" void WuqiquTask_Stop(void);
-extern "C" uint8_t WuqiquTask_RunOnce(void);
 extern "C" uint8_t WuqiquTask_IsActive(void);
-extern "C" void WuqiquTask_AdvanceToNext(void);
-extern "C" uint8_t WuqiquTask_IsAllFinished(void);
+extern "C" uint8_t WuqiquTask_IsFinished(void);
 extern "C" float WuqiquTask_GetWaypointYawDeg(uint8_t waypoint_index);
 
 enum FTMMainState
@@ -91,6 +90,8 @@ TimedStep g_step = {0U, 0U, 0U, 0U};
 uint8_t g_lift_commanded = 0U;
 float g_lift_last_target_height_mm = 0.0f;
 uint8_t g_wuqiqu_route_finished = 0U;
+uint8_t g_wuqiqu_route_started = 0U;
+uint8_t g_wuqiqu_parallel_route_finished = 0U;
 uint8_t g_active_main_state = 0xFFU;
 uint8_t g_active_action_state = 0xFFU;
 uint8_t g_modules_initialized = 0U;
@@ -216,6 +217,8 @@ void ResetActionRuntime(void)
     g_wuqiqu_route_sequence_step_index = 0U;
     g_route_action_sequence_step_index = 0U;
     g_go_meilin_step_index = 0U;
+    g_wuqiqu_route_started = 0U;
+    g_wuqiqu_parallel_route_finished = 0U;
 }
 
 uint8_t IsMechanismAction(uint8_t action_state)
@@ -290,6 +293,7 @@ void PrepareActionState(uint8_t action_state)
     {
         WuqiquTask_Stop();
         g_wuqiqu_route_finished = 0U;
+        g_wuqiqu_route_started = 0U;
     }
 
     if ((IsMechanismAction(action_state) == 0U) &&
@@ -321,6 +325,7 @@ void PrepareMainState(uint8_t main_state)
     {
         WuqiquTask_Stop();
         g_wuqiqu_route_finished = 0U;
+        g_wuqiqu_route_started = 0U;
     }
 
     if (main_state != FTM_MAIN_WUQIQU_ZERO)
@@ -625,11 +630,8 @@ bool RunMechanismSequence(const uint8_t *sequence, uint8_t sequence_count)
 
 void StartWuqiquRoutePoint(uint8_t waypoint_index)
 {
-    WuqiquTask_Start();
-    for (uint8_t i = 0U; i < waypoint_index; ++i)
-    {
-        WuqiquTask_AdvanceToNext();
-    }
+    WuqiquTask_StartAt(waypoint_index);
+    g_wuqiqu_route_started = 1U;
 }
 
 void ServiceWuqiquRoutePoint(uint8_t waypoint_index)
@@ -639,45 +641,64 @@ void ServiceWuqiquRoutePoint(uint8_t waypoint_index)
         return;
     }
 
-    if (WuqiquTask_IsActive() == 0U)
-    {
-        StartWuqiquRoutePoint(waypoint_index);
-        if (WuqiquTask_IsAllFinished() != 0U)
-        {
-            WuqiquTask_Stop();
-            g_wuqiqu_route_finished = 1U;
-            EnterMainState(FTM_MAIN_INIT);
-            return;
-        }
-    }
-
-    if (WuqiquTask_RunOnce() != 0U)
+    if (WuqiquTask_IsFinished() != 0U)
     {
         WuqiquTask_Stop();
+        g_wuqiqu_route_started = 0U;
         g_wuqiqu_route_finished = 1U;
         EnterMainState(FTM_MAIN_INIT);
+        return;
+    }
+
+    if (g_wuqiqu_route_started == 0U)
+    {
+        StartWuqiquRoutePoint(waypoint_index);
+        if (WuqiquTask_IsFinished() != 0U)
+        {
+            WuqiquTask_Stop();
+            g_wuqiqu_route_started = 0U;
+            g_wuqiqu_route_finished = 1U;
+            EnterMainState(FTM_MAIN_INIT);
+        }
     }
 }
 
 uint8_t RunWuqiquRoutePoint(uint8_t waypoint_index)
 {
-    if (WuqiquTask_IsActive() == 0U)
+    if (WuqiquTask_IsFinished() != 0U)
+    {
+        WuqiquTask_Stop();
+        g_wuqiqu_route_started = 0U;
+        return 1U;
+    }
+
+    if (g_wuqiqu_route_started == 0U)
     {
         StartWuqiquRoutePoint(waypoint_index);
-        if (WuqiquTask_IsAllFinished() != 0U)
+        if (WuqiquTask_IsFinished() != 0U)
         {
             WuqiquTask_Stop();
+            g_wuqiqu_route_started = 0U;
             return 1U;
         }
     }
 
-    if (WuqiquTask_RunOnce() != 0U)
+    return 0U;
+}
+
+bool RunWuqiquRoutePointAndMechanismSequence(uint8_t waypoint_index, const uint8_t *sequence, uint8_t sequence_count)
+{
+    if (g_wuqiqu_parallel_route_finished == 0U)
     {
-        WuqiquTask_Stop();
-        return 1U;
+        if (RunWuqiquRoutePoint(waypoint_index) != 0U)
+        {
+            g_wuqiqu_parallel_route_finished = 1U;
+        }
     }
 
-    return 0U;
+    const bool mechanism_finished = RunMechanismSequence(sequence, sequence_count);
+
+    return ((g_wuqiqu_parallel_route_finished != 0U) && (mechanism_finished != false));
 }
 
 uint8_t RunWuqiquYawTurn180(void)
@@ -792,15 +813,18 @@ bool RunWuqiquAndMechanismSequence(void)
         return false;
 
     case 2:
-        if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) == 0U)
+        if (RunWuqiquRoutePointAndMechanismSequence(kWuqiquYawTargetWaypointIndex,
+                                                    kSequenceBackturnRs05,
+                                                    static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0]))) == false)
         {
             return false;
         }
         ++g_wuqiqu_route_sequence_step_index;
-        return false;
+        g_wuqiqu_parallel_route_finished = 0U;
+        return true;
 
     default:
-        return RunMechanismSequence(kSequenceBackturnRs05, static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
+        return true;
     }
 }
 

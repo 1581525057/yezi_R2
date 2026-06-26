@@ -1,4 +1,5 @@
 #include "wuqiqu.h"
+#include "cmsis_os.h"
 #include "omni_chassis.h"
 #include "usart_task.h"
 #include <math.h>
@@ -72,6 +73,7 @@ class WuqiquTask
 public:
     WuqiquTask()
         : active_(0U),
+          finished_(0U),
           vx_target_(0.0f),
           vy_target_(0.0f),
           wz_target_(0.0f)
@@ -80,14 +82,34 @@ public:
 
     void start()
     {
+        startAt(0U);
+    }
+
+    void startAt(uint8_t waypoint_index)
+    {
+        active_ = 0U;
+        finished_ = 0U;
         wuqiqu.resetRoute();
         clearOutput();
+
+        for (uint8_t i = 0U; i < waypoint_index; ++i)
+        {
+            wuqiqu.advanceToNext();
+        }
+
+        if (wuqiqu.isAllFinished())
+        {
+            finished_ = 1U;
+            return;
+        }
+
         active_ = 1U;
     }
 
     void stop()
     {
         active_ = 0U;
+        finished_ = 0U;
         clearOutput();
         wuqiqu.reset();
     }
@@ -107,6 +129,9 @@ public:
 
         if (finished != 0)
         {
+            active_ = 0U;
+            finished_ = 1U;
+            clearOutput();
             return 1U;
         }
 
@@ -118,9 +143,23 @@ public:
         return active_;
     }
 
+    uint8_t isFinished() const
+    {
+        return finished_;
+    }
+
     void advanceToNext()
     {
+        active_ = 0U;
+        finished_ = 0U;
+        clearOutput();
         wuqiqu.advanceToNext();
+        if (wuqiqu.isAllFinished())
+        {
+            finished_ = 1U;
+            return;
+        }
+        active_ = 1U;
     }
 
     uint8_t isAllFinished() const
@@ -151,12 +190,13 @@ public:
 
 private:
     /* active_ 为 1 表示当前任务接管底盘速度目标。 */
-    uint8_t active_;
+    volatile uint8_t active_;
+    volatile uint8_t finished_;
 
     /* 下发到底盘的车体系目标速度，单位 m/s、rad/s。 */
-    float vx_target_;
-    float vy_target_;
-    float wz_target_;
+    volatile float vx_target_;
+    volatile float vy_target_;
+    volatile float wz_target_;
 
     void clearOutput()
     {
@@ -236,54 +276,75 @@ private:
     }
 };
 
-WuqiquTask wuqiqu_task;
+WuqiquTask g_wuqiqu_task;
+
+extern "C" void wuqiqu_task(void *argument)
+{
+    (void)argument;
+
+    for (;;)
+    {
+        (void)g_wuqiqu_task.runOnce();
+        osDelay(1);
+    }
+}
 
 extern "C" void WuqiquTask_Start(void)
 {
-    wuqiqu_task.start();
+    g_wuqiqu_task.start();
+}
+
+extern "C" void WuqiquTask_StartAt(uint8_t waypoint_index)
+{
+    g_wuqiqu_task.startAt(waypoint_index);
 }
 
 extern "C" void WuqiquTask_Stop(void)
 {
-    wuqiqu_task.stop();
+    g_wuqiqu_task.stop();
 }
 
 extern "C" uint8_t WuqiquTask_RunOnce(void)
 {
-    return wuqiqu_task.runOnce();
+    return g_wuqiqu_task.runOnce();
 }
 
 extern "C" uint8_t WuqiquTask_IsActive(void)
 {
-    return wuqiqu_task.isActive();
+    return g_wuqiqu_task.isActive();
+}
+
+extern "C" uint8_t WuqiquTask_IsFinished(void)
+{
+    return g_wuqiqu_task.isFinished();
 }
 
 extern "C" float WuqiquTask_GetChassisVxTarget(float manual)
 {
-    return wuqiqu_task.getChassisVxTarget(manual);
+    return g_wuqiqu_task.getChassisVxTarget(manual);
 }
 
 extern "C" float WuqiquTask_GetChassisVyTarget(float manual)
 {
-    return wuqiqu_task.getChassisVyTarget(manual);
+    return g_wuqiqu_task.getChassisVyTarget(manual);
 }
 
 extern "C" float WuqiquTask_GetChassisVzTarget(float manual)
 {
-    return wuqiqu_task.getChassisVzTarget(manual);
+    return g_wuqiqu_task.getChassisVzTarget(manual);
 }
 
 extern "C" void WuqiquTask_AdvanceToNext(void)
 {
-    wuqiqu_task.advanceToNext();
+    g_wuqiqu_task.advanceToNext();
 }
 
 extern "C" uint8_t WuqiquTask_IsAllFinished(void)
 {
-    return wuqiqu_task.isAllFinished();
+    return g_wuqiqu_task.isAllFinished();
 }
 
 extern "C" float WuqiquTask_GetWaypointYawDeg(uint8_t waypoint_index)
 {
-    return wuqiqu_task.getWaypointYawDeg(waypoint_index);
+    return g_wuqiqu_task.getWaypointYawDeg(waypoint_index);
 }

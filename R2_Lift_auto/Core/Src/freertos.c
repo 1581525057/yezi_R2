@@ -108,6 +108,18 @@ const osThreadAttr_t FTMTask_attributes = {
   .stack_size = sizeof(FTMTaskBuffer),
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for WUQIQUTask */
+osThreadId_t WUQIQUTaskHandle;
+uint32_t WUQIQUTaskBuffer[ 512 ];
+osStaticThreadDef_t WUQIQUTaskControlBlock;
+const osThreadAttr_t WUQIQUTask_attributes = {
+  .name = "WUQIQUTask",
+  .cb_mem = &WUQIQUTaskControlBlock,
+  .cb_size = sizeof(WUQIQUTaskControlBlock),
+  .stack_mem = &WUQIQUTaskBuffer[0],
+  .stack_size = sizeof(WUQIQUTaskBuffer),
+  .priority = (osPriority_t) osPriorityNormal,
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -119,6 +131,7 @@ void usart_task(void *argument);
 void lift_task(void *argument);
 void plan_route(void *argument);
 void ftm_task(void *argument);
+void wuqiqu_task(void *argument);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -164,6 +177,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of FTMTask */
   FTMTaskHandle = osThreadNew(ftm_task, NULL, &FTMTask_attributes);
+
+  /* creation of WUQIQUTask */
+  WUQIQUTaskHandle = osThreadNew(wuqiqu_task, NULL, &WUQIQUTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -265,6 +281,24 @@ __weak void ftm_task(void *argument)
     osDelay(1);
   }
   /* USER CODE END ftm_task */
+}
+
+/* USER CODE BEGIN Header_wuqiqu_task */
+/**
+* @brief Function implementing the WUQIQUTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_wuqiqu_task */
+__weak void wuqiqu_task(void *argument)
+{
+  /* USER CODE BEGIN wuqiqu_task */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END wuqiqu_task */
 }
 
 /* Private application code --------------------------------------------------*/
