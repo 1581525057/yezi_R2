@@ -22,7 +22,7 @@ enum FTMMainState
     FTM_MAIN_WUQIQU_ROUTE = 2,     // 独立执行武器区第 1 个跑点。
     FTM_MAIN_WUQIQU_ZERO = 3,      // 向视觉发送置零命令。
     FTM_MAIN_DONE = 4,             // 全流程完成保持状态。
-    FTM_MAIN_AUTO_PICK_ROUTE = 5,  // 武器区综合取物流程：开爪、先到抓取高度+20、对位、跑第 1 点、下降到抓取高度闭爪、再到对接高度、继续跑点并回位。
+    FTM_MAIN_AUTO_PICK_ROUTE = 5,  // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
     FTM_MAIN_AUTO_TURN_READY = 6,  // 武器区姿态准备流程：张爪、对位并让 M2006 翻转到预备姿态。
     FTM_MAIN_DOCKING = 7,          // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
     FTM_MAIN_GO_MEILIN = 8         // 前往梅林：先修正航向到 0 度，再跑梅林目标点。
@@ -46,7 +46,7 @@ enum FTMActionState
     FTM_ACTION_WUQIQU_YAW_TURN_180 = 13,         // 武器区第 2 点到第 3 点之间原地转向 180 度。
     FTM_ACTION_WUQIQU_ROUTE_3 = 14,              // 武器区第 3 个跑点。
     FTM_ACTION_SEQUENCE_ROUTE_BACKTURN = 15,     // 完成武器区 2/3 号跑点和中间转向后，执行 M2006 反转和 RS05 回位。
-    FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT = 16,   // 先跑武器区 1 号点，再下降到抓取高度并闭爪，然后抬到取出武器头对接高度继续后续跑点和回位。
+    FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT = 16,   // 跑武器区 1 号点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
     FTM_ACTION_SEQUENCE_OPEN_RS05_TURN = 17,     // 夹爪张开、RS05 对位、M2006 正向翻转 180 度。
     FTM_ACTION_LIFT_UP_GRAB_APPROACH = 18,       // 抬升机构上升到抓取预备高度：抓取高度 + 20mm。
     FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05 = 19 // 自动夹取专用：夹爪张开、抬升到抓取高度+20、RS05 对位。
@@ -92,6 +92,7 @@ float g_lift_last_target_height_mm = 0.0f;
 uint8_t g_wuqiqu_route_finished = 0U;
 uint8_t g_wuqiqu_route_started = 0U;
 uint8_t g_wuqiqu_parallel_route_finished = 0U;
+uint8_t g_wuqiqu_parallel_mechanism_finished = 0U;
 uint8_t g_active_main_state = 0xFFU;
 uint8_t g_active_action_state = 0xFFU;
 uint8_t g_modules_initialized = 0U;
@@ -140,7 +141,6 @@ const uint8_t kSequenceOpenRs05Turn[] = {
 };
 
 const uint8_t kMainSequencePickRoute[] = {
-    FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05,
     FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT
 };
 
@@ -219,6 +219,7 @@ void ResetActionRuntime(void)
     g_go_meilin_step_index = 0U;
     g_wuqiqu_route_started = 0U;
     g_wuqiqu_parallel_route_finished = 0U;
+    g_wuqiqu_parallel_mechanism_finished = 0U;
 }
 
 uint8_t IsMechanismAction(uint8_t action_state)
@@ -701,6 +702,22 @@ bool RunWuqiquRoutePointAndMechanismSequence(uint8_t waypoint_index, const uint8
     return ((g_wuqiqu_parallel_route_finished != 0U) && (mechanism_finished != false));
 }
 
+bool RunParallelMechanismSequence(const uint8_t *sequence, uint8_t sequence_count)
+{
+    if (g_wuqiqu_parallel_mechanism_finished != 0U)
+    {
+        return true;
+    }
+
+    if (RunMechanismSequence(sequence, sequence_count) != false)
+    {
+        g_wuqiqu_parallel_mechanism_finished = 1U;
+        return true;
+    }
+
+    return false;
+}
+
 uint8_t RunWuqiquYawTurn180(void)
 {
     if (g_wuqiqu_yaw_turn_active == 0U)
@@ -797,6 +814,9 @@ bool RunWuqiquAndMechanismSequence(void)
     switch (g_wuqiqu_route_sequence_step_index)
     {
     case 0:
+        (void)RunParallelMechanismSequence(kSequenceBackturnRs05,
+                                           static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
+
         if (RunWuqiquRoutePoint(kWuqiquSecondWaypointIndex) == 0U)
         {
             return false;
@@ -805,6 +825,9 @@ bool RunWuqiquAndMechanismSequence(void)
         return false;
 
     case 1:
+        (void)RunParallelMechanismSequence(kSequenceBackturnRs05,
+                                           static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
+
         if (RunWuqiquYawTurn180() == 0U)
         {
             return false;
@@ -813,14 +836,28 @@ bool RunWuqiquAndMechanismSequence(void)
         return false;
 
     case 2:
-        if (RunWuqiquRoutePointAndMechanismSequence(kWuqiquYawTargetWaypointIndex,
-                                                    kSequenceBackturnRs05,
-                                                    static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0]))) == false)
+        if (g_wuqiqu_parallel_route_finished == 0U)
+        {
+            if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) != 0U)
+            {
+                g_wuqiqu_parallel_route_finished = 1U;
+            }
+        }
+
+        if (RunParallelMechanismSequence(kSequenceBackturnRs05,
+                                         static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0]))) == false)
         {
             return false;
         }
+
+        if (g_wuqiqu_parallel_route_finished == 0U)
+        {
+            return false;
+        }
+
         ++g_wuqiqu_route_sequence_step_index;
         g_wuqiqu_parallel_route_finished = 0U;
+        g_wuqiqu_parallel_mechanism_finished = 0U;
         return true;
 
     default:
@@ -833,11 +870,16 @@ bool RunRouteAndMechanismSequence(void)
     switch (g_route_action_sequence_step_index)
     {
     case 0:
-        if (RunWuqiquRoutePoint(0U) == 0U)
+        if (RunWuqiquRoutePointAndMechanismSequence(0U,
+                                                    kSequenceOpenGrabApproachRs05,
+                                                    static_cast<uint8_t>(sizeof(kSequenceOpenGrabApproachRs05) / sizeof(kSequenceOpenGrabApproachRs05[0]))) == false)
         {
             return false;
         }
         ++g_route_action_sequence_step_index;
+        g_wuqiqu_parallel_route_finished = 0U;
+        g_action_sequence_step_index = 0U;
+        ResetMechanismStep();
         return false;
 
     case 1:
