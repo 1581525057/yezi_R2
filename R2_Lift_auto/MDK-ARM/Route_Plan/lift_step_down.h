@@ -4,6 +4,14 @@
 #include "main.h"
 #include <stdint.h>
 
+#ifndef STEP_DOWN_CYLINDER_OPEN
+#define STEP_DOWN_CYLINDER_OPEN() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
+#endif
+
+#ifndef STEP_DOWN_CYLINDER_CLOSE
+#define STEP_DOWN_CYLINDER_CLOSE() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
+#endif
+
 /**
  * @brief 自动下台阶流程控制类。
  *
@@ -63,8 +71,9 @@ public:
     void setStepDownHeightMode(uint16_t height_mm);
 
 private:
-    enum StepDownState {
-        STEP_DOWN_IDLE = 0,        // 空闲状态：不接管控制目标，getter 透传外部输入。
+    enum StepDownState
+    {
+        STEP_DOWN_IDLE = 0,              // 空闲状态：不接管控制目标，getter 透传外部输入。
         STEP_DOWN_MOVE_TO_PREPARE,       // 第 1 阶段：底盘沿 X 轴移动到下台阶准备点。
         STEP_DOWN_WAIT_PRE_LIFT_HEIGHT,  // 第 2 阶段：切 2 档下降到下 400 准备高度。
         STEP_DOWN_DESCEND,               // 第 3 阶段：底盘悬空，由升降轮沿 X 轴带动车辆离开台阶。
@@ -85,26 +94,26 @@ private:
     uint8_t step_down_started_;     // 流程启动标志：1 表示允许状态机推进。
     StepDownState step_down_state_; // 当前下台阶状态。
 
-    uint8_t lift_switch_target_;     // 自动流程要求的升降机构档位。
-    float lift_linear_speed_target_; // 自动流程要求的升降轮线速度，单位为 m/s。
-    float chassis_vx_target_;        // 自动流程要求的底盘 X 方向速度，单位为 m/s。
-    float chassis_vy_target_;        // 自动流程要求的底盘 Y 方向速度，单位为 m/s。
+    uint8_t lift_switch_target_;        // 自动流程要求的升降机构档位。
+    float lift_linear_speed_target_;    // 自动流程要求的升降轮线速度，单位为 m/s。
+    float chassis_vx_target_;           // 自动流程要求的底盘 X 方向速度，单位为 m/s。
+    float chassis_vy_target_;           // 自动流程要求的底盘 Y 方向速度，单位为 m/s。
     uint16_t step_down_height_mode_mm_; // 下台阶高度模式，200 为旧流程，400 为融合流程。
 
-    uint8_t step_down_stable_count_;      // 当前状态下连续满足到位条件的周期数。
-    int step_down_block_num_;             // 当前方块编号，仅保存，不在本类内部查表。
+    uint8_t step_down_stable_count_;           // 当前状态下连续满足到位条件的周期数。
+    int step_down_block_num_;                  // 当前方块编号，仅保存，不在本类内部查表。
     float step_down_radar_x_ref_prepare_base_; // 第 1 阶段准备点计算使用的本次基准 X 坐标，单位为 m。
     float step_down_radar_y_ref_prepare_base_; // 第 1 阶段准备点计算使用的本次基准 Y 坐标，单位为 m。
-    float step_down_radar_x_ref_prepare_; // 第 1 阶段准备点 X 坐标，单位为 m。
-    float step_down_radar_y_ref_prepare_; // 第 1 阶段准备点 Y 坐标，单位为 m。
-    float step_down_radar_x_ref_descend_; // 第 2 阶段离开台阶目标 X 坐标，单位为 m。
-    float step_down_radar_y_ref_descend_; // 第 2 阶段离开台阶目标 Y 坐标，单位为 m。
-    float step_down_radar_x_ref_finish_;  // 第 5 阶段终点 X 坐标，单位为 m。
-    float step_down_radar_y_ref_finish_;  // 第 5 阶段终点 Y 坐标，单位为 m。
-    uint8_t step_down_turn_left_90_;      // 下台阶前上一个动作是否左转 90 度。
-    uint8_t step_down_turn_right_90_;     // 下台阶前上一个动作是否右转 90 度。
-    uint8_t step_down_turn_180_;          // 下台阶前上一个动作是否转 180 度。
-    uint8_t step_down_descend_target_valid_; // 第 3 阶段目标是否已按进入时坐标锁存。
+    float step_down_radar_x_ref_prepare_;      // 第 1 阶段准备点 X 坐标，单位为 m。
+    float step_down_radar_y_ref_prepare_;      // 第 1 阶段准备点 Y 坐标，单位为 m。
+    float step_down_radar_x_ref_descend_;      // 第 2 阶段离开台阶目标 X 坐标，单位为 m。
+    float step_down_radar_y_ref_descend_;      // 第 2 阶段离开台阶目标 Y 坐标，单位为 m。
+    float step_down_radar_x_ref_finish_;       // 第 5 阶段终点 X 坐标，单位为 m。
+    float step_down_radar_y_ref_finish_;       // 第 5 阶段终点 Y 坐标，单位为 m。
+    uint8_t step_down_turn_left_90_;           // 下台阶前上一个动作是否左转 90 度。
+    uint8_t step_down_turn_right_90_;          // 下台阶前上一个动作是否右转 90 度。
+    uint8_t step_down_turn_180_;               // 下台阶前上一个动作是否转 180 度。
+    uint8_t step_down_descend_target_valid_;   // 第 3 阶段目标是否已按进入时坐标锁存。
     uint32_t step_down_pre_lift_command_seq_;  // 进入 2 档等待前的高度命令序号。
     uint32_t step_down_post_lift_command_seq_; // 进入 3 档等待前的高度命令序号。
 };

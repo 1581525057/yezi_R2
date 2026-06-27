@@ -3,13 +3,7 @@
 #include "usart_task.h"
 #include <math.h>
 
-#ifndef STEP_DOWN_CYLINDER_OPEN
-#define STEP_DOWN_CYLINDER_OPEN() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
-#endif
 
-#ifndef STEP_DOWN_CYLINDER_CLOSE
-#define STEP_DOWN_CYLINDER_CLOSE() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
-#endif
 
 // 下四百：1.先走到一定位置 2. 抬升抬到-200，同时打开气缸 3.动2006到指定位置 4.抬升到+200，等待+200抬升完毕后，关闭气缸  5.然后到中心点 6.然后抬升到+100
 extern VisionData_t vision;
@@ -26,12 +20,12 @@ static void step_down_world_error_to_body_error(float x_world, float y_world, fl
 }
 
 // 第 1、3 阶段底盘移动时允许输出的最大速度，单位为 m/s。
-float STEP_DOWN_AUTO_CHASSIS_SPEED_MPS = 0.6f;
+float STEP_DOWN_AUTO_CHASSIS_SPEED_MPS = 0.9f;
 // 底盘速度计算使用的制动包络参数。数值越大，距离目标较远时允许的速度越高。
-float STEP_DOWN_CHASSIS_ACC_SPEED = 0.35f;
+float STEP_DOWN_CHASSIS_ACC_SPEED = 0.4f;
 
 // 第 2 阶段升降轮带动车辆离开台阶时允许输出的最大线速度，单位为 m/s。
-float STEP_DOWN_AUTO_LIFT_SPEED_MPS = 1.25f;
+float STEP_DOWN_AUTO_LIFT_SPEED_MPS = 1.05f;
 // 升降轮速度计算使用的制动包络参数。数值越大，离开台阶时允许的速度越高。
 float STEP_DOWN_LIFT_ACC_SPEED = 0.8f;
 
@@ -41,7 +35,7 @@ uint8_t STEP_DOWN_AUTO_STABLE_COUNT = 10U;
 // 下台阶前准备阶段离方块中心点的距离，单位为 m。
 float STEP_DOWN_PREPARE_DISTANCE_L = 0.35f;
 // 下台阶下降阶段离开当前坐标的距离，单位为 m。
-float STEP_DOWN_DESCEND_DISTANCE_D = 0.56f;
+float STEP_DOWN_DESCEND_DISTANCE_D = 0.58f;
 
 // 全局实例由任务层调用，调用方式与现有上台阶自动流程保持一致。
 LiftStepDown lift_step_down;

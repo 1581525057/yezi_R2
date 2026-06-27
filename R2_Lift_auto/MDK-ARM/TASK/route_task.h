@@ -20,7 +20,8 @@ enum Route_state
     PHASE_TURN180,            // 转 180 度
     PHASE_GET_KFS_HEIGHT_200, // 取高 200mm 的 KFS
     PHASE_GET_KFS_HEIGHT_400, // 取高 400mm 的 KFS
-    PHASE_GET_KFS_SHORT_200,  // 取低 200mm 的 KFS
+    PHASE_GET_KFS_SHORT_200,  // 取低 200mm 的 KFS4
+    PHASE_GO_2,
     PHASE_GO_3
 };
 

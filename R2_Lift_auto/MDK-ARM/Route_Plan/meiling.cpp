@@ -14,9 +14,9 @@
 
 MeilingLocator meiling;
 
-float MeilingLocator::MEILING_V_MAX = 1.6f;         // 最大二维合速度，单位 m/s
-float MeilingLocator::MEILING_ACC_MAX = 1.0f;       // 最大加速度，限制速度指令突变，单位 m/s^2
-float MeilingLocator::MEILING_DEC_MAX = 0.8;        // 最大减速度，按剩余距离计算刹车速度，单位 m/s^2
+float MeilingLocator::MEILING_V_MAX = 0.6f;         // 最大二维合速度，单位 m/s
+float MeilingLocator::MEILING_ACC_MAX = 0.3f;       // 最大加速度，限制速度指令突变，单位 m/s^2
+float MeilingLocator::MEILING_DEC_MAX = 0.3;        // 最大减速度，按剩余距离计算刹车速度，单位 m/s^2
 float MeilingLocator::MEILING_FILTER_ALPHA = 0.25f; // 测距一阶低通系数，越大响应越快、滤波越弱
 float MeilingLocator::MEILING_MIN_DT = 0.001f;      // 最小规划周期，防止同一节拍内重复调用
 float MeilingLocator::MEILING_MAX_DT = 0.05f;       // 最大规划周期，防止任务卡顿后步长过大
