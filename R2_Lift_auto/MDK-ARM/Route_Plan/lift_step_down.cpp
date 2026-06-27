@@ -31,17 +31,17 @@ float STEP_DOWN_AUTO_CHASSIS_SPEED_MPS = 0.6f;
 float STEP_DOWN_CHASSIS_ACC_SPEED = 0.35f;
 
 // 第 2 阶段升降轮带动车辆离开台阶时允许输出的最大线速度，单位为 m/s。
-float STEP_DOWN_AUTO_LIFT_SPEED_MPS = 1.05f;
+float STEP_DOWN_AUTO_LIFT_SPEED_MPS = 1.25f;
 // 升降轮速度计算使用的制动包络参数。数值越大，离开台阶时允许的速度越高。
-float STEP_DOWN_LIFT_ACC_SPEED = 0.6f;
+float STEP_DOWN_LIFT_ACC_SPEED = 0.8f;
 
 // 雷达坐标必须连续满足目标条件 10 个周期，状态机才允许进入下一阶段。
 uint8_t STEP_DOWN_AUTO_STABLE_COUNT = 10U;
 
 // 下台阶前准备阶段离方块中心点的距离，单位为 m。
-float STEP_DOWN_PREPARE_DISTANCE_L = 0.39f;
+float STEP_DOWN_PREPARE_DISTANCE_L = 0.35f;
 // 下台阶下降阶段离开当前坐标的距离，单位为 m。
-float STEP_DOWN_DESCEND_DISTANCE_D = 0.55f;
+float STEP_DOWN_DESCEND_DISTANCE_D = 0.56f;
 
 // 全局实例由任务层调用，调用方式与现有上台阶自动流程保持一致。
 LiftStepDown lift_step_down;

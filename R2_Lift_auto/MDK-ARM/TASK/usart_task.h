@@ -27,12 +27,12 @@ typedef struct
 /* USB 串口接收缓冲区（中断回调写入，任务循环读取） */
 #define USB_RX_BUFFER_SIZE 256U
 extern uint8_t data_usb[USB_RX_BUFFER_SIZE];
-extern uint16_t usb_rx_idx;  /* USB接收缓冲区的当前写入位置，由CDC_Receive_HS追加，usart_task消费后清零 */
+extern uint16_t usb_rx_idx; /* USB接收缓冲区的当前写入位置，由CDC_Receive_HS追加，usart_task消费后清零 */
 
 /* 全局视觉数据实例 */
 extern VisionData_t vision;
 extern Block_Vision block_vision[10];
-extern Block_Vision block_vision_middle[13];
+extern Block_Vision block_vision_middle[16];
 /*
  * 解析视觉帧，提取坐标、角度和标定位，并把不定长动作及格子编号压入队列。
  * 帧格式：S,<exec>,<x>,<y>,<yaw>,C,<action...>,B,<block...>,A,<release>,<claw_vertical>,<unused>,E
@@ -56,6 +56,3 @@ void vision_block_clear(void);
 void send_position_to_pc(int16_t behaivor, uint8_t p_diff, float X_diff, float Y_diff, float yaw);
 
 #endif
-
-
-

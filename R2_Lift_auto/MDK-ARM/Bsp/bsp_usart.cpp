@@ -1,5 +1,4 @@
 #include "bsp_usart.h"
-#include "CommData.h"
 #include "usart.h"
 #include "dma.h"
 #include "bsp_remove.h"
@@ -33,7 +32,8 @@ static uint8_t uart7_arm_rx_index;
 
 static void USART2_RxCallback(uint8_t *buf, uint16_t len)
 {
-    if (len = UART_BUFNUM_DM) {
+    if (len = UART_BUFNUM_DM)
+    {
         dm_imu.ParseIMUStream(buf);
     }
 }
@@ -43,7 +43,8 @@ static void USART2_RxCallback(uint8_t *buf, uint16_t len)
 //------------------------------------------------------------
 static void USART5_RxCallback(uint8_t *buf, uint16_t len)
 {
-    if (len == SBUS_RX_BUF_NUM) {
+    if (len == SBUS_RX_BUF_NUM)
+    {
         remove_dji.parseSBUS(buf);
     }
 }
@@ -53,24 +54,30 @@ static void USART5_RxCallback(uint8_t *buf, uint16_t len)
 //------------------------------------------------------------
 static void UART7_RxByteCallback(uint8_t data)
 {
-    if (uart7_arm_rx_index == 0U) {
-        if (data != 0xBBU) {
+    if (uart7_arm_rx_index == 0U)
+    {
+        if (data != 0xBBU)
+        {
             return;
         }
 
         uart7_arm_rx_buf[0] = data;
-        uart7_arm_rx_index  = 1U;
+        uart7_arm_rx_index = 1U;
         return;
     }
 
     uart7_arm_rx_buf[uart7_arm_rx_index] = data;
     uart7_arm_rx_index++;
 
-    if (uart7_arm_rx_index >= ArmComm::RX_FRAME_LENGTH) {
-        if (arm_comm.parseRxFrame(uart7_arm_rx_buf, ArmComm::RX_FRAME_LENGTH) == 0U && data == 0xBBU) {
+    if (uart7_arm_rx_index >= ArmComm::RX_FRAME_LENGTH)
+    {
+        if (arm_comm.parseRxFrame(uart7_arm_rx_buf, ArmComm::RX_FRAME_LENGTH) == 0U && data == 0xBBU)
+        {
             uart7_arm_rx_buf[0] = data;
-            uart7_arm_rx_index  = 1U;
-        } else {
+            uart7_arm_rx_index = 1U;
+        }
+        else
+        {
             uart7_arm_rx_index = 0U;
         }
     }
@@ -83,14 +90,16 @@ static void UART7_StartReceiveIT(void)
 
 static void USART8_RxCallback(uint8_t *buf, uint16_t len)
 {
-    if (len > 9) {
+    if (len > 9)
+    {
         laser_right.laser_parse_dma_data(buf, len);
     }
 }
 
 static void USART9_RxCallback(uint8_t *buf, uint16_t len)
 {
-    if (len > 9) {
+    if (len > 9)
+    {
         laser_left.laser_parse_dma_data(buf, len);
     }
 }
@@ -100,10 +109,10 @@ static void USART9_RxCallback(uint8_t *buf, uint16_t len)
 //============================================================
 UART_DMA_Channel::UART_DMA_Channel()
 {
-    huart      = 0;
-    buf0       = 0;
-    buf1       = 0;
-    buffSize   = 0;
+    huart = 0;
+    buf0 = 0;
+    buf1 = 0;
+    buffSize = 0;
     rxCallback = 0;
 }
 
@@ -116,10 +125,10 @@ void UART_DMA_Channel::Init(UART_HandleTypeDef *huart_,
                             uint16_t buffSize_,
                             void (*rxCallback_)(uint8_t *buf, uint16_t len))
 {
-    huart      = huart_;
-    buf0       = buf0_;
-    buf1       = buf1_;
-    buffSize   = buffSize_;
+    huart = huart_;
+    buf0 = buf0_;
+    buf1 = buf1_;
+    buffSize = buffSize_;
     rxCallback = rxCallback_;
 
     InitMultiBufferDMA();
@@ -127,7 +136,8 @@ void UART_DMA_Channel::Init(UART_HandleTypeDef *huart_,
 
 void UART_DMA_Channel::InitMultiBufferDMA()
 {
-    if (huart == 0 || buf0 == 0 || buf1 == 0) {
+    if (huart == 0 || buf0 == 0 || buf1 == 0)
+    {
         return;
     }
 
@@ -143,7 +153,8 @@ void UART_DMA_Channel::InitMultiBufferDMA()
     __HAL_UART_ENABLE_IT(huart, UART_IT_IDLE);
 
     // 先关闭 DMA，等待真正关掉后再改寄存器
-    do {
+    do
+    {
         __HAL_DMA_DISABLE(huart->hdmarx);
     } while (((DMA_Stream_TypeDef *)huart->hdmarx->Instance)->CR & DMA_SxCR_EN);
 
@@ -174,7 +185,8 @@ void UART_DMA_Channel::RxEventCallback(uint16_t Size)
 {
     DMA_Stream_TypeDef *dma_stream;
 
-    if (huart == 0) {
+    if (huart == 0)
+    {
         return;
     }
 
@@ -190,7 +202,8 @@ void UART_DMA_Channel::RxEventCallback(uint16_t Size)
     // 如果 CT=0，就处理 buf0，然后切到 buf1
     // 如果 CT=1，就处理 buf1，然后切到 buf0
     //--------------------------------------------------------
-    if ((dma_stream->CR & DMA_SxCR_CT) == RESET) {
+    if ((dma_stream->CR & DMA_SxCR_CT) == RESET)
+    {
         //----------------------------------------------------
         // 当前 DMA 正在使用 M0
         //----------------------------------------------------
@@ -203,10 +216,13 @@ void UART_DMA_Channel::RxEventCallback(uint16_t Size)
         __HAL_DMA_SET_COUNTER(huart->hdmarx, buffSize * 2);
 
         // 处理 buf0
-        if (rxCallback != 0) {
+        if (rxCallback != 0)
+        {
             rxCallback(buf0, Size);
         }
-    } else {
+    }
+    else
+    {
         //----------------------------------------------------
         // 当前 DMA 正在使用 M1
         //----------------------------------------------------
@@ -219,7 +235,8 @@ void UART_DMA_Channel::RxEventCallback(uint16_t Size)
         __HAL_DMA_SET_COUNTER(huart->hdmarx, buffSize * 2);
 
         // 处理 buf1
-        if (rxCallback != 0) {
+        if (rxCallback != 0)
+        {
             rxCallback(buf1, Size);
         }
     }
@@ -233,7 +250,8 @@ void UART_DMA_Channel::RxEventCallback(uint16_t Size)
 //============================================================
 void UART_DMA_Channel::ReEnable()
 {
-    if (huart == 0) {
+    if (huart == 0)
+    {
         return;
     }
 
@@ -251,13 +269,15 @@ void UART_DMA_Channel::ReEnable()
 
 void UART_DMA_Channel::RecoverFromError()
 {
-    if (huart == 0 || huart->hdmarx == 0 || buf0 == 0 || buf1 == 0) {
+    if (huart == 0 || huart->hdmarx == 0 || buf0 == 0 || buf1 == 0)
+    {
         return;
     }
 
     DMA_Stream_TypeDef *dma_stream = (DMA_Stream_TypeDef *)huart->hdmarx->Instance;
 
-    do {
+    do
+    {
         __HAL_DMA_DISABLE(huart->hdmarx);
     } while ((dma_stream->CR & DMA_SxCR_EN) != 0U);
 
@@ -265,13 +285,13 @@ void UART_DMA_Channel::RecoverFromError()
                                      UART_CLEAR_NEF | UART_CLEAR_OREF |
                                      UART_CLEAR_IDLEF);
 
-    huart->ErrorCode     = HAL_UART_ERROR_NONE;
-    huart->RxState       = HAL_UART_STATE_BUSY_RX;
+    huart->ErrorCode = HAL_UART_ERROR_NONE;
+    huart->RxState = HAL_UART_STATE_BUSY_RX;
     huart->ReceptionType = HAL_UART_RECEPTION_TOIDLE;
-    huart->RxXferSize    = buffSize;
-    huart->RxXferCount   = buffSize;
+    huart->RxXferSize = buffSize;
+    huart->RxXferCount = buffSize;
 
-    dma_stream->PAR  = (uint32_t)&huart->Instance->RDR;
+    dma_stream->PAR = (uint32_t)&huart->Instance->RDR;
     dma_stream->M0AR = (uint32_t)buf0;
     dma_stream->M1AR = (uint32_t)buf1;
     dma_stream->NDTR = buffSize;
@@ -287,7 +307,8 @@ void UART_DMA_Channel::RecoverFromError()
 //============================================================
 uint8_t UART_DMA_Channel::IsThisUart(UART_HandleTypeDef *huart_)
 {
-    if (huart == huart_) {
+    if (huart == huart_)
+    {
         return 1;
     }
     return 0;
@@ -318,7 +339,7 @@ void BSP_USART::Init(void)
     //--------------------------------------------------------
     // UART7 -> 机械臂
     //--------------------------------------------------------
-    // UART7 使用普通中断接收机械臂 6 字节回传帧，不走 DMA 双缓冲。
+    // UART7 使用 IT 中断接收机械臂 6 字节回传帧。
     UART7_StartReceiveIT();
 
     uart8_dma.Init(&huart8, laser_right.rx_buf[0], laser_right.rx_buf[1], LASER_RX_LEN, USART8_RxCallback);
@@ -332,42 +353,47 @@ void BSP_USART::Init(void)
 //============================================================
 void BSP_USART::RxEventDispatch(UART_HandleTypeDef *huart, uint16_t Size)
 {
-    if (uart2_dma.IsThisUart(huart)) {
+    if (uart2_dma.IsThisUart(huart))
+    {
         uart2_dma.RxEventCallback(Size);
         return;
     }
 
-    if (uart5_dma.IsThisUart(huart)) {
+    if (uart5_dma.IsThisUart(huart))
+    {
         uart5_dma.RxEventCallback(Size);
         return;
     }
 
-    if (uart8_dma.IsThisUart(huart)) {
+    if (uart8_dma.IsThisUart(huart))
+    {
         uart8_dma.RxEventCallback(Size);
         return;
     }
 
-    if (uart9_dma.IsThisUart(huart)) {
+    if (uart9_dma.IsThisUart(huart))
+    {
         uart9_dma.RxEventCallback(Size);
         return;
     }
-
-    (void)CommData_UartRxEventDispatch(huart, Size);
 }
 
 void BSP_USART::ErrorDispatch(UART_HandleTypeDef *huart)
 {
-    if (uart2_dma.IsThisUart(huart)) {
+    if (uart2_dma.IsThisUart(huart))
+    {
         uart2_dma.RecoverFromError();
         return;
     }
 
-    if (uart5_dma.IsThisUart(huart)) {
+    if (uart5_dma.IsThisUart(huart))
+    {
         uart5_dma.RecoverFromError();
         return;
     }
 
-    if (huart == &huart7) {
+    if (huart == &huart7)
+    {
         __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_PEF | UART_CLEAR_FEF |
                                          UART_CLEAR_NEF | UART_CLEAR_OREF);
         huart->ErrorCode = HAL_UART_ERROR_NONE;
@@ -377,12 +403,14 @@ void BSP_USART::ErrorDispatch(UART_HandleTypeDef *huart)
         return;
     }
 
-    if (uart8_dma.IsThisUart(huart)) {
+    if (uart8_dma.IsThisUart(huart))
+    {
         uart8_dma.RecoverFromError();
         return;
     }
 
-    if (uart9_dma.IsThisUart(huart)) {
+    if (uart9_dma.IsThisUart(huart))
+    {
         uart9_dma.RecoverFromError();
         return;
     }
@@ -398,7 +426,8 @@ extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t S
 
 extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if (huart == &huart7) {
+    if (huart == &huart7)
+    {
         UART7_RxByteCallback(uart7_arm_rx_byte);
         UART7_StartReceiveIT();
     }

@@ -32,9 +32,9 @@ float STEP_UP_CHASSIS_ACC_SPEED = 0.95f;
 float STEP_UP_AUTO_CLIMB_MIN_SPEED_MPS = 0.25f;
 
 // 爬升阶段升降最大线速度 (m/s)
-float STEP_UP_AUTO_CLIMB_SPEED_MPS = 1.0f;
+float STEP_UP_AUTO_CLIMB_SPEED_MPS = 1.2f;
 // 爬升阶段升降最大加速度 (m/s)
-float STEP_UP_LIFT_ACC_SPEED = 0.6f;
+float STEP_UP_LIFT_ACC_SPEED = 0.8f;
 
 // 配置雷达爬升阶段的前进距离 L，单位为 m。
 float STEP_UP_RADAR_CLIMB_DISTANCE_M = 0.87f;

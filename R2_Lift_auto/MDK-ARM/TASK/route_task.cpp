@@ -16,7 +16,7 @@
 
 ROUTE_TASK route_t;
 extern float yaw_target;
-extern Block_Vision block_vision_middle[13];
+extern Block_Vision block_vision_middle[16];
 
 #ifndef ROUTE_DEBUG_MANUAL_STEP_CMD
 #define ROUTE_DEBUG_MANUAL_STEP_CMD 0
@@ -31,10 +31,10 @@ namespace
     MeilingTarget_t first_relocation = {
         .preset_id = 0,
         .L_ref = 0.0f,
-        .R_ref = 2565.0f,
+        .R_ref = 2630.0f,
         .F_ref = 0.0f,
-        .tol_lat = 15.0f,
-        .tol_lon = 15.0f,
+        .tol_lat = 20.0f,
+        .tol_lon = 20.0f,
         .timeout_ms = 500000U,
         .sensor_mask = SENSOR_RIGHT,
     };
@@ -61,11 +61,6 @@ namespace
         .timeout_ms = 500000U,
         .sensor_mask = SENSOR_FRONT | SENSOR_LEFT,
     };
-
-    // 取 KFS 后接转弯时，目标 yaw 按设定角速度线性推进。
-    static const float PICK_KFS_SLOW_TURN_RATE_DPS = 80.0f;
-    // 启动时先给一点目标角提前量，避免 yaw 误差为 0 导致底盘起步发愣。
-    static const float PICK_KFS_SLOW_TURN_LEAD_DEG = 30.0f;
 
     // 将 yaw 角限制到 [-180, 180]，后面做角度差时统一走最短方向。
     static float normalize_yaw_deg(float yaw_deg)
@@ -190,62 +185,11 @@ void ROUTE_TASK::start_turn_target(float yaw_delta_deg)
 {
     const float current_yaw = vision.angle_x;
 
-    // 先锁定最终目标角；完成判定始终看这个最终目标，避免慢速斜坡中途误判完成。
+    // 先锁定最终目标角。
     turn_final_yaw_ = normalize_yaw_deg(current_yaw + yaw_delta_deg);
     yaw_target = turn_final_yaw_;
     yaw_stable_count = 0;
     yaw_target_valid_ = 1U;
-
-    if (kfs_slow_turn_pending_ != 0U)
-    {
-        // 只有 KFS 后紧接的这一次转弯走慢速斜坡，普通转弯仍直接给最终角。
-        kfs_slow_turn_pending_ = 0U;
-        kfs_slow_turn_active_ = 1U;
-        kfs_slow_turn_start_yaw_ = current_yaw;
-        kfs_slow_turn_start_tick_ = HAL_GetTick();
-
-        // 慢速转弯第一帧就给提前量，让底盘 PID 立刻有 yaw 误差可跟。
-        yaw_target = normalize_yaw_deg(current_yaw +
-                                       ((yaw_delta_deg < 0.0f) ? -PICK_KFS_SLOW_TURN_LEAD_DEG
-                                                               : PICK_KFS_SLOW_TURN_LEAD_DEG));
-    }
-    else
-    {
-        kfs_slow_turn_active_ = 0U;
-    }
-}
-
-void ROUTE_TASK::update_slow_turn_target(void)
-{
-    // 没有慢速转弯任务时不改 yaw_target。
-    if (kfs_slow_turn_active_ == 0U)
-    {
-        return;
-    }
-
-    const float yaw_delta = normalize_yaw_deg(turn_final_yaw_ - kfs_slow_turn_start_yaw_);
-    const float abs_yaw_delta = fabsf(yaw_delta);
-    const float elapsed_s = (float)(HAL_GetTick() - kfs_slow_turn_start_tick_) * 0.001f;
-
-    // 一元一次函数：目标角增量 = 启动提前量 + 设定角速度 * 时间。
-    float target_delta = PICK_KFS_SLOW_TURN_LEAD_DEG + PICK_KFS_SLOW_TURN_RATE_DPS * elapsed_s;
-
-    // 斜坡已经走完时直接钳到最终目标角，防止超过目标。
-    if (target_delta >= abs_yaw_delta)
-    {
-        yaw_target = turn_final_yaw_;
-        kfs_slow_turn_active_ = 0U;
-        return;
-    }
-
-    // 目标在负方向时，把角度增量取反。
-    if (yaw_delta < 0.0f)
-    {
-        target_delta = -target_delta;
-    }
-
-    // 每个周期刷新 yaw_target，让底盘 yaw PID 跟着这个线性目标慢慢转。
-    yaw_target = normalize_yaw_deg(kfs_slow_turn_start_yaw_ + target_delta);
 }
 
 void ROUTE_TASK::route_reset()
@@ -278,12 +222,8 @@ void ROUTE_TASK::route_reset()
     pick_kfs_center_y_ = 0.0f;
     pick_kfs_center_valid_ = 0U;
 
-    // 清空 KFS 后慢速转弯的最终目标角、触发标志和计时起点。
+    // 清空转弯最终目标角。
     turn_final_yaw_ = 0.0f;
-    kfs_slow_turn_pending_ = 0U;
-    kfs_slow_turn_active_ = 0U;
-    kfs_slow_turn_start_yaw_ = 0.0f;
-    kfs_slow_turn_start_tick_ = 0U;
 
     // 清空 1 区跑点底盘接管输出。
     path_loaded_ = 0U;
@@ -311,7 +251,7 @@ void ROUTE_TASK::update_number_KFS_by_cmd()
     number_KFS = (uint8_t)(rx_data.car_kfs + rx_data.arm_kfs + 1);
 }
 
-uint8_t ROUTE_TASK::one_two_start(void)
+uint8_t ROUTE_TASK::one_go_two(void)
 {
     if (path_loaded_ == 0U)
     {
@@ -322,6 +262,7 @@ uint8_t ROUTE_TASK::one_two_start(void)
 }
 
 uint8_t ROUTE_TASK::find_KFS1(void)
+
 {
     if (path_loaded_ == 0U)
     {
@@ -462,8 +403,6 @@ void ROUTE_TASK::vision_choice()
         // 视觉指令 7：左转 90 度。
         yaw_stable_count = 0;
         yaw_target_valid_ = 0U;
-        kfs_slow_turn_pending_ = 0U;
-        kfs_slow_turn_active_ = 0U;
         state = PHASE_TURN_LEFT90;
         break;
 
@@ -471,8 +410,6 @@ void ROUTE_TASK::vision_choice()
         // 视觉指令 8：右转 90 度。
         yaw_stable_count = 0;
         yaw_target_valid_ = 0U;
-        kfs_slow_turn_pending_ = 0U;
-        kfs_slow_turn_active_ = 0U;
         state = PHASE_TURN_RIGHT90;
         break;
 
@@ -480,8 +417,6 @@ void ROUTE_TASK::vision_choice()
         // 视觉指令 9：转 180 度。
         yaw_stable_count = 0;
         yaw_target_valid_ = 0U;
-        kfs_slow_turn_pending_ = 0U;
-        kfs_slow_turn_active_ = 0U;
         state = PHASE_TURN180;
         break;
     case 10: // 取低200mm
@@ -519,48 +454,43 @@ void ROUTE_TASK::meiling_route()
         return;
 
     if (state == PHASE_IDLE)
-        state = PHASE_FIRST_PATH;
+        state = FIRST_RELOCATION;
 
     switch (state)
     {
-    case PHASE_FIRST_PATH:
+    case FIRST_RELOCATION:
     {
+        // if (relocation_number == 0)
+        // {
+        //     // 第一次重定位
+        //     meiling.start(first_relocation);
+        //     relocation_number = 1;
+        // }
+        // else if (relocation_number == 1)
+        // {
+        //     uint8_t relocation_result = meiling.update();
 
-        uint8_t path_result = one_two_start();
-
+        //     if (relocation_result == MeilingLocator::SUCCESS)
+        //     {
+        //         relocation_number = 2;
+        //         send_position_to_pc(0, 1, 0.96, -1.64, 0.0f);
+        //         // 第一次重定位完成，回到视觉命令等待阶段。
+        //         state = PHASE_VISION;
+        //     }
+        //     else if (relocation_result == MeilingLocator::TIMEOUT)
+        //     {
+        //         meiling.start(first_relocation);
+        //     }
+        // }
+        uint8_t path_result = one_go_two();
         if (path_result == 1U)
         {
             path_loaded_ = 0U;
-            relocation_number = 0U;
             state = PHASE_VISION;
         }
 
         break;
     }
-
-    case FIRST_RELOCATION:
-        if (relocation_number == 0)
-        {
-            // 第一次重定位
-            meiling.start(first_relocation);
-            relocation_number = 1;
-        }
-        else if (relocation_number == 1)
-        {
-            uint8_t relocation_result = meiling.update();
-
-            if (relocation_result == MeilingLocator::SUCCESS)
-            {
-                relocation_number = 2;
-                // 第一次重定位完成，回到视觉命令等待阶段。
-                state = PHASE_VISION;
-            }
-            else if (relocation_result == MeilingLocator::TIMEOUT)
-            {
-                meiling.start(first_relocation);
-            }
-        }
-        break;
 
     case PHASE_FIND_KFS: // 寻找对应的KFS的位置
         switch (entrence_KFS)
@@ -637,13 +567,13 @@ void ROUTE_TASK::meiling_route()
         break;
 
     case PHASE_TURN_LEFT90:
+    {
         if (yaw_target_valid_ == 0U)
         {
             start_turn_target(90.0f);
         }
-        update_slow_turn_target();
 
-        if (fabsf(normalize_yaw_deg(turn_final_yaw_ - vision.angle_x)) < 1.5f)
+        if (fabsf(normalize_yaw_deg(turn_final_yaw_ - vision.angle_x)) < 2.0f)
         {
             yaw_stable_count++;
         }
@@ -653,178 +583,173 @@ void ROUTE_TASK::meiling_route()
         }
 
         // yaw 误差连续稳定 200 个周期后，认为本次左转 90 度完成。
-        if (yaw_stable_count >= 200)
+        if (yaw_stable_count >= 100)
         {
             yaw_stable_count = 0;
             yaw_target_valid_ = 0U;
-            kfs_slow_turn_active_ = 0U;
             // 上/下台阶使用雷达实际 yaw 分类，避免连续转向后把动作方向误当成当前朝向。
             set_last_turn_flags_by_radar_yaw(vision.angle_x, &last_turn_90_direction_, &last_turn_180_);
 
             state = PHASE_VISION;
-            break;
+        }
+        break;
+    }
 
-        case PHASE_TURN_RIGHT90:
-            if (yaw_target_valid_ == 0U)
-            {
-                start_turn_target(-90.0f);
-            }
-            update_slow_turn_target();
+    case PHASE_TURN_RIGHT90:
+    {
+        if (yaw_target_valid_ == 0U)
+        {
+            start_turn_target(-90.0f);
+        }
 
-            if (fabsf(normalize_yaw_deg(turn_final_yaw_ - vision.angle_x)) < 1.5f)
+        if (fabsf(normalize_yaw_deg(turn_final_yaw_ - vision.angle_x)) < 2.0f)
+        {
+            yaw_stable_count++;
+        }
+        else
+        {
+            yaw_stable_count = 0;
+        }
+
+        // yaw 误差连续稳定 200 个周期后，认为本次右转 90 度完成。
+        if (yaw_stable_count >= 100)
+        {
+            yaw_stable_count = 0;
+            yaw_target_valid_ = 0U;
+            // 上/下台阶使用雷达实际 yaw 分类，避免连续转向后把动作方向误当成当前朝向。
+            set_last_turn_flags_by_radar_yaw(vision.angle_x, &last_turn_90_direction_, &last_turn_180_);
+
+            state = PHASE_VISION;
+        }
+        break;
+    }
+
+    case PHASE_TURN180:
+    {
+        if (yaw_target_valid_ == 0U)
+        {
+            start_turn_target(180.0f);
+        }
+
+        if (fabsf(normalize_yaw_deg(turn_final_yaw_ - vision.angle_x)) < 2.0f)
+        {
+            yaw_stable_count++;
+        }
+        else
+        {
+            yaw_stable_count = 0;
+        }
+
+        if (yaw_stable_count >= 100)
+        {
+            yaw_stable_count = 0;
+            yaw_target_valid_ = 0U;
+            // 上/下台阶使用雷达实际 yaw 分类，避免连续转向后把动作方向误当成当前朝向。
+            set_last_turn_flags_by_radar_yaw(vision.angle_x, &last_turn_90_direction_, &last_turn_180_);
+
+            state = PHASE_VISION;
+        }
+        break;
+    }
+
+    case PHASE_GET_KFS_HEIGHT_200:
+    {
+        Route_state next_turn_state = PHASE_VISION;
+        const uint8_t next_is_turn = next_command_is_turn(&next_turn_state);
+        const uint8_t return_center = (pick_kfs_center_valid_ != 0U && next_is_turn != 0U) ? 1U : 0U;
+
+        if (arm_comm.pickKFS(ArmComm::ACTION_PICK_HIGH_200,
+                             number_KFS,
+                             already_step_up_,
+                             vision.x_diff,
+                             vision.y_diff,
+                             vision.angle_x,
+                             return_center,
+                             pick_kfs_center_x_,
+                             pick_kfs_center_y_) != 0U)
+        {
+            if (next_is_turn != 0U && pop_next_turn_state(&next_turn_state) != 0U)
             {
-                yaw_stable_count++;
+                yaw_stable_count = 0U;
+                yaw_target_valid_ = 0U;
+                state = next_turn_state;
             }
             else
             {
-                yaw_stable_count = 0;
-            }
-
-            // yaw 误差连续稳定 200 个周期后，认为本次右转 90 度完成。
-            if (yaw_stable_count >= 200)
-            {
-                yaw_stable_count = 0;
-                yaw_target_valid_ = 0U;
-                kfs_slow_turn_active_ = 0U;
-                // 上/下台阶使用雷达实际 yaw 分类，避免连续转向后把动作方向误当成当前朝向。
-                set_last_turn_flags_by_radar_yaw(vision.angle_x, &last_turn_90_direction_, &last_turn_180_);
-
                 state = PHASE_VISION;
             }
-            break;
+        }
 
-        case PHASE_TURN180:
-            if (yaw_target_valid_ == 0U)
-            {
-                start_turn_target(180.0f);
-            }
-            update_slow_turn_target();
+        break;
+    }
 
-            if (fabsf(normalize_yaw_deg(turn_final_yaw_ - vision.angle_x)) < 1.5f)
+    case PHASE_GET_KFS_HEIGHT_400:
+    {
+        Route_state next_turn_state = PHASE_VISION;
+        const uint8_t next_is_turn = next_command_is_turn(&next_turn_state);
+        const uint8_t return_center = (pick_kfs_center_valid_ != 0U && next_is_turn != 0U) ? 1U : 0U;
+
+        if (arm_comm.pickKFS(ArmComm::ACTION_PICK_HIGH_400,
+                             number_KFS,
+                             already_step_up_,
+                             vision.x_diff,
+                             vision.y_diff,
+                             vision.angle_x,
+                             return_center,
+                             pick_kfs_center_x_,
+                             pick_kfs_center_y_) != 0U)
+        {
+            if (next_is_turn != 0U && pop_next_turn_state(&next_turn_state) != 0U)
             {
-                yaw_stable_count++;
+                yaw_stable_count = 0U;
+                yaw_target_valid_ = 0U;
+                state = next_turn_state;
             }
             else
             {
-                yaw_stable_count = 0;
-            }
-
-            if (yaw_stable_count >= 200)
-            {
-                yaw_stable_count = 0;
-                yaw_target_valid_ = 0U;
-                kfs_slow_turn_active_ = 0U;
-                // 上/下台阶使用雷达实际 yaw 分类，避免连续转向后把动作方向误当成当前朝向。
-                set_last_turn_flags_by_radar_yaw(vision.angle_x, &last_turn_90_direction_, &last_turn_180_);
-
                 state = PHASE_VISION;
             }
-            break;
+        }
 
-        case PHASE_GET_KFS_HEIGHT_200:
+        break;
+    }
+
+    case PHASE_GET_KFS_SHORT_200:
+    {
+        Route_state next_turn_state = PHASE_VISION;
+        const uint8_t next_is_turn = next_command_is_turn(&next_turn_state);
+        const uint8_t return_center = (pick_kfs_center_valid_ != 0U && next_is_turn != 0U) ? 1U : 0U;
+
+        if (arm_comm.pickKFS(ArmComm::ACTION_PICK_LOW_200,
+                             number_KFS,
+                             already_step_up_,
+                             vision.x_diff,
+                             vision.y_diff,
+                             vision.angle_x,
+                             return_center,
+                             pick_kfs_center_x_,
+                             pick_kfs_center_y_) != 0U)
         {
-            Route_state next_turn_state = PHASE_VISION;
-            const uint8_t next_is_turn = next_command_is_turn(&next_turn_state);
-            const uint8_t return_center = (pick_kfs_center_valid_ != 0U && next_is_turn != 0U) ? 1U : 0U;
-
-            if (arm_comm.pickKFS(ArmComm::ACTION_PICK_HIGH_200,
-                                 number_KFS,
-                                 already_step_up_,
-                                 vision.x_diff,
-                                 vision.y_diff,
-                                 vision.angle_x,
-                                 return_center,
-                                 pick_kfs_center_x_,
-                                 pick_kfs_center_y_) != 0U)
+            if (next_is_turn != 0U && pop_next_turn_state(&next_turn_state) != 0U)
             {
-                if (next_is_turn != 0U && pop_next_turn_state(&next_turn_state) != 0U)
-                {
-                    yaw_stable_count = 0U;
-                    yaw_target_valid_ = 0U;
-                    // KFS 完成后发现下一个命令是转弯，通知转弯状态启用慢速目标角。
-                    kfs_slow_turn_pending_ = 1U;
-                    state = next_turn_state;
-                }
-                else
-                {
-                    state = PHASE_VISION;
-                }
+                yaw_stable_count = 0U;
+                yaw_target_valid_ = 0U;
+                state = next_turn_state;
             }
-
-            break;
-        }
-
-        case PHASE_GET_KFS_HEIGHT_400:
-        {
-            Route_state next_turn_state = PHASE_VISION;
-            const uint8_t next_is_turn = next_command_is_turn(&next_turn_state);
-            const uint8_t return_center = (pick_kfs_center_valid_ != 0U && next_is_turn != 0U) ? 1U : 0U;
-
-            if (arm_comm.pickKFS(ArmComm::ACTION_PICK_HIGH_400,
-                                 number_KFS,
-                                 already_step_up_,
-                                 vision.x_diff,
-                                 vision.y_diff,
-                                 vision.angle_x,
-                                 return_center,
-                                 pick_kfs_center_x_,
-                                 pick_kfs_center_y_) != 0U)
+            else
             {
-                if (next_is_turn != 0U && pop_next_turn_state(&next_turn_state) != 0U)
-                {
-                    yaw_stable_count = 0U;
-                    yaw_target_valid_ = 0U;
-                    // KFS 完成后发现下一个命令是转弯，通知转弯状态启用慢速目标角。
-                    kfs_slow_turn_pending_ = 1U;
-                    state = next_turn_state;
-                }
-                else
-                {
-                    state = PHASE_VISION;
-                }
+                state = PHASE_VISION;
             }
-
-            break;
         }
 
-        case PHASE_GET_KFS_SHORT_200:
-        {
-            Route_state next_turn_state = PHASE_VISION;
-            const uint8_t next_is_turn = next_command_is_turn(&next_turn_state);
-            const uint8_t return_center = (pick_kfs_center_valid_ != 0U && next_is_turn != 0U) ? 1U : 0U;
+        break;
+    }
 
-            if (arm_comm.pickKFS(ArmComm::ACTION_PICK_LOW_200,
-                                 number_KFS,
-                                 already_step_up_,
-                                 vision.x_diff,
-                                 vision.y_diff,
-                                 vision.angle_x,
-                                 return_center,
-                                 pick_kfs_center_x_,
-                                 pick_kfs_center_y_) != 0U)
-            {
-                if (next_is_turn != 0U && pop_next_turn_state(&next_turn_state) != 0U)
-                {
-                    yaw_stable_count = 0U;
-                    yaw_target_valid_ = 0U;
-                    // KFS 完成后发现下一个命令是转弯，通知转弯状态启用慢速目标角。
-                    kfs_slow_turn_pending_ = 1U;
-                    state = next_turn_state;
-                }
-                else
-                {
-                    state = PHASE_VISION;
-                }
-            }
-
-            break;
-        }
-
-        default:
-            break;
-        }
+    default:
+        break;
     }
 }
+
 uint8_t ROUTE_TASK::load_follow_plan(void)
 {
     PathFollower::Pose pose;
@@ -890,7 +815,6 @@ extern "C" uint8_t RouteTask_IsMeilingAreaActive(void)
 
     switch (route_t.state)
     {
-    case FIRST_RELOCATION:
     case SECOND_RELOCATION:
     case THIRD_RELOCATION:
     case PHASE_STEP_UP:
