@@ -1,5 +1,4 @@
 #include "FTMTask.h"
-#include "CommData.h"
 #include "FTMLiftAction.h"
 #include "M2006AngleMotor.h"
 #include "RS05.h"
@@ -870,8 +869,6 @@ void InitModules(void)
         return;
     }
 
-    vis_init();
-    cmd_init();
     RS05_Init();
     M2006Angle_Init();
     FTMLiftAction_Reset();
