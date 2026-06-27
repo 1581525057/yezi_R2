@@ -67,6 +67,7 @@ constexpr uint32_t kClawActionDelayMs = 200U;
 constexpr float kM2006TurnAngleDeg = 180.0f;
 constexpr float kM2006ToleranceDeg = 3.0f;
 constexpr uint32_t kM2006TimeoutMs = 3000U;
+constexpr uint32_t kWuqiquBackturnDelayMs = 500U;
 
 constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;
 constexpr uint32_t kWuqiquZeroSettleMs = 200U;
@@ -104,6 +105,8 @@ uint8_t g_wuqiqu_route_sequence_step_index = 0U;
 uint8_t g_route_action_sequence_step_index = 0U;
 uint8_t g_go_meilin_step_index = 0U;
 uint8_t g_main_action_step_index = 0U;
+uint8_t g_wuqiqu_backturn_delay_active = 0U;
+uint32_t g_wuqiqu_backturn_delay_start_tick = 0U;
 uint32_t g_last_minipc_control_seq = 0U;
 int16_t g_last_lift_adjust_unused_mark = 0;
 uint8_t g_docking_lift_adjust_active = 0U;
@@ -208,10 +211,17 @@ void ResetYawTargetTurnRuntime(void)
     }
 }
 
+void ResetWuqiquBackturnDelay(void)
+{
+    g_wuqiqu_backturn_delay_active = 0U;
+    g_wuqiqu_backturn_delay_start_tick = 0U;
+}
+
 void ResetActionRuntime(void)
 {
     ResetMechanismStep();
     ResetYawTargetTurnRuntime();
+    ResetWuqiquBackturnDelay();
     g_action_sequence_step_index = 0U;
     g_wuqiqu_route_sequence_step_index = 0U;
     g_route_action_sequence_step_index = 0U;
@@ -717,6 +727,23 @@ bool RunParallelMechanismSequence(const uint8_t *sequence, uint8_t sequence_coun
     return false;
 }
 
+bool RunDelayedBackturnRs05Sequence(void)
+{
+    if (g_wuqiqu_backturn_delay_active == 0U)
+    {
+        g_wuqiqu_backturn_delay_active = 1U;
+        g_wuqiqu_backturn_delay_start_tick = HAL_GetTick();
+    }
+
+    if (HasElapsed(g_wuqiqu_backturn_delay_start_tick, kWuqiquBackturnDelayMs) == false)
+    {
+        return false;
+    }
+
+    return RunParallelMechanismSequence(kSequenceBackturnRs05,
+                                        static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
+}
+
 uint8_t RunWuqiquYawTurn180(void)
 {
     if (g_wuqiqu_yaw_turn_active == 0U)
@@ -813,9 +840,6 @@ bool RunWuqiquAndMechanismSequence(void)
     switch (g_wuqiqu_route_sequence_step_index)
     {
     case 0:
-        (void)RunParallelMechanismSequence(kSequenceBackturnRs05,
-                                           static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
-
         if (RunWuqiquRoutePoint(kWuqiquSecondWaypointIndex) == 0U)
         {
             return false;
@@ -824,10 +848,7 @@ bool RunWuqiquAndMechanismSequence(void)
         return false;
 
     case 1:
-        (void)RunParallelMechanismSequence(kSequenceBackturnRs05,
-                                           static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
-
-        if (RunWuqiquYawTurn180() == 0U)
+        if (RunDelayedBackturnRs05Sequence() == false)
         {
             return false;
         }
@@ -835,28 +856,20 @@ bool RunWuqiquAndMechanismSequence(void)
         return false;
 
     case 2:
-        if (g_wuqiqu_parallel_route_finished == 0U)
-        {
-            if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) != 0U)
-            {
-                g_wuqiqu_parallel_route_finished = 1U;
-            }
-        }
-
-        if (RunParallelMechanismSequence(kSequenceBackturnRs05,
-                                         static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0]))) == false)
+        if (RunWuqiquYawTurn180() == 0U)
         {
             return false;
         }
+        ++g_wuqiqu_route_sequence_step_index;
+        return false;
 
-        if (g_wuqiqu_parallel_route_finished == 0U)
+    case 3:
+        if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) == 0U)
         {
             return false;
         }
 
         ++g_wuqiqu_route_sequence_step_index;
-        g_wuqiqu_parallel_route_finished = 0U;
-        g_wuqiqu_parallel_mechanism_finished = 0U;
         return true;
 
     default:
