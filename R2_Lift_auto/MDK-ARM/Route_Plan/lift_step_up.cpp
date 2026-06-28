@@ -11,6 +11,17 @@
 extern VisionData_t vision;
 extern uint8_t vision_block_pop(int *out);
 
+#ifndef STEP_UP_DEBUG_MANUAL_STEP_CMD
+#define STEP_UP_DEBUG_MANUAL_STEP_CMD 0
+#endif
+
+#if STEP_UP_DEBUG_MANUAL_STEP_CMD
+uint8_t step_up_debug_step_next_cmd = 0U; // 调试用：置 1 后只允许上台阶状态机切换一次。
+#define STEP_UP_DEBUG_ALLOW_NEXT() ((step_up_debug_step_next_cmd != 0U) ? (step_up_debug_step_next_cmd = 0U, 1U) : 0U)
+#else
+#define STEP_UP_DEBUG_ALLOW_NEXT() 1U
+#endif
+
 static void step_up_world_error_to_body_error(float x_world, float y_world, float yaw_deg, float *x_body, float *y_body)
 {
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
@@ -50,6 +61,8 @@ float STEP_UP_AUTO_LATERAL_REF = 250.0f;
 uint32_t STEP_UP_AUTO_LASER_MAX_MM = 1700U;
 // 高度稳定所需连续确认次数，防抖用
 uint8_t STEP_UP_AUTO_STABLE_COUNT = 10U;
+// 2 档等待时按实际电机角度换算出的左右高度判定到位，避免只看轨迹 finished 提前跳转。
+float STEP_UP_LIFT_HEIGHT_TOLERANCE_MM = 40.0f;
 
 LiftAuto lift_auto;
 
@@ -142,8 +155,8 @@ uint8_t LiftAuto::isStepUpFinished(void) const
     return (step_up_state_ == STEP_UP_FINISHED) ? 1U : 0U;
 }
 
-// 清零上台阶流程状态，回到空闲
-void LiftAuto::resetStepUp(void)
+// 只清运行状态，不清视觉命令提前配置好的本次上台阶参数。
+void LiftAuto::resetStepUpRuntime(void)
 {
     step_up_started_ = 0U;
     step_up_state_ = STEP_UP_IDLE;
@@ -153,25 +166,31 @@ void LiftAuto::resetStepUp(void)
     chassis_vy_target_ = 0.0f;
     step_up_stable_count_ = 0U;
     step_up_crossed_finish_height_ = 0U;
-    step_up_height_mode_mm_ = 200U;
     step_up_pre_lift_command_seq_ = 0U;
     step_up_pre_lift_started_ = 0U;
     step_up_pre_lift_ready_ = 0U;
-    step_up_return_middle_ = 1U;
     chassis_vx_target_ = 0.0f;
     step_up_use_radar_ = 0U;
+    step_up_radar_climb_target_ = 0.0f;
+    step_up_radar_climb_target_valid_ = 0U;
+    step_up_climb_lift_command_seq_ = 0U;
+    step_up_middle_lift_command_seq_ = 0U;
+}
+
+// 清零上台阶流程状态，回到空闲
+void LiftAuto::resetStepUp(void)
+{
+    resetStepUpRuntime();
+    step_up_height_mode_mm_ = 200U;
+    step_up_return_middle_ = 1U;
     step_up_block_num_ = 0;
     step_up_radar_x_ref_middle_ = 0.0f;
     step_up_radar_y_ref_middle_ = 0.0f;
     step_up_radar_x_ref_climb_base_ = 0.0f;
     step_up_radar_y_ref_climb_base_ = 0.0f;
-    step_up_radar_climb_target_ = 0.0f;
-    step_up_radar_climb_target_valid_ = 0U;
     step_up_radar_climb_y_direction_ = 0;
     step_up_lateral_ref_mm_ = STEP_UP_AUTO_LATERAL_REF;
     step_up_laser_max_mm_ = STEP_UP_AUTO_LASER_MAX_MM;
-    step_up_climb_lift_command_seq_ = 0U;
-    step_up_middle_lift_command_seq_ = 0U;
 }
 
 // 上台阶自动流程的周期调度函数。
@@ -190,7 +209,7 @@ void LiftAuto::update(void)
     // 未启动则持续复位
     if (step_up_started_ == 0U)
     {
-        resetStepUp();
+        resetStepUpRuntime();
         return;
     }
 
@@ -212,11 +231,17 @@ void LiftAuto::update(void)
             step_up_pre_lift_started_ = 0U;
             step_up_pre_lift_ready_ = 0U;
         }
-        step_up_state_ = STEP_UP_APPROACH_Y;
+        if (STEP_UP_DEBUG_ALLOW_NEXT() != 0U)
+        {
+            step_up_state_ = STEP_UP_APPROACH_Y;
+        }
     }
 
     switch (step_up_state_) // 靠近Y
     {
+    case STEP_UP_IDLE:
+        break;
+
     case STEP_UP_APPROACH_Y:
         // 先靠近台阶，靠近到位后才触发升降，防侧翻
         chassis_vy_override_ = 1U;
@@ -228,15 +253,11 @@ void LiftAuto::update(void)
             lift_switch_target_ = 1U;
 
             // command_seq 变化说明升降任务已经接收到新的 1 档目标。
-            // 只有观察到 finished 先变为 0，才认为这次预抬升动作真正启动过，
-            // 避免沿用上一条轨迹残留的 finished=1，误判为本次 1 档已经完成。
+            // 1 档目标可能本来就在当前高度，finished 会直接为 1，不能强制要求先观察到 0。
             if (lift_calulate.command_seq != step_up_pre_lift_command_seq_)
             {
-                if (lift_calulate.finished == 0U)
-                {
-                    step_up_pre_lift_started_ = 1U;
-                }
-                else if (step_up_pre_lift_started_ != 0U)
+                step_up_pre_lift_started_ = 1U;
+                if (lift_calulate.finished != 0U)
                 {
                     step_up_pre_lift_ready_ = 1U;
                 }
@@ -268,17 +289,18 @@ void LiftAuto::update(void)
         {
             chassis_vx_target_ = 0.0f;
             chassis_vy_target_ = 0.0f;
-            step_up_stable_count_ = 0U;
             if (step_up_height_mode_mm_ == 400U)
             {
-                if (step_up_pre_lift_ready_ != 0U)
+                if (step_up_pre_lift_ready_ != 0U && STEP_UP_DEBUG_ALLOW_NEXT() != 0U)
                 {
+                    step_up_stable_count_ = 0U;
                     step_up_climb_lift_command_seq_ = lift_calulate.command_seq;
                     step_up_state_ = STEP_UP_WAIT_CLIMB_HEIGHT;
                 }
             }
-            else
+            else if (STEP_UP_DEBUG_ALLOW_NEXT() != 0U)
             {
+                step_up_stable_count_ = 0U;
                 step_up_climb_lift_command_seq_ = lift_calulate.command_seq;
                 step_up_state_ = STEP_UP_WAIT_CLIMB_HEIGHT;
             }
@@ -287,19 +309,27 @@ void LiftAuto::update(void)
         break;
 
     case STEP_UP_WAIT_CLIMB_HEIGHT:
-        // 等待 2 档高度轨迹（抬到最低）生成并完成，期间底盘和升降轮都保持不动。
+    {
+        // 等待 2 档高度轨迹生成并完成，确认抬升任务完成后再进入边走边升阶段。
         chassis_vy_override_ = 1U;
         chassis_vx_target_ = 0.0f;
         chassis_vy_target_ = 0.0f;
         lift_switch_target_ = 2U;
         lift_linear_speed_target_ = 0.0f;
 
+        const uint8_t climb_height_reached =
+            (fabsf(lift_class.left.height - lift_calulate.target_height) <= STEP_UP_LIFT_HEIGHT_TOLERANCE_MM &&
+             fabsf(lift_class.right.height - lift_calulate.target_height) <= STEP_UP_LIFT_HEIGHT_TOLERANCE_MM)
+                ? 1U
+                : 0U;
         if (lift_calulate.command_seq != step_up_climb_lift_command_seq_ &&
-            lift_calulate.finished == 1U)
+            climb_height_reached != 0U &&
+            STEP_UP_DEBUG_ALLOW_NEXT() != 0U)
         {
             step_up_state_ = STEP_UP_CLIMB_FORWARD;
         }
         break;
+    }
 
     case STEP_UP_CLIMB_FORWARD:
         chassis_vy_override_ = 1U;
@@ -324,7 +354,7 @@ void LiftAuto::update(void)
                          step_up_block_num_ <= 3)
                 {
                     // 入口方块 1/2/3 没有上一台阶中心，X 方向爬升从本方块基准向负方向走 L。
-                    step_up_radar_climb_target_ = step_up_radar_x_ref_climb_base_ - STEP_UP_RADAR_CLIMB_DISTANCE_M;
+                    step_up_radar_climb_target_ = step_up_radar_x_ref_climb_base_ - 0.37f;
                 }
                 else
                 {
@@ -355,15 +385,18 @@ void LiftAuto::update(void)
             // 到位判定
             if (step_up_stable_confirm(climb_reached) != 0U)
             {
-                lift_switch_target_ = 3U;
-                if (step_up_height_mode_mm_ == 400U)
-                {
-                    STEP_UP_CYLINDER_CLOSE();
-                }
                 lift_linear_speed_target_ = 0.0f;
-                step_up_stable_count_ = 0U;
-                step_up_middle_lift_command_seq_ = lift_calulate.command_seq;
-                step_up_state_ = STEP_UP_WAIT_NEW_HEIGHT;
+                if (STEP_UP_DEBUG_ALLOW_NEXT() != 0U)
+                {
+                    lift_switch_target_ = 3U;
+                    if (step_up_height_mode_mm_ == 400U)
+                    {
+                        STEP_UP_CYLINDER_CLOSE();
+                    }
+                    step_up_stable_count_ = 0U;
+                    step_up_middle_lift_command_seq_ = lift_calulate.command_seq;
+                    step_up_state_ = STEP_UP_WAIT_NEW_HEIGHT;
+                }
             }
         }
         else
@@ -393,20 +426,24 @@ void LiftAuto::update(void)
             // 必须先爬升到高处，再降回FINISH_MM以下才算完成
             if (step_up_stable_confirm(laser_reached) != 0U)
             {
-                lift_switch_target_ = 3U;
-                if (step_up_height_mode_mm_ == 400U)
-                {
-                    STEP_UP_CYLINDER_CLOSE();
-                }
                 lift_linear_speed_target_ = 0.0f;
-                step_up_stable_count_ = 0U;
-                step_up_middle_lift_command_seq_ = lift_calulate.command_seq;
-                step_up_state_ = STEP_UP_WAIT_NEW_HEIGHT;
+                if (STEP_UP_DEBUG_ALLOW_NEXT() != 0U)
+                {
+                    lift_switch_target_ = 3U;
+                    if (step_up_height_mode_mm_ == 400U)
+                    {
+                        STEP_UP_CYLINDER_CLOSE();
+                    }
+                    step_up_stable_count_ = 0U;
+                    step_up_middle_lift_command_seq_ = lift_calulate.command_seq;
+                    step_up_state_ = STEP_UP_WAIT_NEW_HEIGHT;
+                }
             }
         }
         break;
 
     case STEP_UP_WAIT_NEW_HEIGHT:
+    {
         // 等待新的 3 档收回轨迹生成并完成，期间底盘保持不动。
         chassis_vy_override_ = 1U;
         chassis_vx_target_ = 0.0f;
@@ -416,10 +453,16 @@ void LiftAuto::update(void)
 
         // step_up_middle_lift_command_seq_ 记录的是进入本状态前的升降轨迹序号。
         // command_seq 发生变化，说明升降控制任务已经接收到新的 3 档收回目标；
-        // 同时 finished 为 1，说明这条新的收回轨迹已经执行完成。
+        // 同时左右实际高度都到位，说明这条新的收回动作已经执行完成。
         // 两个条件都满足后，才允许离开等待状态，避免复用上一条轨迹的完成标志误跳转。
+        const uint8_t middle_height_reached =
+            (fabsf(lift_class.left.height - lift_calulate.target_height) <= STEP_UP_LIFT_HEIGHT_TOLERANCE_MM &&
+             fabsf(lift_class.right.height - lift_calulate.target_height) <= STEP_UP_LIFT_HEIGHT_TOLERANCE_MM)
+                ? 1U
+                : 0U;
         if (lift_calulate.command_seq != step_up_middle_lift_command_seq_ &&
-            lift_calulate.finished == 1U)
+            middle_height_reached != 0U &&
+            STEP_UP_DEBUG_ALLOW_NEXT() != 0U)
         {
             // 如果后续还需要回到台阶中心，则进入 APPROACH_MIDDLE 继续用雷达靠近中心点。
             // 如果外部配置为不回中心，说明后面通常还会连续执行下一次上台阶，
@@ -427,6 +470,7 @@ void LiftAuto::update(void)
             step_up_state_ = (step_up_return_middle_ != 0U) ? STEP_UP_APPROACH_MIDDLE : STEP_UP_FINISHED;
         }
         break;
+    }
 
     case STEP_UP_APPROACH_MIDDLE:
     {
@@ -454,8 +498,11 @@ void LiftAuto::update(void)
             {
                 chassis_vx_target_ = 0.0f;
                 chassis_vy_target_ = 0.0f;
-                step_up_stable_count_ = 0U;
-                step_up_state_ = STEP_UP_FINISHED;
+                if (STEP_UP_DEBUG_ALLOW_NEXT() != 0U)
+                {
+                    step_up_stable_count_ = 0U;
+                    step_up_state_ = STEP_UP_FINISHED;
+                }
             }
         }
         else
@@ -498,8 +545,11 @@ void LiftAuto::update(void)
                 {
                     chassis_vx_target_ = 0.0f;
                     chassis_vy_target_ = 0.0f;
-                    step_up_stable_count_ = 0U;
-                    step_up_state_ = STEP_UP_FINISHED;
+                    if (STEP_UP_DEBUG_ALLOW_NEXT() != 0U)
+                    {
+                        step_up_stable_count_ = 0U;
+                        step_up_state_ = STEP_UP_FINISHED;
+                    }
                 }
             }
             else

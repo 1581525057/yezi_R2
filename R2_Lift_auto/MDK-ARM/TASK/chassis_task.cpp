@@ -17,6 +17,7 @@
 #include "route_task.h"
 #include "arm_comm.h"
 #include "FTMTask.h"
+#include "conbat_task.h"
 
 extern "C" float WuqiquTask_GetChassisVxTarget(float manual);
 extern "C" float WuqiquTask_GetChassisVyTarget(float manual);
@@ -29,11 +30,15 @@ typedef enum
     CHASSIS_AUTO_MEILING,
     CHASSIS_AUTO_WUQIQU,
     CHASSIS_AUTO_ROUTE_PATH,
+    CHASSIS_AUTO_CONBAT,
     CHASSIS_AUTO_CONFLICT
 } ChassisAutoSource;
 
 // 底盘自动控制只允许一个来源生效，避免多个任务同时改写目标速度。
-static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, uint8_t meiling_area_active, uint8_t route_path_active)
+static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active,
+                                                         uint8_t meiling_area_active,
+                                                         uint8_t route_active,
+                                                         uint8_t conbat_active)
 {
     uint8_t active_count = 0U;
 
@@ -45,7 +50,11 @@ static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, 
     {
         active_count++;
     }
-    if (route_path_active != 0U)
+    if (route_active != 0U)
+    {
+        active_count++;
+    }
+    if (conbat_active != 0U)
     {
         active_count++;
     }
@@ -62,9 +71,13 @@ static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, 
     {
         return CHASSIS_AUTO_MEILING;
     }
-    if (route_path_active != 0U)
+    if (route_active != 0U)
     {
         return CHASSIS_AUTO_ROUTE_PATH;
+    }
+    if (conbat_active != 0U)
+    {
+        return CHASSIS_AUTO_CONBAT;
     }
     return CHASSIS_AUTO_NONE;
 }
@@ -151,8 +164,21 @@ extern "C" void chassis_task(void *argument)
                                                                  &route_path_vy,
                                                                  &route_path_vz);
         const uint8_t route_yaw_turn_active = ChassisAuto_IsRouteYawTurnActive();
+        const uint8_t route_auto_active = ((route_path_active != 0U) || (route_yaw_turn_active != 0U)) ? 1U : 0U;
+        float conbat_vx = target_vx;
+        float conbat_vy = target_vy;
+        float conbat_vz = target_vz;
+        const uint8_t conbat_active = conbat_t.getChassisTarget(target_vx,
+                                                                target_vy,
+                                                                target_vz,
+                                                                &conbat_vx,
+                                                                &conbat_vy,
+                                                                &conbat_vz);
 
-        const ChassisAutoSource auto_source = ChassisAuto_SelectSource(WuqiquTask_IsActive(), RouteTask_IsMeilingAreaActive(), route_path_active);
+        const ChassisAutoSource auto_source = ChassisAuto_SelectSource(WuqiquTask_IsActive(),
+                                                                       RouteTask_IsMeilingAreaActive(),
+                                                                       route_auto_active,
+                                                                       conbat_active);
         switch (auto_source)
         {
         case CHASSIS_AUTO_WUQIQU:
@@ -172,6 +198,12 @@ extern "C" void chassis_task(void *argument)
             target_vx = route_path_vx;
             target_vy = route_path_vy;
             target_vz = route_path_vz;
+            break;
+        case CHASSIS_AUTO_CONBAT:
+            // conbat_task 接管底盘速度，状态占位时默认输出零速度。
+            target_vx = conbat_vx;
+            target_vy = conbat_vy;
+            target_vz = conbat_vz;
             break;
         case CHASSIS_AUTO_CONFLICT:
             // 两个自动任务同时生效时停车，避免底盘控制权冲突。
@@ -197,8 +229,12 @@ extern "C" void chassis_task(void *argument)
 
             target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, FTM_GetYawTargetDegree());
         }
+        else if (auto_source == CHASSIS_AUTO_CONBAT && conbat_t.yaw_target_enabled != 0U)
+        {
+            target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, conbat_t.yaw_target_degree);
+        }
 
-        if (route_yaw_turn_active != 0U)
+        if (auto_source == CHASSIS_AUTO_ROUTE_PATH && route_yaw_turn_active != 0U)
         {
             target_vx = 0.0f;
             target_vy = 0.0f;
