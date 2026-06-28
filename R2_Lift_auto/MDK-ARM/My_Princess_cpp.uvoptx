@@ -1254,6 +1254,18 @@
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
+    <File>
+      <GroupNumber>12</GroupNumber>
+      <FileNumber>71</FileNumber>
+      <FileType>8</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>.\TASK\conbat_task.cpp</PathWithFileName>
+      <FilenameWithoutPath>conbat_task.cpp</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
   </Group>
 
   <Group>
@@ -1531,6 +1543,30 @@
       <bDave2>0</bDave2>
       <PathWithFileName>.\Route_Plan\path.cpp</PathWithFileName>
       <FilenameWithoutPath>path.cpp</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>14</GroupNumber>
+      <FileNumber>93</FileNumber>
+      <FileType>8</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>.\Route_Plan\BR_McuBsplinePathGenerator.cpp</PathWithFileName>
+      <FilenameWithoutPath>BR_McuBsplinePathGenerator.cpp</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>14</GroupNumber>
+      <FileNumber>94</FileNumber>
+      <FileType>5</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>.\Route_Plan\BR_McuBsplinePathGenerator.h</PathWithFileName>
+      <FilenameWithoutPath>BR_McuBsplinePathGenerator.h</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
