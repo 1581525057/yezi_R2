@@ -448,18 +448,18 @@ void ROUTE_TASK::meiling_route()
         return;
 
     if (state == PHASE_IDLE)
-        state = PHASE_GO_2;
+        // state = PHASE_GO_2;
 
     switch (state)
     {
     case PHASE_GO_2:
     {
-        uint8_t path_result = one_go_two();
-        if (path_result == 1U)
-        {
-            path_loaded_ = 0U;
-            state = PHASE_VISION;
-        }
+        // uint8_t path_result = one_go_two();
+        // if (path_result == 1U)
+        // {
+        //     path_loaded_ = 0U;
+        //     state = PHASE_VISION;
+        // }
 
         break;
     }

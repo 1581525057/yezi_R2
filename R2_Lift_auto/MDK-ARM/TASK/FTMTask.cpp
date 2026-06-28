@@ -22,9 +22,10 @@ enum FTMMainState
     FTM_MAIN_WUQIQU_ZERO = 3,      // 向视觉发送置零命令。
     FTM_MAIN_DONE = 4,             // 全流程完成保持状态。
     FTM_MAIN_AUTO_PICK_ROUTE = 5,  // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
-    FTM_MAIN_AUTO_TURN_READY = 6,  // 武器区姿态准备流程：张爪、对位并让 M2006 翻转到预备姿态。
+    FTM_MAIN_AUTO_TURN_READY = 6,  // 武器区姿态准备流程：张爪、对位、M2006 翻转并让 RS05 回 0。
     FTM_MAIN_DOCKING = 7,          // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
-    FTM_MAIN_GO_MEILIN = 8         // 前往梅林：先修正航向到 0 度，再跑梅林目标点。
+    FTM_MAIN_GO_MEILIN = 8,        // 前往梅林：先修正航向到 0 度，再跑梅林目标点。
+    FTM_MAIN_AUTO_FULL_FLOW = 9    // 完整自动流程入口：切入 5，之后依次执行 7、8、4。
 };
 
 enum FTMActionState
@@ -144,7 +145,8 @@ const uint8_t kMainSequencePickRoute[] = {
 };
 
 const uint8_t kMainSequenceTurnReady[] = {
-    FTM_ACTION_SEQUENCE_OPEN_RS05_TURN
+    FTM_ACTION_SEQUENCE_OPEN_RS05_TURN,
+    FTM_ACTION_RS05_TO_RETURN
 };
 
 uint32_t g_wuqiqu_zero_start_tick = 0U;
@@ -367,6 +369,17 @@ void EnterActionState(uint8_t action_state)
     g_ftm_action_state = action_state;
     g_active_action_state = action_state;
     PrepareActionState(action_state);
+}
+
+uint8_t TryEnterGoMeilinFromDocking(void)
+{
+    if ((g_ftm_main_state == FTM_MAIN_DOCKING) && (vision.exec == 1))
+    {
+        EnterMainState(FTM_MAIN_GO_MEILIN);
+        return 1U;
+    }
+
+    return 0U;
 }
 
 void SyncExternalState(void)
@@ -750,6 +763,16 @@ uint8_t RunWuqiquYawTurn180(void)
     return 0U;
 }
 
+bool RunWuqiquYawTurnAndMechanismSequence(void)
+{
+    const bool yaw_turn_finished = (RunWuqiquYawTurn180() != 0U);
+    const bool mechanism_finished =
+        RunParallelMechanismSequence(kSequenceBackturnRs05,
+                                     static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
+
+    return ((yaw_turn_finished != false) && (mechanism_finished != false));
+}
+
 uint8_t RunGoMeilinYawZero(void)
 {
     if (g_wuqiqu_yaw_turn_active == 0U)
@@ -824,10 +847,7 @@ bool RunWuqiquAndMechanismSequence(void)
         return false;
 
     case 1:
-        (void)RunParallelMechanismSequence(kSequenceBackturnRs05,
-                                           static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0])));
-
-        if (RunWuqiquYawTurn180() == 0U)
+        if (RunWuqiquYawTurnAndMechanismSequence() == false)
         {
             return false;
         }
@@ -835,21 +855,7 @@ bool RunWuqiquAndMechanismSequence(void)
         return false;
 
     case 2:
-        if (g_wuqiqu_parallel_route_finished == 0U)
-        {
-            if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) != 0U)
-            {
-                g_wuqiqu_parallel_route_finished = 1U;
-            }
-        }
-
-        if (RunParallelMechanismSequence(kSequenceBackturnRs05,
-                                         static_cast<uint8_t>(sizeof(kSequenceBackturnRs05) / sizeof(kSequenceBackturnRs05[0]))) == false)
-        {
-            return false;
-        }
-
-        if (g_wuqiqu_parallel_route_finished == 0U)
+        if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) == 0U)
         {
             return false;
         }
@@ -1018,6 +1024,7 @@ void InitModules(void)
 
 extern "C" volatile uint8_t g_ftm_main_state = FTM_MAIN_INIT;
 extern "C" volatile uint8_t g_ftm_action_state = FTM_ACTION_NONE;
+extern "C" volatile uint8_t wuqiqu_done = 0U;
 extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
 extern "C" volatile float g_ftm_yaw_target_degree = 0.0f;
 extern "C" volatile float g_ftm_lift_up_target_mm = 70.0f;
@@ -1075,6 +1082,7 @@ extern "C" void ftm_task(void *argument)
     for (;;)
     {
         SyncExternalState();
+        (void)TryEnterGoMeilinFromDocking();
         ServiceMiniPcFtmCommands();
 
         if ((IsWuqiquRouteActiveContext() == 0U) && (WuqiquTask_IsActive() != 0U))
@@ -1113,6 +1121,7 @@ extern "C" void ftm_task(void *argument)
 
         // 主状态 4：全流程完成保持；RS05 周期补发回位角度，底盘可开启航向保持。
         case FTM_MAIN_DONE:
+            wuqiqu_done = 1U;
             if (g_m2006_angle_lock_active == 0U)
             {
                 g_m2006_angle_lock_active = 1U;
@@ -1140,6 +1149,11 @@ extern "C" void ftm_task(void *argument)
 
         // 主状态 7：对接调试；只处理 MiniPC 的松手和对接高度微调，状态保持不自动退出。
         case FTM_MAIN_DOCKING:
+            if (TryEnterGoMeilinFromDocking() != 0U)
+            {
+                break;
+            }
+
             if (g_docking_lift_adjust_active != 0U)
             {
                 if (RunLiftState(g_ftm_lift_weapon_head_takeout_dock_target_mm))
@@ -1156,6 +1170,11 @@ extern "C" void ftm_task(void *argument)
             {
                 EnterMainState(FTM_MAIN_DONE);
             }
+            break;
+
+        // 主状态 9：完整自动流程入口；进入 5，之后按 5->7->8->4 自动衔接。
+        case FTM_MAIN_AUTO_FULL_FLOW:
+            EnterMainState(FTM_MAIN_AUTO_PICK_ROUTE);
             break;
 
         // 异常主状态：回到初始化，等待重新触发。

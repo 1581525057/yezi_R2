@@ -14,12 +14,12 @@ static const float kMinMoveSpeedMps =
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {0.05f, 0.89f, -90.0f, 1.0f, 0.0f, 0.010f, 2.0f},
-    {0.05f, 0.64f, -90.0f, 1.0f, 0.0f, 0.020f, 2.0f},
-    {0.05f, 0.64f, 90.0f, 1.0f, 0.0f, 0.020f, 2.0f},
+    {0.06f, 0.89f, -90.0f, 1.0f, 0.0f, 0.010f, 2.0f},
+    {0.06f, 0.64f, -90.0f, 1.0f, 0.0f, 0.020f, 2.0f},
+    {0.06f, 0.64f, 90.0f, 1.0f, 0.0f, 0.020f, 2.0f},
     {0.96f, -1.64f, 0.0f, 1.0f, 0.0f, 0.020f, 2.0f},
 };
-static const float kMeilinApproachVMaxMps = 1.20f;
+static const float kMeilinApproachVMaxMps = 1.50f;
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 
 WuqiquPathPlanner wuqiqu;
@@ -28,36 +28,36 @@ WuqiquPathPlanner::WuqiquPathPlanner()
 {
     reset();
 
-    approach_v_max_ = 0.90f;
-    slow_v_max_ = 0.55f;
-    contact_v_max_ = 0.25f;
-    finish_v_max_ = 0.12f;
-    min_move_v_ = 0.18f;
+    approach_v_max_ = 1.10f;      // 远距离接近阶段最大平移速度，单位 m/s
+    slow_v_max_ = 0.55f;          // 进入减速区后的最大平移速度，单位 m/s
+    contact_v_max_ = 0.25f;       // 接触/贴近阶段最大平移速度，单位 m/s
+    finish_v_max_ = 0.12f;        // 终点收敛阶段最大平移速度，单位 m/s
+    min_move_v_ = 0.18f;          // 平移输出下限，避免小误差时底盘不动，单位 m/s
 
-    slow_dist_ = 0.16f;
-    contact_dist_ = 0.02f;
-    finish_dist_ = 0.010f;
-    decel_ = 1.50f;
+    slow_dist_ = 0.16f;           // 距目标小于该值后进入减速区，单位 m
+    contact_dist_ = 0.02f;        // 距目标小于该值后进入接触/贴近段，单位 m
+    finish_dist_ = 0.010f;        // XY 到点判定距离，单位 m
+    decel_ = 1.60f;               // 按剩余距离限速的减速度系数，单位 m/s^2
 
-    kp_approach_ = 2.6f;
-    kd_approach_ = 0.08f;
-    kp_slow_ = 3.0f;
-    kd_slow_ = 0.10f;
-    kp_contact_ = 2.2f;
-    kd_contact_ = 0.06f;
+    kp_approach_ = 2.8f;          // 接近阶段位置比例增益
+    kd_approach_ = 0.08f;         // 接近阶段位置微分增益
+    kp_slow_ = 3.0f;              // 减速阶段位置比例增益
+    kd_slow_ = 0.10f;             // 减速阶段位置微分增益
+    kp_contact_ = 2.2f;           // 接触/贴近阶段位置比例增益
+    kd_contact_ = 0.06f;          // 接触/贴近阶段位置微分增益
 
-    yaw_sign_ = 1.0f;
-    yaw_kp_ = 2.8f;
-    min_yaw_wz_ = 0.18f;
-    strong_yaw_wz_ = 0.35f;
-    strong_yaw_error_deg_ = 6.0f;
-    moving_wz_max_ = 0.80f;
-    settle_wz_max_ = 0.55f;
-    yaw_tolerance_deg_ = 2.0f;
+    yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
+    yaw_kp_ = 2.8f;               // yaw 角度误差比例增益
+    min_yaw_wz_ = 0.18f;          // yaw 最小角速度输出，单位 rad/s
+    strong_yaw_wz_ = 0.35f;       // 大角度误差时的最小角速度输出，单位 rad/s
+    strong_yaw_error_deg_ = 6.0f; // 判定为大角度误差的阈值，单位 deg
+    moving_wz_max_ = 0.80f;       // 平移过程中 yaw 角速度上限，单位 rad/s
+    settle_wz_max_ = 0.55f;       // 末端稳定阶段 yaw 角速度上限，单位 rad/s
+    yaw_tolerance_deg_ = 2.0f;    // yaw 到位判定角度误差，单位 deg
 
-    stable_cycles_ = 120U;
-    contact_hold_ms_ = 500U;
-    contact_timeout_ms_ = 1500U;
+    stable_cycles_ = 120U;        // 软接触稳定计数阈值，按 runOnce 调用周期计数
+    contact_hold_ms_ = 500U;      // 接触后最短保持时间，单位 ms
+    contact_timeout_ms_ = 1500U;  // 接触阶段超时时间，单位 ms
 
     waypoint_count_ = kWaypointCount;
     if (waypoint_count_ > MAX_WAYPOINTS)
