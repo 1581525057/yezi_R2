@@ -71,8 +71,9 @@ extern "C" void lift_task(void *argument)
     // 初始化所有 PID 参数
     lift_class_pid_init();
 
-    // 上电后先给一个回到 0 高度的初始轨迹
-    lift_height_set_target(&lift_calulate, 0.0f, 2.0f);
+    // 上电初始化为 3 档高度
+    lift_debug.height_target = 215.0f;
+    lift_height_set_target(&lift_calulate, lift_debug.height_target, 1.0f);
 
     for (;;)
     {
@@ -124,7 +125,7 @@ extern "C" void lift_task(void *argument)
         // 当标志位置位时，重新生成一条 0.7s 的线性轨迹
         if (lift_debug.flag == 1.0f)
         {
-            lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.5f);
+            lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.3f);
             lift_debug.flag = 0.0f;
         }
 
@@ -138,8 +139,8 @@ extern "C" void lift_task(void *argument)
         lift_class_pid_calculate();
 
         // 左右两侧云深电机按目标角度与 PID 力矩输出控制
-        yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 15, 0.5f, pid_lift_left.pid.Output);
-        yun_j60_motor.SendControl(0x02, -lift_debug.posi, 0, 15, 0.5f, -pid_lift_right.pid.Output);
+        yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 40, 0.2f, pid_lift_left.pid.Output);
+        yun_j60_motor.SendControl(0x02, -lift_debug.posi, 0, 40, 0.2f, -pid_lift_right.pid.Output);
 
         // 2006 电机电流控制发送口目前保留
         lift_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame,

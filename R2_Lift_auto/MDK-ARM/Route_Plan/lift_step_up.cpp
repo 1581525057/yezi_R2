@@ -25,21 +25,21 @@ static void step_up_world_error_to_body_error(float x_world, float y_world, floa
 }
 
 // 靠近阶段最大底盘速度 (m/s)
-float STEP_UP_AUTO_APPROACH_MPS = 0.95f;
+float STEP_UP_AUTO_APPROACH_MPS = 1.2f;
 // 底盘靠近阶段升降最大加速度 (m/s)
-float STEP_UP_CHASSIS_ACC_SPEED = 0.95f;
+float STEP_UP_CHASSIS_ACC_SPEED = 0.7f;
 // 爬升阶段未到完成区时的最小线速度，避免小误差下卡在静摩擦附近。
 float STEP_UP_AUTO_CLIMB_MIN_SPEED_MPS = 0.25f;
 
 // 爬升阶段升降最大线速度 (m/s)
-float STEP_UP_AUTO_CLIMB_SPEED_MPS = 1.2f;
+float STEP_UP_AUTO_CLIMB_SPEED_MPS = 1.35f;
 // 爬升阶段升降最大加速度 (m/s)
-float STEP_UP_LIFT_ACC_SPEED = 0.8f;
+float STEP_UP_LIFT_ACC_SPEED = 1.0f;
 
 // 配置雷达爬升阶段的前进距离 L，单位为 m。
-float STEP_UP_RADAR_CLIMB_DISTANCE_M = 0.87f;
+float STEP_UP_RADAR_CLIMB_DISTANCE_M = 0.82f;
 // 靠近目标距离 (mm)，到达后停止前进
-uint32_t STEP_UP_AUTO_PREPARE_MM = 55U;
+uint32_t STEP_UP_AUTO_PREPARE_MM = 60U;
 // 爬升完成判定高度 (mm)，低于此值说明已过台阶
 uint32_t STEP_UP_AUTO_FINISH_MM = 685U;
 // 到达中间台阶距离
@@ -450,7 +450,7 @@ void LiftAuto::update(void)
             chassis_vy_target_ = trapezoid_speed(y_err_body, STEP_UP_CHASSIS_ACC_SPEED, STEP_UP_AUTO_APPROACH_MPS);
 
             // 到位判定：x 和 y 误差都在容差内
-            if (step_up_stable_confirm((fabsf(x_err_world) < 0.030f && fabsf(y_err_world) < 0.030f && fabsf(chassis_vx_target_) < 0.2f && fabsf(chassis_vy_target_) < 0.2f) ? 1U : 0U) != 0U)
+            if (step_up_stable_confirm((fabsf(x_err_world) < 0.040f && fabsf(y_err_world) < 0.030f && fabsf(chassis_vx_target_) < 0.2f && fabsf(chassis_vy_target_) < 0.2f) ? 1U : 0U) != 0U)
             {
                 chassis_vx_target_ = 0.0f;
                 chassis_vy_target_ = 0.0f;

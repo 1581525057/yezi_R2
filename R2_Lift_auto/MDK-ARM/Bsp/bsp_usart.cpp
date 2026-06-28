@@ -432,3 +432,8 @@ extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         UART7_StartReceiveIT();
     }
 }
+
+extern "C" void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    BSP_USART::ErrorDispatch(huart);
+}

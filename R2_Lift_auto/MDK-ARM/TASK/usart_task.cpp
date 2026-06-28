@@ -41,8 +41,8 @@ uint8_t vision_block_tail = 0U;
 
 // 每个方块的中心坐标
 Block_Vision block_vision_middle[16];
-float block_middle_x = 3.4f;
-float block_middle_y = -1.64f;
+float block_middle_x = 3.41f;
+float block_middle_y = -1.62f;
 
 // 通过第2个方块来计算得到其他8个的坐标位置
 

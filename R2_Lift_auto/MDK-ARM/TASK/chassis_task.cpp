@@ -69,6 +69,19 @@ static inline ChassisAutoSource ChassisAuto_SelectSource(uint8_t wuqiqu_active, 
     return CHASSIS_AUTO_NONE;
 }
 
+// route_task 转弯阶段由全局 yaw_target 接管底盘角度。
+static inline uint8_t ChassisAuto_IsRouteYawTurnActive(void)
+{
+    if (route_t.flag_start != 1U)
+    {
+        return 0U;
+    }
+
+    return ((route_t.state == PHASE_TURN_LEFT90) ||
+            (route_t.state == PHASE_TURN_RIGHT90) ||
+            (route_t.state == PHASE_TURN180)) ? 1U : 0U;
+}
+
 // 初始化底盘任务中使用的全部 PID。
 static void chassis_pid_init(void);
 
@@ -137,6 +150,7 @@ extern "C" void chassis_task(void *argument)
                                                                  &route_path_vx,
                                                                  &route_path_vy,
                                                                  &route_path_vz);
+        const uint8_t route_yaw_turn_active = ChassisAuto_IsRouteYawTurnActive();
 
         const ChassisAutoSource auto_source = ChassisAuto_SelectSource(WuqiquTask_IsActive(), RouteTask_IsMeilingAreaActive(), route_path_active);
         switch (auto_source)
@@ -169,17 +183,26 @@ extern "C" void chassis_task(void *argument)
             break;
         }
 
-        if ((FTM_IsWuqiquDone() != 0U) &&
-            ((auto_source == CHASSIS_AUTO_WUQIQU) || (auto_source == CHASSIS_AUTO_NONE)) &&
-            (FTM_IsYawTargetCorrectionEnabled() != 0U))
+        if (FTM_GetMainState() == 4U)
         {
-            yaw_target = FTM_GetYawTargetDegree();
+            target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
+        }
+        else if (FTM_IsYawTargetCorrectionEnabled() != 0U)
+        {
             if (FTM_IsYawTargetTurnActive() != 0U)
             {
                 target_vx = 0.0f;
                 target_vy = 0.0f;
             }
-            // 只有 FTM_MAIN_DONE 后才使用航向 PID 锁定指定 yaw。
+
+            target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, FTM_GetYawTargetDegree());
+        }
+
+        if (route_yaw_turn_active != 0U)
+        {
+            target_vx = 0.0f;
+            target_vy = 0.0f;
+            // route_task 已经写入 yaw_target，这里只负责按全局目标转向。
             target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
         }
 

@@ -31,10 +31,10 @@ namespace
     MeilingTarget_t first_relocation = {
         .preset_id = 0,
         .L_ref = 0.0f,
-        .R_ref = 2630.0f,
+        .R_ref = 2678.0f,
         .F_ref = 0.0f,
         .tol_lat = 20.0f,
-        .tol_lon = 20.0f,
+        .tol_lon = 10.0f,
         .timeout_ms = 500000U,
         .sensor_mask = SENSOR_RIGHT,
     };
@@ -134,12 +134,6 @@ namespace
         return (cmd == 3 || cmd == 4) ? 1U : 0U;
     }
 
-    // 判断命令是否为取 KFS 命令：10/11/12 分别对应不同高度的取 KFS 动作。
-    static uint8_t command_is_pick_kfs(int cmd)
-    {
-        return (cmd == 10 || cmd == 11 || cmd == 12) ? 1U : 0U;
-    }
-
     // 只查看队首命令是否需要跳过上台阶后的回中点，不弹出命令。
     static uint8_t next_command_skips_step_up_middle(void)
     {
@@ -149,7 +143,7 @@ namespace
             return 0U;
         }
 
-        return (command_is_step_up(cmd) != 0U || command_is_pick_kfs(cmd) != 0U) ? 1U : 0U;
+        return (command_is_step_up(cmd) != 0U) ? 1U : 0U;
     }
 
     // 只查看队首命令是否为转弯，不弹出命令。
@@ -454,34 +448,12 @@ void ROUTE_TASK::meiling_route()
         return;
 
     if (state == PHASE_IDLE)
-        state = FIRST_RELOCATION;
+        state = PHASE_GO_2;
 
     switch (state)
     {
-    case FIRST_RELOCATION:
+    case PHASE_GO_2:
     {
-        // if (relocation_number == 0)
-        // {
-        //     // 第一次重定位
-        //     meiling.start(first_relocation);
-        //     relocation_number = 1;
-        // }
-        // else if (relocation_number == 1)
-        // {
-        //     uint8_t relocation_result = meiling.update();
-
-        //     if (relocation_result == MeilingLocator::SUCCESS)
-        //     {
-        //         relocation_number = 2;
-        //         send_position_to_pc(0, 1, 0.96, -1.64, 0.0f);
-        //         // 第一次重定位完成，回到视觉命令等待阶段。
-        //         state = PHASE_VISION;
-        //     }
-        //     else if (relocation_result == MeilingLocator::TIMEOUT)
-        //     {
-        //         meiling.start(first_relocation);
-        //     }
-        // }
         uint8_t path_result = one_go_two();
         if (path_result == 1U)
         {
@@ -489,6 +461,33 @@ void ROUTE_TASK::meiling_route()
             state = PHASE_VISION;
         }
 
+        break;
+    }
+
+    case FIRST_RELOCATION:
+    {
+        if (relocation_number == 0)
+        {
+            // 第一次重定位
+            meiling.start(first_relocation);
+            relocation_number = 1;
+        }
+        else if (relocation_number == 1)
+        {
+            uint8_t relocation_result = meiling.update();
+
+            if (relocation_result == MeilingLocator::SUCCESS)
+            {
+                relocation_number = 2;
+                send_position_to_pc(0, 1, 0.96, -1.6, 0.0f);
+                // 第一次重定位完成，回到视觉命令等待阶段。
+                state = PHASE_VISION;
+            }
+            else if (relocation_result == MeilingLocator::TIMEOUT)
+            {
+                meiling.start(first_relocation);
+            }
+        }
         break;
     }
 
@@ -554,7 +553,6 @@ void ROUTE_TASK::meiling_route()
             state = PHASE_VISION;
         }
         break;
-
     case PHASE_STEP_DOWN:
         // 下台阶目标参数已在 vision_choice() 中配置。
         lift_step_down.startStepDown();
@@ -815,6 +813,7 @@ extern "C" uint8_t RouteTask_IsMeilingAreaActive(void)
 
     switch (route_t.state)
     {
+    case FIRST_RELOCATION:
     case SECOND_RELOCATION:
     case THIRD_RELOCATION:
     case PHASE_STEP_UP:
@@ -838,6 +837,16 @@ extern "C" void plan_route(void *argument)
 
     for (;;)
     {
+
+        if (flag_step == 0)
+        {
+            
+        }
+
+        else
+        {
+            
+        }
 
         if (flag_meiling == 1)
         {
