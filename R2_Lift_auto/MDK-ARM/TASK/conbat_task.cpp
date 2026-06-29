@@ -67,6 +67,21 @@ static const std::size_t conbat_kfs_place_middle_point_counts[] = {
 
 CONBAT_TASK conbat_t;
 
+// action_result: 0 继续当前状态，1 进入下一状态，2 回到空闲。
+static void update_state_by_action_result(uint8_t action_result,
+                                          ConbatState next_state,
+                                          ConbatState *state)
+{
+    if (action_result == 1U)
+    {
+        *state = next_state;
+    }
+    else if (action_result == 2U)
+    {
+        *state = CONBAT_IDLE;
+    }
+}
+
 /*
  * 构造函数：上电创建全局 conbat_t 时调用。
  * 这里直接复位所有状态，保证任务启动前处于空闲、安全输出状态。
@@ -84,6 +99,7 @@ void CONBAT_TASK::reset(void)
 {
     state = CONBAT_IDLE;
     last_state_ = CONBAT_IDLE;
+    conbat_start = 0U;
     path_follower_.reset();
     path_loaded_ = 0U;
     kfs_place_index_ = 0U;
@@ -112,14 +128,7 @@ void CONBAT_TASK::runOnce(void)
     case CONBAT_RAMP_UP:
         /* 上坡状态：加载并执行上坡路径。 */
         action_result = runRampUp();
-        if (action_result == 1U)
-        {
-            state = CONBAT_PICK_KFS;
-        }
-        else if (action_result == 2U)
-        {
-            state = CONBAT_IDLE;
-        }
+        update_state_by_action_result(action_result, CONBAT_PICK_KFS, &state);
         break;
 
     case CONBAT_PICK_KFS:
@@ -127,30 +136,25 @@ void CONBAT_TASK::runOnce(void)
         action_result = loadGeneratedPathToGoal(conbat_pick_kfs_goals[0],
                                                 conbat_pick_kfs_middle_points,
                                                 conbat_pick_kfs_middle_point_count);
-        if (action_result == 1U)
-        {
-            state = CONBAT_SELECT_KFS_PLACE;
-        }
-        else if (action_result == 2U)
-        {
-            state = CONBAT_IDLE;
-        }
+
+        update_state_by_action_result(action_result, CONBAT_SELECT_KFS_PLACE, &state);
         break;
 
     case CONBAT_SELECT_KFS_PLACE:
         /* 选择 KFS 放置点：按 kfs_place_index_ 选择对应路径。 */
         action_result = runSelectKfsPlace();
-        if (action_result == 1U)
-        {
-            state = CONBAT_IDLE;
-        }
-        else if (action_result == 2U)
-        {
-            state = CONBAT_IDLE;
-        }
+        update_state_by_action_result(action_result, CONBAT_IDLE, &state);
         break;
 
     case CONBAT_IDLE:
+        if (conbat_start == 1U)
+        {
+            conbat_start = 0U;
+            state = CONBAT_RAMP_UP;
+        }
+        clearPathOutput();
+        break;
+
     case CONBAT_PLACE_KFS:
     case CONBAT_COMBINE:
     case CONBAT_AVOID:

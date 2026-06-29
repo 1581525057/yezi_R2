@@ -209,10 +209,10 @@ private:
     {
         WuqiquPathPlanner::Pose pose = {};
 
-        pose.x = kVisionXToPlannerX * vision.x_diff;      // m, planner X / chassis Vx
-        pose.y = kVisionYToPlannerY * vision.y_diff;      // m, planner Y / chassis Vy
-        pose.yaw = vision.angle_x * kDegToRad;            // rad
-        pose.yaw_360 = vision.angle_x;                    // deg
+        pose.x = kVisionXToPlannerX * vision.x_diff; // m, planner X / chassis Vx
+        pose.y = kVisionYToPlannerY * vision.y_diff; // m, planner Y / chassis Vy
+        pose.yaw = vision.angle_x * kDegToRad;       // rad
+        pose.yaw_360 = vision.angle_x;               // deg
 
         /* 底盘当前速度来自运动学解算，单位 m/s */
         pose.car_speed_x = omni_chassis.now.Vx;

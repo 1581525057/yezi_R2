@@ -13,6 +13,7 @@
 #include "arm_comm.h"
 #include "path_follow.h"
 #include "path.h"
+#include "FTMTask.h"
 
 ROUTE_TASK route_t;
 extern float yaw_target;
@@ -362,36 +363,37 @@ void ROUTE_TASK::vision_choice()
 
     case 5:
     case 6:
-    {
+        // 指令 5 下200台阶，指令 6 下400台阶。
         // 从方块队列取编号，查表设置下台阶雷达目标坐标。
-        int block_num = 0;
-        vision_block_pop(&block_num);
-        float finish_x = block_vision_middle[block_num].x;
-        float finish_y = block_vision_middle[block_num].y;
-        float prepare_base_x = finish_x;
-        float prepare_base_y = finish_y;
-        if (last_step_center_valid_ != 0U)
         {
-            // 下台阶准备点基准来自接线层记录的当前台阶中心，不能由 LiftStepDown 自己猜。
-            prepare_base_x = last_step_center_x_;
-            prepare_base_y = last_step_center_y_;
+            int block_num = 0;
+            vision_block_pop(&block_num);
+            float finish_x = block_vision_middle[block_num].x;
+            float finish_y = block_vision_middle[block_num].y;
+            float prepare_base_x = finish_x;
+            float prepare_base_y = finish_y;
+            if (last_step_center_valid_ != 0U)
+            {
+                // 下台阶准备点基准来自接线层记录的当前台阶中心，不能由 LiftStepDown 自己猜。
+                prepare_base_x = last_step_center_x_;
+                prepare_base_y = last_step_center_y_;
+            }
+            lift_step_down.setStepDownHeightMode((cmd == 6) ? 400U : 200U);
+            lift_step_down.setStepDownBlockNum(block_num);
+            lift_step_down.setStepDownRadarTarget(
+                prepare_base_x,
+                prepare_base_y,
+                finish_x,
+                finish_y,
+                (last_turn_90_direction_ > 0) ? 1U : 0U,
+                (last_turn_90_direction_ < 0) ? 1U : 0U,
+                last_turn_180_);
+            last_step_center_x_ = finish_x;
+            last_step_center_y_ = finish_y;
+            last_step_center_valid_ = 1U;
+            state = PHASE_STEP_DOWN;
+            break;
         }
-        lift_step_down.setStepDownHeightMode((cmd == 6) ? 400U : 200U);
-        lift_step_down.setStepDownBlockNum(block_num);
-        lift_step_down.setStepDownRadarTarget(
-            prepare_base_x,
-            prepare_base_y,
-            finish_x,
-            finish_y,
-            (last_turn_90_direction_ > 0) ? 1U : 0U,
-            (last_turn_90_direction_ < 0) ? 1U : 0U,
-            last_turn_180_);
-        last_step_center_x_ = finish_x;
-        last_step_center_y_ = finish_y;
-        last_step_center_valid_ = 1U;
-        state = PHASE_STEP_DOWN;
-        break;
-    }
 
     case 7:
         // 视觉指令 7：左转 90 度。
@@ -448,18 +450,18 @@ void ROUTE_TASK::meiling_route()
         return;
 
     if (state == PHASE_IDLE)
-        // state = PHASE_GO_2;
+        state = PHASE_VISION;
 
     switch (state)
     {
     case PHASE_GO_2:
     {
-        // uint8_t path_result = one_go_two();
-        // if (path_result == 1U)
-        // {
-        //     path_loaded_ = 0U;
-        //     state = PHASE_VISION;
-        // }
+        uint8_t path_result = one_go_two();
+        if (path_result == 1U)
+        {
+            path_loaded_ = 0U;
+            state = PHASE_VISION;
+        }
 
         break;
     }
@@ -478,7 +480,20 @@ void ROUTE_TASK::meiling_route()
         if (relocation_result == MeilingLocator::SUCCESS)
         {
             relocation_number = 2U;
-            send_position_to_pc(0, 1, 0.96, -1.6, 0.0f);
+
+            if (entrence_KFS == 0)
+            {
+                send_position_to_pc(0, 1, 0.96, -1.6, 0.0f);
+            }
+            else if (entrence_KFS == 1)
+            {
+                send_position_to_pc(0, 1, 0.96, -1.6, 0.0f);
+            }
+            else
+            {
+                send_position_to_pc(0, 1, 0.96, -1.6, 0.0f);
+            }
+
             // 第一次重定位完成，回到视觉命令等待阶段。
             state = PHASE_VISION;
         }
@@ -499,7 +514,7 @@ void ROUTE_TASK::meiling_route()
             if (path_result == 1U)
             {
                 path_loaded_ = 0U;
-                state = PHASE_VISION;
+                state = FIRST_RELOCATION;
             }
             break;
         }
@@ -509,7 +524,7 @@ void ROUTE_TASK::meiling_route()
             if (path_result == 1U)
             {
                 path_loaded_ = 0U;
-                state = PHASE_VISION;
+                state = FIRST_RELOCATION;
             }
             // 跑到KFS为2的位置去
             break;
@@ -520,7 +535,7 @@ void ROUTE_TASK::meiling_route()
             if (path_result == 1U)
             {
                 path_loaded_ = 0U;
-                state = PHASE_VISION;
+                state = FIRST_RELOCATION;
             }
             // 跑到KFS为3的位置去
             break;
@@ -844,7 +859,7 @@ extern "C" void plan_route(void *argument)
             arm_comm.send();
         }
 
-        if (vision.exec == 1) // 接收数据，启动route_task
+        if (wuqiqu_done == 1) // 武器区完全。启动route_t任务
         {
             route_t.flag_start = 1;
         }
