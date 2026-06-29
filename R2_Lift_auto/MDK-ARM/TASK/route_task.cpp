@@ -466,27 +466,25 @@ void ROUTE_TASK::meiling_route()
 
     case FIRST_RELOCATION:
     {
-        if (relocation_number == 0)
+        if (relocation_number == 0U)
         {
-            // 第一次重定位
             meiling.start(first_relocation);
-            relocation_number = 1;
+            relocation_number = 1U;
+            break;
         }
-        else if (relocation_number == 1)
-        {
-            uint8_t relocation_result = meiling.update();
 
-            if (relocation_result == MeilingLocator::SUCCESS)
-            {
-                relocation_number = 2;
-                send_position_to_pc(0, 1, 0.96, -1.6, 0.0f);
-                // 第一次重定位完成，回到视觉命令等待阶段。
-                state = PHASE_VISION;
-            }
-            else if (relocation_result == MeilingLocator::TIMEOUT)
-            {
-                meiling.start(first_relocation);
-            }
+        uint8_t relocation_result = meiling.update();
+
+        if (relocation_result == MeilingLocator::SUCCESS)
+        {
+            relocation_number = 2U;
+            send_position_to_pc(0, 1, 0.96, -1.6, 0.0f);
+            // 第一次重定位完成，回到视觉命令等待阶段。
+            state = PHASE_VISION;
+        }
+        else if (relocation_result == MeilingLocator::TIMEOUT)
+        {
+            meiling.start(first_relocation);
         }
         break;
     }
@@ -837,16 +835,6 @@ extern "C" void plan_route(void *argument)
 
     for (;;)
     {
-
-        if (flag_step == 0)
-        {
-            
-        }
-
-        else
-        {
-            
-        }
 
         if (flag_meiling == 1)
         {

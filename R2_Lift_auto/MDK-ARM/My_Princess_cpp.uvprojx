@@ -1814,6 +1814,11 @@
               <FileType>8</FileType>
               <FilePath>.\TASK\wuqiqu_task.cpp</FilePath>
             </File>
+            <File>
+              <FileName>conbat_task.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\TASK\conbat_task.cpp</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -1933,6 +1938,16 @@
               <FileName>path.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\Route_Plan\path.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>BR_McuBsplinePathGenerator.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\Route_Plan\BR_McuBsplinePathGenerator.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>BR_McuBsplinePathGenerator.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Route_Plan\BR_McuBsplinePathGenerator.h</FilePath>
             </File>
           </Files>
         </Group>

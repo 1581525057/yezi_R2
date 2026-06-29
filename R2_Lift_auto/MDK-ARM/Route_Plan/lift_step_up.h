@@ -42,6 +42,7 @@ public:
     void setStepUpReturnMiddle(uint8_t enable);
 
 private:
+    void resetStepUpRuntime(void);
     void resetStepUp(void);
 
     enum StepUpState

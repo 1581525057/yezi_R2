@@ -3,8 +3,6 @@
 #include "usart_task.h"
 #include <math.h>
 
-
-
 // 下四百：1.先走到一定位置 2. 抬升抬到-200，同时打开气缸 3.动2006到指定位置 4.抬升到+200，等待+200抬升完毕后，关闭气缸  5.然后到中心点 6.然后抬升到+100
 extern VisionData_t vision;
 
@@ -25,9 +23,9 @@ float STEP_DOWN_AUTO_CHASSIS_SPEED_MPS = 0.9f;
 float STEP_DOWN_CHASSIS_ACC_SPEED = 0.4f;
 
 // 第 2 阶段升降轮带动车辆离开台阶时允许输出的最大线速度，单位为 m/s。
-float STEP_DOWN_AUTO_LIFT_SPEED_MPS = 1.05f;
+float STEP_DOWN_AUTO_LIFT_SPEED_MPS = 1.35f;
 // 升降轮速度计算使用的制动包络参数。数值越大，离开台阶时允许的速度越高。
-float STEP_DOWN_LIFT_ACC_SPEED = 0.8f;
+float STEP_DOWN_LIFT_ACC_SPEED = 1.0f;
 
 // 雷达坐标必须连续满足目标条件 10 个周期，状态机才允许进入下一阶段。
 uint8_t STEP_DOWN_AUTO_STABLE_COUNT = 10U;

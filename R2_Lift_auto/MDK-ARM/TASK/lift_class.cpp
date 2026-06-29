@@ -122,10 +122,10 @@ extern "C" void lift_task(void *argument)
             last_sw = now_sw;
         }
 
-        // 当标志位置位时，重新生成一条 0.7s 的线性轨迹
+        // 当标志位置位时，直接刷新目标高度，不生成过渡轨迹。
         if (lift_debug.flag == 1.0f)
         {
-            lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.3f);
+            lift_height_set_target(&lift_calulate, lift_debug.height_target, 0.0f);
             lift_debug.flag = 0.0f;
         }
 
