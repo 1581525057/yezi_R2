@@ -105,6 +105,7 @@ namespace
     uint8_t g_route_action_sequence_step_index = 0U;
     uint8_t g_go_meilin_step_index = 0U;
     uint8_t g_main_action_step_index = 0U;
+    uint8_t g_auto_full_flow_active = 0U;
     uint32_t g_last_minipc_control_seq = 0U;
     int16_t g_last_lift_adjust_unused_mark = 0;
     uint8_t g_docking_lift_adjust_active = 0U;
@@ -240,6 +241,16 @@ namespace
                    : 0U;
     }
 
+    uint8_t IsAutoFullFlowCarryState(uint8_t main_state)
+    {
+        return ((main_state == FTM_MAIN_AUTO_FULL_FLOW) ||
+                (main_state == FTM_MAIN_AUTO_PICK_ROUTE) ||
+                (main_state == FTM_MAIN_DOCKING) ||
+                (main_state == FTM_MAIN_GO_MEILIN))
+                   ? 1U
+                   : 0U;
+    }
+
     uint8_t IsWuqiquRouteAction(uint8_t action_state)
     {
         return ((action_state == FTM_ACTION_WUQIQU_ROUTE_2) ||
@@ -317,6 +328,11 @@ namespace
         UpdateYawTargetCorrectionState(main_state);
         ResetActionRuntime();
         g_main_action_step_index = 0U;
+
+        if (IsAutoFullFlowCarryState(main_state) == 0U)
+        {
+            g_auto_full_flow_active = 0U;
+        }
 
         if (main_state != FTM_MAIN_IDLE)
         {
@@ -1166,12 +1182,21 @@ extern "C" void ftm_task(void *argument)
         case FTM_MAIN_GO_MEILIN:
             if (RunGoMeilinSequence() != 0U)
             {
+                if (g_auto_full_flow_active != 0U)
+                {
+                    if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) == 0U)
+                    {
+                        break;
+                    }
+                    g_auto_full_flow_active = 0U;
+                }
                 EnterMainState(FTM_MAIN_DONE);
             }
             break;
 
         // 主状态 9：完整自动流程入口；进入 5，之后按 5->7->8->4 自动衔接。
         case FTM_MAIN_AUTO_FULL_FLOW:
+            g_auto_full_flow_active = 1U;
             EnterMainState(FTM_MAIN_AUTO_PICK_ROUTE);
             break;
 
