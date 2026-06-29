@@ -19,7 +19,7 @@ static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
     {0.06f, 0.64f, 90.0f, 1.0f, 0.0f, 0.020f, 2.0f},
     {0.96f, -1.64f, 0.0f, 1.0f, 0.0f, 0.020f, 2.0f},
 };
-static const float kMeilinApproachVMaxMps = 1.50f;
+static const float kMeilinApproachVMaxMps = 2.0f;
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 
 WuqiquPathPlanner wuqiqu;

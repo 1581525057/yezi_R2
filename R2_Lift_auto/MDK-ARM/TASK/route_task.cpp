@@ -13,6 +13,7 @@
 #include "arm_comm.h"
 #include "path_follow.h"
 #include "path.h"
+#include "FTMTask.h"
 
 ROUTE_TASK route_t;
 extern float yaw_target;
@@ -448,7 +449,9 @@ void ROUTE_TASK::meiling_route()
         return;
 
     if (state == PHASE_IDLE)
-        // state = PHASE_GO_2;
+    {
+        return;
+    }
 
     switch (state)
     {
@@ -832,6 +835,7 @@ uint16_t flag_meiling = 1;
 uint16_t flag_step = 0;
 extern "C" void plan_route(void *argument)
 {
+    uint8_t ftm_done_route_started = 0U;
 
     for (;;)
     {
@@ -840,6 +844,7 @@ extern "C" void plan_route(void *argument)
         {
             route_t.route_reset();
             flag_meiling = 0;
+            ftm_done_route_started = 0U;
             arm_comm.executeAction(ArmComm::ACTION_POWER_ON_INIT, 0);
             arm_comm.send();
         }
@@ -847,6 +852,15 @@ extern "C" void plan_route(void *argument)
         if (vision.exec == 1) // 接收数据，启动route_task
         {
             route_t.flag_start = 1;
+        }
+
+        if ((FTM_GetMainState() == 4U) &&
+            (route_t.state == PHASE_IDLE) &&
+            (ftm_done_route_started == 0U))
+        {
+            route_t.flag_start = 1U;
+            route_t.state = FIRST_RELOCATION;
+            ftm_done_route_started = 1U;
         }
 
         // 更新现在几个KFS
