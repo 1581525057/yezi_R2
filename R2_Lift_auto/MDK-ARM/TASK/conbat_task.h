@@ -39,6 +39,7 @@ public:
     void setYawTarget(float yaw_degree);
 
     ConbatState state;
+    uint8_t conbat_start;
     uint8_t yaw_target_enabled;
     float yaw_target_degree;
 

@@ -6,6 +6,17 @@
 // 下四百：1.先走到一定位置 2. 抬升抬到-200，同时打开气缸 3.动2006到指定位置 4.抬升到+200，等待+200抬升完毕后，关闭气缸  5.然后到中心点 6.然后抬升到+100
 extern VisionData_t vision;
 
+#ifndef STEP_DOWN_DEBUG_MANUAL_STEP_CMD
+#define STEP_DOWN_DEBUG_MANUAL_STEP_CMD 0
+#endif
+
+#if STEP_DOWN_DEBUG_MANUAL_STEP_CMD
+uint8_t step_down_debug_step_next_cmd = 0U; // 调试用：置 1 后只允许下台阶状态机切换一次。
+#define STEP_DOWN_DEBUG_ALLOW_NEXT() ((step_down_debug_step_next_cmd != 0U) ? (step_down_debug_step_next_cmd = 0U, 1U) : 0U)
+#else
+#define STEP_DOWN_DEBUG_ALLOW_NEXT() 1U
+#endif
+
 static void step_down_world_error_to_body_error(float x_world, float y_world, float yaw_deg, float *x_body, float *y_body)
 {
     const float deg_to_rad = 0.01745329251994329577f;
@@ -29,6 +40,8 @@ float STEP_DOWN_LIFT_ACC_SPEED = 1.0f;
 
 // 雷达坐标必须连续满足目标条件 10 个周期，状态机才允许进入下一阶段。
 uint8_t STEP_DOWN_AUTO_STABLE_COUNT = 10U;
+// 等待升降档位时，按左右实际高度判定是否到达目标高度，避免只看 finished 提前跳转。
+float STEP_DOWN_LIFT_HEIGHT_TOLERANCE_MM = 40.0f;
 
 // 下台阶前准备阶段离方块中心点的距离，单位为 m。
 float STEP_DOWN_PREPARE_DISTANCE_L = 0.35f;
@@ -224,7 +237,8 @@ void LiftStepDown::update(void)
             prepare_done = (fabsf(y_err) < 0.020f) ? 1U : 0U;
         }
 
-        if (step_down_stable_confirm(prepare_done) != 0U)
+        if (step_down_stable_confirm(prepare_done) != 0U &&
+            STEP_DOWN_DEBUG_ALLOW_NEXT() != 0U)
         {
             chassis_vx_target_ = 0.0f;
             chassis_vy_target_ = 0.0f;
@@ -245,6 +259,7 @@ void LiftStepDown::update(void)
     }
 
     case STEP_DOWN_WAIT_PRE_LIFT_HEIGHT:
+    {
         /*
          * 第 2 阶段：切到 2 档下降到下 400 准备高度。
          *
@@ -256,14 +271,21 @@ void LiftStepDown::update(void)
         chassis_vx_target_ = 0.0f;
         chassis_vy_target_ = 0.0f;
 
+        const uint8_t pre_lift_height_reached =
+            (fabsf(lift_class.left.height - lift_calulate.target_height) <= STEP_DOWN_LIFT_HEIGHT_TOLERANCE_MM &&
+             fabsf(lift_class.right.height - lift_calulate.target_height) <= STEP_DOWN_LIFT_HEIGHT_TOLERANCE_MM)
+                ? 1U
+                : 0U;
         if (lift_calulate.command_seq != step_down_pre_lift_command_seq_ &&
-            lift_calulate.finished == 1U)
+            pre_lift_height_reached != 0U &&
+            STEP_DOWN_DEBUG_ALLOW_NEXT() != 0U)
         {
             step_down_stable_count_ = 0U;
             step_down_descend_target_valid_ = 0U;
             step_down_state_ = STEP_DOWN_DESCEND;
         }
         break;
+    }
 
     case STEP_DOWN_DESCEND:
     {
@@ -308,7 +330,8 @@ void LiftStepDown::update(void)
         }
         lift_linear_speed_target_ = lift_speed;
 
-        if (step_down_stable_confirm((fabsf(lift_err) < 0.040f) ? 1U : 0U) != 0U)
+        if (step_down_stable_confirm((fabsf(lift_err) < 0.040f) ? 1U : 0U) != 0U &&
+            STEP_DOWN_DEBUG_ALLOW_NEXT() != 0U)
         {
             lift_linear_speed_target_ = 0.0f;
             step_down_stable_count_ = 0U;
@@ -328,6 +351,7 @@ void LiftStepDown::update(void)
     }
 
     case STEP_DOWN_WAIT_POST_LIFT_HEIGHT:
+    {
         /*
          * 第 4 阶段：切到 1 档上升到释放高度。
          *
@@ -338,14 +362,21 @@ void LiftStepDown::update(void)
         chassis_vx_target_ = 0.0f;
         chassis_vy_target_ = 0.0f;
 
+        const uint8_t post_lift_height_reached =
+            (fabsf(lift_class.left.height - lift_calulate.target_height) <= STEP_DOWN_LIFT_HEIGHT_TOLERANCE_MM &&
+             fabsf(lift_class.right.height - lift_calulate.target_height) <= STEP_DOWN_LIFT_HEIGHT_TOLERANCE_MM)
+                ? 1U
+                : 0U;
         if (lift_calulate.command_seq != step_down_post_lift_command_seq_ &&
-            lift_calulate.finished == 1U)
+            post_lift_height_reached != 0U &&
+            STEP_DOWN_DEBUG_ALLOW_NEXT() != 0U)
         {
             STEP_DOWN_CYLINDER_CLOSE();
             step_down_stable_count_ = 0U;
             step_down_state_ = STEP_DOWN_MOVE_TO_FINISH;
         }
         break;
+    }
 
     case STEP_DOWN_MOVE_TO_FINISH:
     {
@@ -376,7 +407,8 @@ void LiftStepDown::update(void)
         if (step_down_stable_confirm((fabsf(x_err) < 0.020f &&
                                       fabsf(y_err) < 0.020f)
                                          ? 1U
-                                         : 0U) != 0U)
+                                         : 0U) != 0U &&
+            STEP_DOWN_DEBUG_ALLOW_NEXT() != 0U)
         {
             chassis_vx_target_ = 0.0f;
             chassis_vy_target_ = 0.0f;
