@@ -386,7 +386,10 @@ void LiftStepDown::update(void)
          * 本阶段切回 3 档后不等待高度轨迹执行完成，直接边抬升到 +100 边回中心。
          * 升降轮保持停止，底盘同时修正 X 和 Y 坐标，走到配置的终点。
          */
-        lift_switch_target_ = 3U;
+        if (step_down_height_mode_mm_ != 400U)
+        {
+            lift_switch_target_ = 3U;
+        }
         lift_linear_speed_target_ = 0.0f;
 
         // X/Y 两个方向分别计算误差，使底盘能够同时完成纵向和横向收敛。
@@ -412,6 +415,10 @@ void LiftStepDown::update(void)
         {
             chassis_vx_target_ = 0.0f;
             chassis_vy_target_ = 0.0f;
+            if (step_down_height_mode_mm_ == 400U)
+            {
+                lift_switch_target_ = 3U;
+            }
             step_down_stable_count_ = 0U;
             step_down_state_ = STEP_DOWN_FINISHED;
         }

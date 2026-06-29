@@ -514,7 +514,7 @@ void ROUTE_TASK::meiling_route()
             if (path_result == 1U)
             {
                 path_loaded_ = 0U;
-                state = FIRST_RELOCATION;
+                state = PHASE_VISION;
             }
             break;
         }
@@ -524,7 +524,7 @@ void ROUTE_TASK::meiling_route()
             if (path_result == 1U)
             {
                 path_loaded_ = 0U;
-                state = FIRST_RELOCATION;
+                state = PHASE_VISION;
             }
             // 跑到KFS为2的位置去
             break;
@@ -535,7 +535,7 @@ void ROUTE_TASK::meiling_route()
             if (path_result == 1U)
             {
                 path_loaded_ = 0U;
-                state = FIRST_RELOCATION;
+                state = PHASE_VISION;
             }
             // 跑到KFS为3的位置去
             break;
@@ -861,17 +861,11 @@ extern "C" void plan_route(void *argument)
             arm_comm.send();
         }
 
-        if (wuqiqu_done == 1) // 武器区完全。启动route_t任务
-        {
-            route_t.flag_start = 1;
-        }
-
         if ((FTM_GetMainState() == 4U) &&
             (route_t.state == PHASE_IDLE) &&
             (ftm_done_route_started == 0U))
         {
             route_t.flag_start = 1U;
-            route_t.state = FIRST_RELOCATION;
             ftm_done_route_started = 1U;
         }
 
