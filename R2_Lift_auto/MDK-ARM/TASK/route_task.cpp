@@ -230,6 +230,7 @@ void ROUTE_TASK::route_reset()
 
     // 清空视觉命令队列，防止复位后继续执行旧命令。
     vision_command_clear();
+    vision_block_clear();
 }
 
 void ROUTE_TASK::clear_path_output(void)
@@ -307,6 +308,7 @@ void ROUTE_TASK::vision_choice()
     if (vision_command_pop(&cmd) != 1U)
     {
         flag_vision = 0;
+        vision_plan_mark_consumed_if_empty();
         return;
     }
 
@@ -861,13 +863,13 @@ extern "C" void plan_route(void *argument)
             arm_comm.send();
         }
 
-        if ((FTM_GetMainState() == 4U) &&
-            (route_t.state == PHASE_IDLE) &&
-            (ftm_done_route_started == 0U))
-        {
-            route_t.flag_start = 1U;
-            ftm_done_route_started = 1U;
-        }
+        // if ((FTM_GetMainState() == 4U) &&
+        //     (route_t.state == PHASE_IDLE) &&
+        //     (ftm_done_route_started == 0U))
+        // {
+        //     route_t.flag_start = 1U;
+        //     ftm_done_route_started = 1U;
+        // }
 
         // 更新现在几个KFS
         route_t.update_number_KFS_by_cmd();

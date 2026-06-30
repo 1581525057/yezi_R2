@@ -37,6 +37,8 @@ public:
         ACTION_ZONE3_FETCH_LOWER, // 取车底层 KFS
         ACTION_ZONE3_RESET,       // 重置状态机，zone3_cmd 回 0
         ACTION_POWER_OFF,         // 关机
+        ACTION_PICK_FIRST_KFS,    // 拾取第一个 KFS
+        ACTION_PICK_SECOND_KFS,   // 拾取第二个 KFS
     };
 
     ArmComm();

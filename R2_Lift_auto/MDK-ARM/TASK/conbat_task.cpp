@@ -1,20 +1,27 @@
 #include "conbat_task.h"
 #include "cmsis_os.h"
 #include "usart_task.h"
+#include "mieling.h"
+#include "arm_comm.h"
 
-static const float CONBAT_DEG_TO_RAD = 3.1415926f / 180.0f;
-static const float CONBAT_GENERATE_PATH_MAX_VEL_M_S = 1.2f;
-static const float CONBAT_GENERATE_PATH_MAX_ACC_M_S2 = 1.0f;
-static const float CONBAT_GENERATE_PATH_GAP_M = 0.1f;
+float CONBAT_DEG_TO_RAD = 3.1415926f / 180.0f;
+float CONBAT_GENERATE_PATH_MAX_VEL_M_S = 2.0f;
+float CONBAT_GENERATE_PATH_MAX_ACC_M_S2 = 1.8f;
+float CONBAT_GENERATE_PATH_GAP_M = 0.1f;
 
 // 上坡状态的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_ramp_up_goals[] = {
-    {0.0f, 0.0f, 0.0f},
+    // {2.63f, 1.99f, 0.0f},
+    {2.51f, 2.58f, 0.0f},
 };
 
 // 上坡状态的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint conbat_ramp_up_middle_points[] = {
-    {0.0f, 0.0f},
+    {0.84f, -0.07f},
+    {1.69f, -0.04f},
+    {3.24f, -0.08f},
+    {3.24f, 1.23f},
+
 };
 static const std::size_t conbat_ramp_up_middle_point_count =
     sizeof(conbat_ramp_up_middle_points) / sizeof(conbat_ramp_up_middle_points[0]);
@@ -30,6 +37,29 @@ static BRPathControlPoint conbat_pick_kfs_middle_points[] = {
 };
 static const std::size_t conbat_pick_kfs_middle_point_count =
     sizeof(conbat_pick_kfs_middle_points) / sizeof(conbat_pick_kfs_middle_points[0]);
+
+// 拾取 KFS 的右激光精定位目标，单位 mm；现场只需要改 R_ref。
+static MeilingTarget_t conbat_pick_kfs_first_laser_target = {
+    .preset_id = 0,
+    .L_ref = 0.0f,
+    .R_ref = 0.0f,
+    .F_ref = 0.0f,
+    .tol_lat = 20.0f,
+    .tol_lon = 20.0f,
+    .timeout_ms = 500000U,
+    .sensor_mask = SENSOR_RIGHT,
+};
+
+static MeilingTarget_t conbat_pick_kfs_second_laser_target = {
+    .preset_id = 0,
+    .L_ref = 0.0f,
+    .R_ref = 0.0f,
+    .F_ref = 0.0f,
+    .tol_lat = 20.0f,
+    .tol_lon = 20.0f,
+    .timeout_ms = 500000U,
+    .sensor_mask = SENSOR_RIGHT,
+};
 
 // 放 KFS 状态的终点表，单位：x/y 为 m，yaw 为 rad；按 kfs_place_index_ 选择。
 static BRPathPose conbat_kfs_place_goals[] = {
@@ -102,6 +132,9 @@ void CONBAT_TASK::reset(void)
     conbat_start = 0U;
     path_follower_.reset();
     path_loaded_ = 0U;
+    ramp_up_waiting_ = 0U;
+    pick_kfs_step_ = PICK_KFS_PATH_TO_AREA;
+    pick_kfs_meiling_active_ = 0U;
     kfs_place_index_ = 0U;
     yaw_target_enabled = 0U;
     yaw_target_degree = 0.0f;
@@ -133,9 +166,7 @@ void CONBAT_TASK::runOnce(void)
 
     case CONBAT_PICK_KFS:
         /* 捡 KFS 状态：生成到捡取点的路径并开始跟随。 */
-        action_result = loadGeneratedPathToGoal(conbat_pick_kfs_goals[0],
-                                                conbat_pick_kfs_middle_points,
-                                                conbat_pick_kfs_middle_point_count);
+        action_result = runPickKfs();
 
         update_state_by_action_result(action_result, CONBAT_SELECT_KFS_PLACE, &state);
         break;
@@ -196,7 +227,13 @@ uint8_t CONBAT_TASK::getChassisTarget(float manual_vx,
         return 0U;
     }
 
-    if (path_active_ != 0U)
+    if (pick_kfs_meiling_active_ != 0U)
+    {
+        *target_vx = meiling.getChassisVxTarget(manual_vx);
+        *target_vy = meiling.getChassisVyTarget(manual_vy);
+        *target_wz = meiling.getChassisVzTarget(manual_wz);
+    }
+    else if (path_active_ != 0U)
     {
         *target_vx = path_vx_target_;
         *target_vy = path_vy_target_;
@@ -254,6 +291,9 @@ void CONBAT_TASK::handleStateChanged(void)
     /* 切状态时重新装载路径，避免沿用上一段路径跟随进度。 */
     path_follower_.reset();
     path_loaded_ = 0U;
+    ramp_up_waiting_ = 0U;
+    pick_kfs_step_ = PICK_KFS_PATH_TO_AREA;
+    pick_kfs_meiling_active_ = 0U;
     clearPathOutput();
 
     if (state == CONBAT_IDLE)
@@ -282,11 +322,155 @@ void CONBAT_TASK::clearPathOutput(void)
  */
 uint8_t CONBAT_TASK::runRampUp(void)
 {
-    /* 上斜坡阶段暂用 first_area 路径。 */
+    /* 上坡完成后原地等待，避免重复生成路径后回追中间点。 */
+    if (ramp_up_waiting_ != 0U)
+    {
+        clearPathOutput();
+        return 0U;
+    }
+
     /* 上坡状态：用当前雷达坐标生成到上坡终点的路径。 */
-    return loadGeneratedPathToGoal(conbat_ramp_up_goals[0],
-                                   conbat_ramp_up_middle_points,
-                                   conbat_ramp_up_middle_point_count);
+    uint8_t result = loadGeneratedPathToGoal(conbat_ramp_up_goals[0],
+                                             conbat_ramp_up_middle_points,
+                                             conbat_ramp_up_middle_point_count);
+    if (result == 1U)
+    {
+        ramp_up_waiting_ = 1U;
+        clearPathOutput();
+        return 0U;
+    }
+
+    return result;
+}
+
+uint8_t CONBAT_TASK::runPickKfs(void)
+{
+    switch (pick_kfs_step_)
+    {
+    case PICK_KFS_PATH_TO_AREA:
+    {
+        /* 第一步：先按路径跑到 KFS 拾取区域的粗略点。 */
+        pick_kfs_meiling_active_ = 0U;
+        uint8_t result = loadGeneratedPathToGoal(conbat_pick_kfs_goals[0],
+                                                 conbat_pick_kfs_middle_points,
+                                                 conbat_pick_kfs_middle_point_count);
+        if (result == 1U)
+        {
+            clearPathOutput();
+            pick_kfs_step_ = PICK_KFS_FIRST_LOC_START;
+            return 0U;
+        }
+        return result;
+    }
+
+    case PICK_KFS_FIRST_LOC_START:
+        /* 第二步：启动第一次右激光精定位，准备对准第一个 KFS。 */
+        clearPathOutput();
+        meiling.start(conbat_pick_kfs_first_laser_target);
+        pick_kfs_meiling_active_ = 1U;
+        pick_kfs_step_ = PICK_KFS_FIRST_LOC_RUN;
+        return 0U;
+
+    case PICK_KFS_FIRST_LOC_RUN:
+    {
+        /* 第三步：持续更新梅林定位，成功后进入第一个 KFS 拾取动作。 */
+        uint8_t result = meiling.update();
+        if (result == MeilingLocator::SUCCESS)
+        {
+            pick_kfs_meiling_active_ = 0U;
+            clearPathOutput();
+            pick_kfs_step_ = PICK_KFS_FIRST_ACTION;
+        }
+        else if (result == MeilingLocator::TIMEOUT)
+        {
+            pick_kfs_meiling_active_ = 0U;
+            clearPathOutput();
+            return 2U;
+        }
+        return 0U;
+    }
+
+    case PICK_KFS_FIRST_ACTION:
+        /* 第四步：发送拾取第一个 KFS 的机械臂指令。 */
+       
+        if (arm_comm.executeAction(ArmComm::ACTION_PICK_FIRST_KFS, 1U) == 0U)
+        {
+            return 2U;
+        }
+        arm_comm.send();
+        pick_kfs_step_ = PICK_KFS_FIRST_WAIT_DONE;
+        return 0U;
+
+    case PICK_KFS_FIRST_WAIT_DONE:
+        /* 第五步：等待机械臂回传 event=1，表示第一个 KFS 吸取成功。 */
+        if (arm_comm.rx_data_.event == 1U)
+        {
+            pick_kfs_step_ = PICK_KFS_SECOND_LOC_START;
+        }
+        return 0U;
+
+    case PICK_KFS_SECOND_LOC_START:
+        /* 第六步：启动第二次右激光精定位，准备移动到第二个 KFS。 */
+        clearPathOutput();
+        meiling.start(conbat_pick_kfs_second_laser_target);
+        pick_kfs_meiling_active_ = 1U;
+        pick_kfs_step_ = PICK_KFS_SECOND_LOC_RUN;
+        return 0U;
+
+    case PICK_KFS_SECOND_LOC_RUN:
+    {
+        /* 第七步：持续更新梅林定位，成功后等待机械臂准备好接收下一条指令。 */
+        uint8_t result = meiling.update();
+        if (result == MeilingLocator::SUCCESS)
+        {
+            pick_kfs_meiling_active_ = 0U;
+            clearPathOutput();
+            pick_kfs_step_ = PICK_KFS_SECOND_WAIT_READY;
+        }
+        else if (result == MeilingLocator::TIMEOUT)
+        {
+            pick_kfs_meiling_active_ = 0U;
+            clearPathOutput();
+            return 2U;
+        }
+        return 0U;
+    }
+
+    case PICK_KFS_SECOND_WAIT_READY:
+        /* 第八步：等待机械臂回传 event=3，表示可以接收第二次拾取指令。 */
+        if (arm_comm.rx_data_.event == 3U)
+        {
+            pick_kfs_step_ = PICK_KFS_SECOND_ACTION;
+        }
+        return 0U;
+
+    case PICK_KFS_SECOND_ACTION:
+        /* 第九步：发送拾取第二个 KFS 的机械臂指令。 */
+        arm_comm.rx_data_.event = 0U;
+        if (arm_comm.executeAction(ArmComm::ACTION_PICK_SECOND_KFS, 2U) == 0U)
+        {
+            return 2U;
+        }
+        arm_comm.send();
+        pick_kfs_step_ = PICK_KFS_SECOND_WAIT_DONE;
+        return 0U;
+
+    case PICK_KFS_SECOND_WAIT_DONE:
+        /* 第十步：等待机械臂再次回传 event=1，表示第二个 KFS 吸取成功。 */
+        if (arm_comm.rx_data_.event == 1U)
+        {
+            pick_kfs_meiling_active_ = 0U;
+            clearPathOutput();
+            return 1U;
+        }
+        return 0U;
+
+    default:
+        /* 异常子状态：释放底盘控制并让上层回到空闲。 */
+        pick_kfs_meiling_active_ = 0U;
+        clearPathOutput();
+        return 2U;
+    }
 }
 
 /*
