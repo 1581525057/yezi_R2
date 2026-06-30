@@ -14,8 +14,7 @@
 constexpr float kPi = 3.14159265358979323846f;
 constexpr float kDegToRad = kPi / 180.0f;
 
-/* 下发给底盘的线速度和角速度上限。 */
-constexpr float kMaxLinearSpeedMps = 2.0f;
+/* 下发给底盘的角速度上限。 */
 constexpr float kMaxAngularSpeedRadps = 2.5f;
 
 /* 每个控制周期允许的速度变化量，用于让目标速度平滑变化。 */
@@ -239,15 +238,6 @@ private:
                                vision.angle_x * kDegToRad,
                                &vx_limited,
                                &vy_limited);
-
-        /* 二维速度限幅 */
-        const float linear_speed = sqrtf(vx_limited * vx_limited + vy_limited * vy_limited);
-        if (linear_speed > kMaxLinearSpeedMps && linear_speed > 0.000001f)
-        {
-            const float scale = kMaxLinearSpeedMps / linear_speed;
-            vx_limited *= scale;
-            vy_limited *= scale;
-        }
 
         const float wz_limited = limitFloat(output.wz_radps, -kMaxAngularSpeedRadps, kMaxAngularSpeedRadps);
 
