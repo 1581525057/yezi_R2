@@ -4,7 +4,7 @@
 #include <math.h>
 
 // 下四百：1.先走到一定位置 2. 抬升抬到-200，同时打开气缸 3.动2006到指定位置 4.抬升到+200，等待+200抬升完毕后，关闭气缸  5.然后到中心点 6.然后抬升到+100
-extern VisionData_t vision;
+extern VisionData_t vision; 
 
 #ifndef STEP_DOWN_DEBUG_MANUAL_STEP_CMD
 #define STEP_DOWN_DEBUG_MANUAL_STEP_CMD 0

@@ -32,12 +32,18 @@ VisionData_t vision;
 int vision_command_queue[VISION_COMMAND_QUEUE_SIZE];
 uint8_t vision_command_head = 0U;
 uint8_t vision_command_tail = 0U;
+static int vision_last_command_plan[VISION_COMMAND_QUEUE_SIZE];
+static uint8_t vision_last_command_count = 0U;
+static uint8_t vision_last_plan_valid = 0U;
+static uint8_t vision_plan_locked = 0U;
 
 /* 方块指令环形队列：缓存视觉帧中 B 后面的不定长方块编号 */
 #define VISION_BLOCK_QUEUE_SIZE 32U
 int vision_block_queue[VISION_BLOCK_QUEUE_SIZE];
 uint8_t vision_block_head = 0U;
 uint8_t vision_block_tail = 0U;
+static int vision_last_block_plan[VISION_BLOCK_QUEUE_SIZE];
+static uint8_t vision_last_block_count = 0U;
 
 // 每个方块的中心坐标
 Block_Vision block_vision_middle[16];
@@ -153,6 +159,74 @@ static uint8_t clamp_uint8_field(int value)
     return static_cast<uint8_t>(value);
 }
 
+static uint8_t vision_int_list_equal(const int *left, uint8_t left_count, const int *right, uint8_t right_count)
+{
+    if (left_count != right_count)
+        return 0U;
+
+    for (uint8_t i = 0U; i < left_count; ++i)
+    {
+        if (left[i] != right[i])
+            return 0U;
+    }
+
+    return 1U;
+}
+
+static uint8_t vision_plan_is_same(const int *commands,
+                                   uint8_t command_count,
+                                   const int *blocks,
+                                   uint8_t block_count)
+{
+    if (vision_last_plan_valid == 0U)
+        return 0U;
+
+    if (vision_int_list_equal(commands, command_count, vision_last_command_plan, vision_last_command_count) == 0U)
+        return 0U;
+
+    return vision_int_list_equal(blocks, block_count, vision_last_block_plan, vision_last_block_count);
+}
+
+static void vision_save_last_plan(const int *commands,
+                                  uint8_t command_count,
+                                  const int *blocks,
+                                  uint8_t block_count)
+{
+    for (uint8_t i = 0U; i < command_count; ++i)
+    {
+        vision_last_command_plan[i] = commands[i];
+    }
+    vision_last_command_count = command_count;
+
+    for (uint8_t i = 0U; i < block_count; ++i)
+    {
+        vision_last_block_plan[i] = blocks[i];
+    }
+    vision_last_block_count = block_count;
+    vision_last_plan_valid = 1U;
+}
+
+static void vision_load_new_plan(const int *commands,
+                                 uint8_t command_count,
+                                 const int *blocks,
+                                 uint8_t block_count)
+{
+    vision_command_clear();
+    vision_block_clear();
+
+    for (uint8_t i = 0U; i < command_count; ++i)
+    {
+        (void)vision_command_push(commands[i]);
+    }
+
+    for (uint8_t i = 0U; i < block_count; ++i)
+    {
+        (void)vision_block_push(blocks[i]);
+    }
+
+    vision_save_last_plan(commands, command_count, blocks, block_count);
+}
+
 /* 向视觉指令环形队列尾部压入一条 B 指令 */
 uint8_t vision_command_push(int cmd)
 {
@@ -178,6 +252,7 @@ uint8_t vision_command_pop(int *out)
     /* 读取 head 位置的 B 值，然后推进 head */
     *out = vision_command_queue[vision_command_head];
     vision_command_head = static_cast<uint8_t>((vision_command_head + 1U) % VISION_COMMAND_QUEUE_SIZE);
+    vision_plan_locked = 1U;
     return 1U;
 }
 
@@ -202,6 +277,8 @@ void vision_command_clear(void)
 {
     vision_command_head = 0U;
     vision_command_tail = 0U;
+    vision_last_plan_valid = 0U;
+    vision_plan_locked = 0U;
 }
 
 /* ===================== 方块队列 ===================== */
@@ -240,6 +317,16 @@ void vision_block_clear(void)
 {
     vision_block_head = 0U;
     vision_block_tail = 0U;
+    vision_last_plan_valid = 0U;
+    vision_plan_locked = 0U;
+}
+
+void vision_plan_mark_consumed_if_empty(void)
+{
+    if (vision_command_has_pending() == 0U && vision_block_has_pending() == 0U)
+    {
+        vision_plan_locked = 0U;
+    }
 }
 
 /**
@@ -263,6 +350,10 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
         return 0;
 
     VisionData_t parsed = {};
+    int parsed_commands[VISION_COMMAND_QUEUE_SIZE];
+    uint8_t parsed_command_count = 0U;
+    int parsed_blocks[VISION_BLOCK_QUEUE_SIZE];
+    uint8_t parsed_block_count = 0U;
 
     /* 查找帧头 'S' */
     const uint8_t *s = nullptr;
@@ -345,7 +436,10 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
             if (p >= e)
                 return 0;
             int action = static_cast<int>(fast_atof(&p, e));
-            vision_command_push(action);
+            if (parsed_command_count >= (VISION_COMMAND_QUEUE_SIZE - 1U))
+                return 0;
+            parsed_commands[parsed_command_count] = action;
+            ++parsed_command_count;
         }
         else
         {
@@ -372,7 +466,10 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
             return 0;
 
         int block = static_cast<int>(fast_atof(&p, e));
-        vision_block_push(block);
+        if (parsed_block_count >= (VISION_BLOCK_QUEUE_SIZE - 1U))
+            return 0;
+        parsed_blocks[parsed_block_count] = block;
+        ++parsed_block_count;
     }
 
     /* 解析 A 后面的三个固定标定位 */
@@ -408,6 +505,12 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
         ++p;
         if (p != e)
             return 0;
+    }
+
+    if (vision_plan_locked == 0U &&
+        vision_plan_is_same(parsed_commands, parsed_command_count, parsed_blocks, parsed_block_count) == 0U)
+    {
+        vision_load_new_plan(parsed_commands, parsed_command_count, parsed_blocks, parsed_block_count);
     }
 
     g_ftm_minipc_claw_release_cmd = clamp_uint8_field(parsed.release_flag);
@@ -449,7 +552,7 @@ int Flag1 = 0;
  *   1. 更新 AS5047 磁编码器和 DT35 激光传感器
  *   2. 解析 USB 串口收到的视觉帧
  */
-
+uint16_t flag_bottom = 0;
 extern "C" void usart_task(void *argument)
 {
     // as5047.init(&hspi1);
@@ -457,6 +560,10 @@ extern "C" void usart_task(void *argument)
     Block_claulate_Middle();
     for (;;)
     {
+        // if (Green == 1)
+        // {
+        //     flag_bottom = 1;
+        // }
         /* 更新传感器数据 */
         // as5047.updata();
         dt35.update();
