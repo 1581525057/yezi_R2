@@ -24,8 +24,6 @@ extern volatile uint8_t g_ftm_minipc_claw_release_cmd;
 extern volatile uint8_t g_ftm_minipc_lift_dock_adjust_cmd;
 extern volatile int16_t g_ftm_minipc_unused_mark;
 extern volatile uint32_t g_ftm_minipc_control_seq;
-extern volatile uint8_t g_ftm_docking_brake_active;
-extern volatile int32_t g_ftm_docking_brake_current_mA;
 
 void ftm_task(void *argument);
 uint8_t FTM_GetState(void);
@@ -35,8 +33,6 @@ uint8_t FTM_IsWuqiquDone(void);
 uint8_t FTM_IsYawTargetCorrectionEnabled(void);
 uint8_t FTM_IsYawTargetTurnActive(void);
 float FTM_GetYawTargetDegree(void);
-uint8_t FTM_IsDockingBrakeActive(void);
-int32_t FTM_GetDockingBrakeCurrentmA(void);
 
 #ifdef __cplusplus
 }

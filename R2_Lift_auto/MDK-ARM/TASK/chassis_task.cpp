@@ -278,14 +278,7 @@ extern "C" void chassis_task(void *argument)
         {
 
             motor_input[i] = omni_chassis.target.rpm[i];
-            if (FTM_IsDockingBrakeActive() != 0U)
-            {
-                VescMotors[i].setHandbrakeCurrent(FTM_GetDockingBrakeCurrentmA());
-            }
-            else
-            {
-                VescMotors[i].setRpm(motor_input[i]);
-            }
+            VescMotors[i].setRpm(motor_input[i]);
         }
 
         // 控制周期约 1 ms。

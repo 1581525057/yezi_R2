@@ -167,8 +167,6 @@ namespace
     uint32_t g_wuqiqu_zero_last_send_tick = 0U;
     uint8_t g_wuqiqu_zero_active = 0U;
 
-    void SetDockingBrake(uint8_t active);
-
     bool HasElapsed(uint32_t start_tick, uint32_t duration_ms)
     {
         return static_cast<uint32_t>(HAL_GetTick() - start_tick) >= duration_ms;
@@ -482,11 +480,6 @@ namespace
             {
                 g_prelim_docking_release_latched = 0U;
             }
-            SetDockingBrake(1U);
-        }
-        else
-        {
-            SetDockingBrake(0U);
         }
     }
 
@@ -513,17 +506,11 @@ namespace
 
         if (IsDockingExecChangedTo(kPrelimExecGoMeilin) != 0U)
         {
-            SetDockingBrake(0U);
             EnterMainState(FTM_MAIN_GO_MEILIN);
             return 1U;
         }
 
         return 0U;
-    }
-
-    void SetDockingBrake(uint8_t active)
-    {
-        g_ftm_docking_brake_active = (active != 0U) ? 1U : 0U;
     }
 
     void SyncExternalState(void)
@@ -586,7 +573,7 @@ namespace
         if (g_ftm_minipc_claw_release_cmd == 1U)
         {
             claw_open();
-            // 松爪只放开夹爪，不解除对接手刹；底盘转向由后续 exec 变化触发。
+            // 松爪只放开夹爪；底盘转向由后续 exec 变化触发。
             if (g_prelim_auto_full_flow_active != 0U)
             {
                 g_prelim_docking_release_latched = 1U;
@@ -945,7 +932,6 @@ namespace
 
         WuqiquTask_Stop();
         g_docking_pre_adjust_started = 0U;
-        SetDockingBrake(1U);
         return true;
     }
 
@@ -1041,7 +1027,6 @@ namespace
         else if (IsDockingExecChangedTo(kPrelimExecGoMeilin) != 0U)
         {
             g_prelim_docking_release_latched = 0U;
-            SetDockingBrake(0U);
             EnterMainState(FTM_MAIN_GO_MEILIN);
             return 1U;
         }
@@ -1258,8 +1243,6 @@ extern "C" volatile uint8_t g_ftm_minipc_claw_release_cmd = 0U;
 extern "C" volatile uint8_t g_ftm_minipc_lift_dock_adjust_cmd = 0U;
 extern "C" volatile int16_t g_ftm_minipc_unused_mark = 0;
 extern "C" volatile uint32_t g_ftm_minipc_control_seq = 0U;
-extern "C" volatile uint8_t g_ftm_docking_brake_active = 0U;
-extern "C" volatile int32_t g_ftm_docking_brake_current_mA = 5000;
 
 extern "C" uint8_t FTM_GetState(void)
 {
@@ -1298,16 +1281,6 @@ extern "C" uint8_t FTM_IsYawTargetTurnActive(void)
 extern "C" float FTM_GetYawTargetDegree(void)
 {
     return g_ftm_yaw_target_degree;
-}
-
-extern "C" uint8_t FTM_IsDockingBrakeActive(void)
-{
-    return g_ftm_docking_brake_active;
-}
-
-extern "C" int32_t FTM_GetDockingBrakeCurrentmA(void)
-{
-    return (g_ftm_docking_brake_current_mA > 0) ? g_ftm_docking_brake_current_mA : 0;
 }
 
 extern "C" void ftm_task(void *argument)
