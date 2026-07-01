@@ -24,7 +24,6 @@ public:
         float y_m;
         float yaw_deg;
         float yaw_kp_scale;
-        float yaw_wz_max;
         float xy_tolerance_m;
         float yaw_tolerance_deg;
     };
@@ -90,8 +89,6 @@ public:
     float min_yaw_wz_;
     float strong_yaw_wz_;
     float strong_yaw_error_deg_;
-    float moving_wz_max_;
-    float settle_wz_max_;
     float yaw_tolerance_deg_;
 
     uint16_t stable_cycles_;
