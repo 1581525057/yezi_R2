@@ -25,9 +25,9 @@ static const uint32_t kFastLinkContactTimeoutMs = 80U;
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {0.04f, 0.89f, -90.0f, 1.0f, 0.0f, 0.015f, 1.5f},
-    {0.04f, 0.41f, -90.0f, 1.0f, 0.0f, 0.035f, 3.0f},
-    {-0.06f, 0.41f, 90.0f, 1.0f, 0.0f, 0.025f, 1.5f},
+    {0.03f, 0.90f, -90.0f, 1.0f, 0.0f, 0.015f, 1.5f},
+    {0.03f, 0.41f, -90.0f, 1.0f, 0.0f, 0.035f, 3.0f},
+    {-0.06f, 0.41f, 90.0f, 1.0f, 0.0f, 0.035f, 1.5f},
     {0.96f, -1.64f, 0.0f, 1.0f, 0.0f, 0.030f, 2.0f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
@@ -48,8 +48,8 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     kd_approach_ = 0.9f;          // 接近阶段位置微分增益
     kp_slow_ = 5.5f;              // 减速阶段位置比例增益
     kd_slow_ = 0.8f;              // 减速阶段位置微分增益
-    kp_contact_ = 3.0f;           // 接触/贴近阶段位置比例增益
-    kd_contact_ = 0.4f;           // 接触/贴近阶段位置微分增益
+    kp_contact_ = 3.5f;           // 接触/贴近阶段位置比例增益
+    kd_contact_ = 0.8f;           // 接触/贴近阶段位置微分增益
 
     yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
     yaw_kp_ = 2.4f;               // yaw 角度误差比例增益

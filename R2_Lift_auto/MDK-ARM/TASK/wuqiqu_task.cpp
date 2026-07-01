@@ -26,10 +26,10 @@ constexpr float kAngularDecStepRadps = 0.022f;
 
 /* 第三点到位后的对接前微调参数。 */
 constexpr float kDockAdjustLaserMinM = 0.060f;
-constexpr float kDockAdjustLaserMaxM = 0.065f;
+constexpr float kDockAdjustLaserMaxM = 0.070f;
 constexpr float kDockAdjustLaserTargetM = 0.0625f;
 constexpr float kDockAdjustLaserKp = 8.0f;
-constexpr float kDockAdjustLaserMinVyMps = 0.12f;
+constexpr float kDockAdjustLaserMinVyMps = 0.15f;
 constexpr float kDockAdjustLaserMaxVyMps = 0.35f;
 constexpr float kDockAdjustYawTargetDeg = 90.0f;
 constexpr float kDockAdjustYawToleranceDeg = 1.0f;
