@@ -25,9 +25,8 @@ enum FTMMainState
     FTM_MAIN_AUTO_PICK_ROUTE = 5, // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
     FTM_MAIN_AUTO_TURN_READY = 6, // 武器区姿态准备流程：张爪、对位、M2006 翻转并让 RS05 回 0。
     FTM_MAIN_DOCKING = 7,         // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
-    FTM_MAIN_GO_MEILIN = 8,             // 前往梅林：先修正航向到 0 度，再跑梅林目标点。
-    FTM_MAIN_AUTO_FULL_FLOW = 9,        // 完整自动流程入口：切入 5，之后依次执行 7、8、4。
-    FTM_MAIN_PRELIM_AUTO_FULL_FLOW = 10 // 预选赛三武器头流程入口：按 exec=2/3/4 选择当前武器头，依次夹取三次后进梅林。
+    FTM_MAIN_GO_MEILIN = 8,       // 前往梅林：先回第三点，再修正航向到 0 度，最后跑梅林目标点。
+    FTM_MAIN_AUTO_FULL_FLOW = 9   // 完整自动流程入口：切入 5，之后依次执行 7、8、4。
 };
 
 enum FTMActionState
@@ -83,11 +82,6 @@ namespace
     constexpr uint8_t kWuqiquMeilinWaypointIndex = 3U;
     constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;
     constexpr uint8_t kFtmActionDockingPreAdjust = 20U;
-    constexpr int kPrelimExecGoMeilin = 1;
-    constexpr int kPrelimExecFirstWeapon = 2;
-    constexpr int kPrelimExecSecondWeapon = 3;
-    constexpr int kPrelimExecThirdWeapon = 4;
-    constexpr uint8_t kPrelimWeaponCount = 3U;
 
     struct TimedStep
     {
@@ -117,9 +111,6 @@ namespace
     uint8_t g_go_meilin_step_index = 0U;
     uint8_t g_main_action_step_index = 0U;
     uint8_t g_auto_full_flow_active = 0U;
-    uint8_t g_prelim_auto_full_flow_active = 0U;
-    uint8_t g_prelim_weapon_index = 0U;
-    uint8_t g_prelim_docking_release_latched = 0U;
     uint32_t g_last_minipc_control_seq = 0U;
     int16_t g_last_lift_adjust_unused_mark = 0;
     uint8_t g_docking_lift_adjust_active = 0U;
@@ -264,40 +255,9 @@ namespace
         return ((main_state == FTM_MAIN_AUTO_FULL_FLOW) ||
                 (main_state == FTM_MAIN_AUTO_PICK_ROUTE) ||
                 (main_state == FTM_MAIN_DOCKING) ||
-                (main_state == FTM_MAIN_GO_MEILIN) ||
-                (main_state == FTM_MAIN_AUTO_TURN_READY) ||
-                (main_state == FTM_MAIN_PRELIM_AUTO_FULL_FLOW))
+                (main_state == FTM_MAIN_GO_MEILIN))
                    ? 1U
                    : 0U;
-    }
-
-    uint8_t GetPrelimWeaponIndexFromExec(int exec)
-    {
-        if (exec == kPrelimExecFirstWeapon)
-        {
-            return 0U;
-        }
-        if (exec == kPrelimExecSecondWeapon)
-        {
-            return 1U;
-        }
-        if (exec == kPrelimExecThirdWeapon)
-        {
-            return 2U;
-        }
-        return 0xFFU;
-    }
-
-    uint8_t GetCurrentPickWaypointIndex(void)
-    {
-        return (g_prelim_auto_full_flow_active != 0U) ? g_prelim_weapon_index : 0U;
-    }
-
-    void ResetPrelimAutoFullFlow(void)
-    {
-        g_prelim_auto_full_flow_active = 0U;
-        g_prelim_weapon_index = 0U;
-        g_prelim_docking_release_latched = 0U;
     }
 
     uint8_t IsWuqiquRouteAction(uint8_t action_state)
@@ -382,7 +342,6 @@ namespace
         if (IsAutoFullFlowCarryState(main_state) == 0U)
         {
             g_auto_full_flow_active = 0U;
-            ResetPrelimAutoFullFlow();
         }
 
         if (main_state != FTM_MAIN_IDLE)
@@ -426,10 +385,6 @@ namespace
 
         if (main_state == FTM_MAIN_DOCKING)
         {
-            if (g_prelim_auto_full_flow_active != 0U)
-            {
-                g_prelim_docking_release_latched = 0U;
-            }
             SetDockingBrake(1U);
         }
         else
@@ -454,11 +409,6 @@ namespace
 
     uint8_t TryEnterGoMeilinFromDocking(void)
     {
-        if (g_prelim_auto_full_flow_active != 0U)
-        {
-            return 0U;
-        }
-
         if ((g_ftm_main_state == FTM_MAIN_DOCKING) && (vision.exec == 1))
         {
             SetDockingBrake(0U);
@@ -535,10 +485,6 @@ namespace
         {
             claw_open();
             SetDockingBrake(0U);
-            if (g_prelim_auto_full_flow_active != 0U)
-            {
-                g_prelim_docking_release_latched = 1U;
-            }
         }
     }
 
@@ -927,7 +873,7 @@ namespace
         switch (g_go_meilin_step_index)
         {
         case 0:
-            if (RunGoMeilinYawZero() == 0U)
+            if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) == 0U)
             {
                 return 0U;
             }
@@ -935,7 +881,7 @@ namespace
             return 0U;
 
         case 1:
-            if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) == 0U)
+            if (RunGoMeilinYawZero() == 0U)
             {
                 return 0U;
             }
@@ -953,40 +899,6 @@ namespace
         default:
             return 1U;
         }
-    }
-
-    uint8_t ServicePrelimDockingFlow(void)
-    {
-        if (g_prelim_auto_full_flow_active == 0U)
-        {
-            return 0U;
-        }
-
-        if (g_prelim_docking_release_latched == 0U)
-        {
-            return 0U;
-        }
-
-        if (g_prelim_weapon_index < static_cast<uint8_t>(kPrelimWeaponCount - 1U))
-        {
-            const int next_exec = kPrelimExecFirstWeapon + static_cast<int>(g_prelim_weapon_index) + 1;
-            if (vision.exec == next_exec)
-            {
-                ++g_prelim_weapon_index;
-                g_prelim_docking_release_latched = 0U;
-                EnterMainState(FTM_MAIN_AUTO_TURN_READY);
-                return 1U;
-            }
-        }
-        else if (vision.exec == kPrelimExecGoMeilin)
-        {
-            g_prelim_docking_release_latched = 0U;
-            SetDockingBrake(0U);
-            EnterMainState(FTM_MAIN_GO_MEILIN);
-            return 1U;
-        }
-
-        return 0U;
     }
 
     bool RunWuqiquAndMechanismSequence(void)
@@ -1031,7 +943,7 @@ namespace
         switch (g_route_action_sequence_step_index)
         {
         case 0:
-            if (RunWuqiquRoutePointAndMechanismSequence(GetCurrentPickWaypointIndex(),
+            if (RunWuqiquRoutePointAndMechanismSequence(0U,
                                                         kSequenceOpenGrabApproachRs05,
                                                         static_cast<uint8_t>(sizeof(kSequenceOpenGrabApproachRs05) / sizeof(kSequenceOpenGrabApproachRs05[0]))) == false)
             {
@@ -1320,25 +1232,13 @@ extern "C" void ftm_task(void *argument)
             if (RunMainActionSequence(kMainSequenceTurnReady,
                                       static_cast<uint8_t>(sizeof(kMainSequenceTurnReady) / sizeof(kMainSequenceTurnReady[0]))))
             {
-                if (g_prelim_auto_full_flow_active != 0U)
-                {
-                    EnterMainState(FTM_MAIN_AUTO_PICK_ROUTE);
-                }
-                else
-                {
-                    EnterMainState(FTM_MAIN_IDLE);
-                }
+                EnterMainState(FTM_MAIN_IDLE);
             }
             break;
 
         // 主状态 7：对接调试；只处理 MiniPC 的松手和对接高度微调，状态保持不自动退出。
         case FTM_MAIN_DOCKING:
             if (TryEnterGoMeilinFromDocking() != 0U)
-            {
-                break;
-            }
-
-            if (ServicePrelimDockingFlow() != 0U)
             {
                 break;
             }
@@ -1353,7 +1253,7 @@ extern "C" void ftm_task(void *argument)
             }
             break;
 
-        // 主状态 8：前往梅林；先修正航向到 0 度，再跑梅林目标点。
+        // 主状态 8：前往梅林；先回第三点，再修正航向到 0 度，最后跑梅林目标点。
         case FTM_MAIN_GO_MEILIN:
             if (RunGoMeilinSequence() != 0U)
             {
@@ -1370,20 +1270,6 @@ extern "C" void ftm_task(void *argument)
             g_auto_full_flow_active = 1U;
             EnterMainState(FTM_MAIN_AUTO_PICK_ROUTE);
             break;
-
-        case FTM_MAIN_PRELIM_AUTO_FULL_FLOW:
-        {
-            const uint8_t weapon_index = GetPrelimWeaponIndexFromExec(vision.exec);
-            if (weapon_index != 0xFFU)
-            {
-                g_auto_full_flow_active = 0U;
-                g_prelim_auto_full_flow_active = 1U;
-                g_prelim_weapon_index = weapon_index;
-                g_prelim_docking_release_latched = 0U;
-                EnterMainState(FTM_MAIN_AUTO_PICK_ROUTE);
-            }
-            break;
-        }
 
         // 异常主状态：回到初始化，等待重新触发。
         default:
