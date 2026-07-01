@@ -4,7 +4,7 @@
 #include <math.h>
 
 // 下四百：1.先走到一定位置 2. 抬升抬到-200，同时打开气缸 3.动2006到指定位置 4.抬升到+200，等待+200抬升完毕后，关闭气缸  5.然后到中心点 6.然后抬升到+100
-extern VisionData_t vision; 
+extern VisionData_t vision;
 
 #ifndef STEP_DOWN_DEBUG_MANUAL_STEP_CMD
 #define STEP_DOWN_DEBUG_MANUAL_STEP_CMD 0
@@ -29,9 +29,9 @@ static void step_down_world_error_to_body_error(float x_world, float y_world, fl
 }
 
 // 第 1、3 阶段底盘移动时允许输出的最大速度，单位为 m/s。
-float STEP_DOWN_AUTO_CHASSIS_SPEED_MPS = 0.9f;
+float STEP_DOWN_AUTO_CHASSIS_SPEED_MPS = 1.5f;
 // 底盘速度计算使用的制动包络参数。数值越大，距离目标较远时允许的速度越高。
-float STEP_DOWN_CHASSIS_ACC_SPEED = 0.4f;
+float STEP_DOWN_CHASSIS_ACC_SPEED = 0.7f;
 
 // 第 2 阶段升降轮带动车辆离开台阶时允许输出的最大线速度，单位为 m/s。
 float STEP_DOWN_AUTO_LIFT_SPEED_MPS = 1.35f;

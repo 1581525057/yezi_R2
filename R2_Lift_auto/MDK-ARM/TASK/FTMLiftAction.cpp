@@ -4,13 +4,13 @@
 
 namespace
 {
-uint32_t g_last_command_seq = 0U;
-uint8_t g_ftm_lift_takeover = 0U;
+    uint32_t g_last_command_seq = 0U;
+    uint8_t g_ftm_lift_takeover = 0U;
 
-float AbsFloat(float value)
-{
-    return (value >= 0.0f) ? value : -value;
-}
+    float AbsFloat(float value)
+    {
+        return (value >= 0.0f) ? value : -value;
+    }
 }
 
 void FTMLiftAction_Reset(void)

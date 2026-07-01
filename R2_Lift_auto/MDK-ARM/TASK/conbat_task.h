@@ -15,7 +15,7 @@ typedef enum
     CONBAT_PICK_KFS,         // 吸取 KFS 状态
     CONBAT_PLACE_KFS,        // 放置 KFS 状态
     CONBAT_SELECT_KFS_PLACE, // 选择 KFS 放置点位状态
-    CONBAT_COMBINE,          // 合体占位状态
+    CONBAT_COMBINE,          // 合体状态
     CONBAT_AVOID             // 避让状态
 } ConbatState;
 
@@ -37,6 +37,8 @@ public:
     void setKfsPlaceIndex(uint8_t index);
     uint8_t getKfsPlaceIndex(void) const;
     void setYawTarget(float yaw_degree);
+    uint8_t getLiftSwitch(uint8_t manual_switch) const;
+    float getLiftLinearSpeedTarget(float manual_target) const;
 
     ConbatState state;
     uint8_t conbat_start;
@@ -47,6 +49,14 @@ private:
     enum
     {
         CONBAT_GENERATE_PATH_MAX_POINTS = 256U
+    };
+
+    enum CombineStep
+    {
+        COMBINE_PRE_LIFT = 0,      // 阶段1：升降机构先到 1 档，完成后打开气缸。
+        COMBINE_WAIT_CLIMB_HEIGHT, // 阶段2：切到 2 档并等待抬升高度真正到位。
+        COMBINE_CLIMB_FORWARD,     // 阶段3：底盘不动，用前激光 ch2 驱动 2006 爬升。
+        COMBINE_FINAL_FORWARD      // 阶段4：收气缸并切回 1 档后，底盘按 ch2 车体前向靠近。
     };
 
     enum PickKfsStep
@@ -71,8 +81,17 @@ private:
     uint8_t path_active_;
     uint8_t ramp_up_waiting_;
     PickKfsStep pick_kfs_step_;
+    CombineStep combine_step_;
     uint8_t pick_kfs_meiling_active_;
+    uint8_t pick_kfs_second_forward_done_;
     uint8_t kfs_place_index_;
+    uint8_t combine_pre_lift_ready_;
+    uint8_t combine_crossed_finish_height_;
+    uint8_t combine_stable_count_;
+    uint32_t combine_pre_lift_command_seq_;
+    uint32_t combine_climb_lift_command_seq_;
+    uint8_t lift_switch_target_;
+    float lift_linear_speed_target_;
     float path_vx_target_;
     float path_vy_target_;
     float path_wz_target_;
@@ -81,6 +100,7 @@ private:
     void clearPathOutput(void);
     uint8_t runRampUp(void);
     uint8_t runPickKfs(void);
+    uint8_t runCombine(void);
     uint8_t runSelectKfsPlace(void);
     uint8_t loadGeneratedPathToGoal(const BRPathPose &goal,
                                     const BRPathControlPoint *middle_points,

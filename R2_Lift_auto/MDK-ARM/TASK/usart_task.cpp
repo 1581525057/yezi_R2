@@ -278,7 +278,7 @@ void vision_command_clear(void)
     vision_command_head = 0U;
     vision_command_tail = 0U;
     vision_last_plan_valid = 0U;
-    vision_plan_locked = 0U;
+    vision_plan_locked = 0U; 
 }
 
 /* ===================== 方块队列 ===================== */
