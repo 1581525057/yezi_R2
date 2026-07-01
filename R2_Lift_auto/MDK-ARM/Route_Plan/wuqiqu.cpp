@@ -25,12 +25,20 @@ static const uint32_t kFastLinkContactTimeoutMs = 80U;
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {0.04f, 0.89f, -90.0f, 1.0f, 0.0f, 0.015f, 1.5f},
-    {0.04f, 0.41f, -90.0f, 1.0f, 0.0f, 0.035f, 3.0f},
-    {-0.06f, 0.41f, 90.0f, 1.0f, 0.0f, 0.025f, 1.5f},
+    {0.03f, 0.90f, -90.0f, 1.0f, 0.0f, 0.015f, 1.5f},
+    {0.03f, 0.41f, -90.0f, 1.0f, 0.0f, 0.035f, 3.0f},
+    {-0.06f, 0.41f, 90.0f, 1.0f, 0.0f, 0.035f, 1.5f},
     {0.96f, -1.64f, 0.0f, 1.0f, 0.0f, 0.030f, 2.0f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
+
+static const WuqiquPathPlanner::TargetPoint kPrelimWeaponHeadPoints[] = {
+    {0.03f, 0.90f, -90.0f, 1.0f, 0.0f, 0.015f, 1.5f},
+    {0.24f, 0.90f, -90.0f, 1.0f, 0.0f, 0.015f, 1.5f},
+    {0.44f, 0.90f, -90.0f, 1.0f, 0.0f, 0.015f, 1.5f},
+};
+static const uint8_t kPrelimWeaponHeadCount =
+    sizeof(kPrelimWeaponHeadPoints) / sizeof(kPrelimWeaponHeadPoints[0]);
 
 WuqiquPathPlanner wuqiqu;
 
@@ -48,8 +56,8 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     kd_approach_ = 0.9f;          // 接近阶段位置微分增益
     kp_slow_ = 5.5f;              // 减速阶段位置比例增益
     kd_slow_ = 0.8f;              // 减速阶段位置微分增益
-    kp_contact_ = 3.0f;           // 接触/贴近阶段位置比例增益
-    kd_contact_ = 0.4f;           // 接触/贴近阶段位置微分增益
+    kp_contact_ = 3.5f;           // 接触/贴近阶段位置比例增益
+    kd_contact_ = 0.8f;           // 接触/贴近阶段位置微分增益
 
     yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
     yaw_kp_ = 2.4f;               // yaw 角度误差比例增益
@@ -64,6 +72,13 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     contact_hold_ms_ = 120U;      // 接触后最短保持时间，单位 ms
     contact_timeout_ms_ = 450U;   // 接触阶段超时时间，单位 ms
 
+    reloadDefaultWaypoints();
+    current_index_ = 0U;
+    loadCurrentWaypoint();
+}
+
+void WuqiquPathPlanner::reloadDefaultWaypoints(void)
+{
     waypoint_count_ = kWaypointCount;
     if (waypoint_count_ > MAX_WAYPOINTS)
     {
@@ -74,9 +89,6 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     {
         waypoints_[i] = kWaypoints[i];
     }
-
-    current_index_ = 0U;
-    loadCurrentWaypoint();
 }
 
 void WuqiquPathPlanner::loadCurrentWaypoint(void)
@@ -97,6 +109,7 @@ void WuqiquPathPlanner::reset(void)
 
 void WuqiquPathPlanner::resetRoute(void)
 {
+    reloadDefaultWaypoints();
     current_index_ = 0U;
     loadCurrentWaypoint();
     reset();
@@ -135,6 +148,22 @@ float WuqiquPathPlanner::getWaypointYawDeg(uint8_t waypoint_index) const
     }
 
     return 0.0f;
+}
+
+uint8_t WuqiquPathPlanner::overrideFirstWaypointWithPrelimWeaponHead(uint8_t weapon_index)
+{
+    if ((weapon_index >= kPrelimWeaponHeadCount) || (waypoint_count_ == 0U))
+    {
+        return 0U;
+    }
+
+    waypoints_[0] = kPrelimWeaponHeadPoints[weapon_index];
+    if (current_index_ == 0U)
+    {
+        target_ = waypoints_[0];
+    }
+
+    return 1U;
 }
 
 int WuqiquPathPlanner::follow(const Pose &current_pose)

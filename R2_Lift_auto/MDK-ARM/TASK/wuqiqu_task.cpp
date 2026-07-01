@@ -26,10 +26,10 @@ constexpr float kAngularDecStepRadps = 0.022f;
 
 /* 第三点到位后的对接前微调参数。 */
 constexpr float kDockAdjustLaserMinM = 0.060f;
-constexpr float kDockAdjustLaserMaxM = 0.065f;
+constexpr float kDockAdjustLaserMaxM = 0.070f;
 constexpr float kDockAdjustLaserTargetM = 0.0625f;
 constexpr float kDockAdjustLaserKp = 8.0f;
-constexpr float kDockAdjustLaserMinVyMps = 0.12f;
+constexpr float kDockAdjustLaserMinVyMps = 0.15f;
 constexpr float kDockAdjustLaserMaxVyMps = 0.35f;
 constexpr float kDockAdjustYawTargetDeg = 90.0f;
 constexpr float kDockAdjustYawToleranceDeg = 1.0f;
@@ -135,6 +135,20 @@ public:
         }
 
         active_ = 1U;
+    }
+
+    void startAtPrelimWeaponHead(uint8_t weapon_index)
+    {
+        startAt(0U);
+        if (active_ != 0U)
+        {
+            if (wuqiqu.overrideFirstWaypointWithPrelimWeaponHead(weapon_index) == 0U)
+            {
+                active_ = 0U;
+                finished_ = 1U;
+                clearOutput();
+            }
+        }
     }
 
     void startDockAdjust()
@@ -406,6 +420,11 @@ extern "C" void WuqiquTask_Start(void)
 extern "C" void WuqiquTask_StartAt(uint8_t waypoint_index)
 {
     g_wuqiqu_task.startAt(waypoint_index);
+}
+
+extern "C" void WuqiquTask_StartAtPrelimWeaponHead(uint8_t weapon_index)
+{
+    g_wuqiqu_task.startAtPrelimWeaponHead(weapon_index);
 }
 
 extern "C" void WuqiquTask_StartDockAdjust(void)

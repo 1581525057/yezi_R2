@@ -62,6 +62,7 @@ public:
     uint8_t getCurrentIndex(void) const;
     uint8_t getWaypointCount(void) const;
     float getWaypointYawDeg(uint8_t waypoint_index) const;
+    uint8_t overrideFirstWaypointWithPrelimWeaponHead(uint8_t weapon_index);
 
     TargetPoint waypoints_[MAX_WAYPOINTS];
     TargetPoint target_;
@@ -104,6 +105,7 @@ public:
     bool isFinished(void) const;
 
 private:
+    void reloadDefaultWaypoints(void);
     void loadCurrentWaypoint(void);
     void setZeroOutput(void);
     void updateState(float distance_m, uint8_t xy_in_tolerance, uint32_t now_tick);
