@@ -32,7 +32,7 @@ static uint8_t uart7_arm_rx_index;
 
 static void USART2_RxCallback(uint8_t *buf, uint16_t len)
 {
-    if (len = UART_BUFNUM_DM)
+    if (len == UART_BUFNUM_DM)
     {
         dm_imu.ParseIMUStream(buf);
     }
