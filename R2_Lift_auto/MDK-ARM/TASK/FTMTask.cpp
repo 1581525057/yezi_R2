@@ -25,7 +25,7 @@ enum FTMMainState
     FTM_MAIN_AUTO_PICK_ROUTE = 5, // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
     FTM_MAIN_AUTO_TURN_READY = 6, // 武器区姿态准备流程：张爪、对位、M2006 翻转并让 RS05 回 0。
     FTM_MAIN_DOCKING = 7,         // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
-    FTM_MAIN_GO_MEILIN = 8,       // 前往梅林：先修正航向到 0 度，再跑梅林目标点。
+    FTM_MAIN_GO_MEILIN = 8,       // 前往梅林：先回第三点，再修正航向到 0 度，最后跑梅林目标点。
     FTM_MAIN_AUTO_FULL_FLOW = 9   // 完整自动流程入口：切入 5，之后依次执行 7、8、4。
 };
 
@@ -873,7 +873,7 @@ namespace
         switch (g_go_meilin_step_index)
         {
         case 0:
-            if (RunGoMeilinYawZero() == 0U)
+            if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) == 0U)
             {
                 return 0U;
             }
@@ -881,7 +881,7 @@ namespace
             return 0U;
 
         case 1:
-            if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) == 0U)
+            if (RunGoMeilinYawZero() == 0U)
             {
                 return 0U;
             }
@@ -1253,7 +1253,7 @@ extern "C" void ftm_task(void *argument)
             }
             break;
 
-        // 主状态 8：前往梅林；先修正航向到 0 度，再跑梅林目标点。
+        // 主状态 8：前往梅林；先回第三点，再修正航向到 0 度，最后跑梅林目标点。
         case FTM_MAIN_GO_MEILIN:
             if (RunGoMeilinSequence() != 0U)
             {
