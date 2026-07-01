@@ -13,7 +13,6 @@ extern "C" void WuqiquTask_Stop(void);
 extern "C" uint8_t WuqiquTask_IsActive(void);
 extern "C" uint8_t WuqiquTask_IsFinished(void);
 extern "C" float WuqiquTask_GetWaypointYawDeg(uint8_t waypoint_index);
-extern "C" void WuqiquTask_StartDockAdjust(void);
 
 enum FTMMainState
 {
@@ -81,7 +80,6 @@ namespace
     constexpr uint8_t kWuqiquYawTargetWaypointIndex = 2U;
     constexpr uint8_t kWuqiquMeilinWaypointIndex = 3U;
     constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;
-    constexpr uint8_t kFtmActionDockingPreAdjust = 20U;
 
     struct TimedStep
     {
@@ -118,7 +116,6 @@ namespace
     uint8_t g_docking_lift_adjust_active = 0U;
     uint8_t g_wuqiqu_yaw_turn_active = 0U;
     uint16_t g_wuqiqu_yaw_turn_stable_count = 0U;
-    uint8_t g_docking_pre_adjust_started = 0U;
 
     const uint8_t kSequenceOpenLiftRs05[] = {
         FTM_ACTION_CLAW_OPEN,
@@ -223,7 +220,6 @@ namespace
         g_wuqiqu_route_started = 0U;
         g_wuqiqu_parallel_route_finished = 0U;
         g_wuqiqu_parallel_mechanism_finished = 0U;
-        g_docking_pre_adjust_started = 0U;
     }
 
     uint8_t IsMechanismAction(uint8_t action_state)
@@ -295,8 +291,7 @@ namespace
                 (action_state == FTM_ACTION_WUQIQU_YAW_TURN_180) ||
                 (action_state == FTM_ACTION_WUQIQU_ROUTE_3) ||
                 (action_state == FTM_ACTION_SEQUENCE_ROUTE_BACKTURN) ||
-                (action_state == FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT) ||
-                (action_state == kFtmActionDockingPreAdjust))
+                (action_state == FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT))
                    ? 1U
                    : 0U;
     }
@@ -835,24 +830,6 @@ namespace
         return ((yaw_turn_finished != false) && (mechanism_finished != false));
     }
 
-    bool RunDockingPreAdjust(void)
-    {
-        if (g_docking_pre_adjust_started == 0U)
-        {
-            WuqiquTask_StartDockAdjust();
-            g_docking_pre_adjust_started = 1U;
-        }
-
-        if (WuqiquTask_IsFinished() == 0U)
-        {
-            return false;
-        }
-
-        WuqiquTask_Stop();
-        g_docking_pre_adjust_started = 0U;
-        return true;
-    }
-
     uint8_t RunGoMeilinYawZero(void)
     {
         if (g_wuqiqu_yaw_turn_active == 0U)
@@ -945,11 +922,7 @@ namespace
                 return false;
             }
 
-            ++g_wuqiqu_route_sequence_step_index;
-            return false;
-
-        case 3:
-            return RunDockingPreAdjust();
+            return true;
 
         default:
             return true;
@@ -1032,9 +1005,6 @@ namespace
 
         case FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT:
             return RunRouteAndMechanismSequence();
-
-        case kFtmActionDockingPreAdjust:
-            return RunDockingPreAdjust();
 
         case FTM_ACTION_SEQUENCE_OPEN_RS05_TURN:
             return RunMechanismSequence(kSequenceOpenRs05Turn,
