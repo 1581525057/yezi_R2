@@ -10,6 +10,7 @@
 #include "yun_j60.h"
 #include "lift_step_up.h"
 #include "lift_step_down.h"
+#include "conbat_task.h"
 #include <math.h>
 #include "usart_task.h"
 
@@ -86,15 +87,17 @@ extern "C" void lift_task(void *argument)
 
         // 根据手动或半自动给出的目标线速度，换算升降轮目标转速
         calc_motor_rpm_from_linear_speed_target(
-            lift_step_down.getLiftLinearSpeedTarget(
-                lift_auto.getLiftLinearSpeedTarget(remove_dji.chassis_.Vl)));
+            conbat_t.getLiftLinearSpeedTarget(
+                lift_step_down.getLiftLinearSpeedTarget(
+                    lift_auto.getLiftLinearSpeedTarget(remove_dji.chassis_.Vl))));
 
         // 记录上一拍的档位，只在档位变化时重新生成高度目标
         static uint8_t last_sw = 0;
 
         // 如果半自动接管，则这里返回自动档位；否则返回手动拨杆档位
-        uint8_t now_sw = lift_step_down.getLiftSwitch(
-            lift_auto.getLiftSwitch(remove_dji.rc_.s[1]));
+        uint8_t now_sw = conbat_t.getLiftSwitch(
+            lift_step_down.getLiftSwitch(
+                lift_auto.getLiftSwitch(remove_dji.rc_.s[1])));
 
         // 只有档位变化时，才重新设置目标高度
         if (now_sw != last_sw)

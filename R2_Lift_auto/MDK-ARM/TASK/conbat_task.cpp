@@ -3,11 +3,35 @@
 #include "usart_task.h"
 #include "mieling.h"
 #include "arm_comm.h"
+#include "DT35.h"
+#include "lift_class.h"
+#include "lift_step_up.h"
+#include <math.h>
 
-float CONBAT_DEG_TO_RAD = 3.1415926f / 180.0f;
-float CONBAT_GENERATE_PATH_MAX_VEL_M_S = 2.0f;
-float CONBAT_GENERATE_PATH_MAX_ACC_M_S2 = 1.8f;
-float CONBAT_GENERATE_PATH_GAP_M = 0.1f;
+float CONBAT_DEG_TO_RAD = 3.1415926f / 180.0f;  // 角度转弧度系数，用于视觉角度转换。
+float CONBAT_GENERATE_PATH_MAX_VEL_M_S = 2.0f;  // 自动生成路径的最大线速度，单位 m/s。
+float CONBAT_GENERATE_PATH_MAX_ACC_M_S2 = 1.8f; // 自动生成路径的最大加速度，单位 m/s2。
+float CONBAT_GENERATE_PATH_GAP_M = 0.1f;        // 自动生成路径点的间距，单位 m。
+
+float CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM = 0.0f;  // 第一个 KFS 边吸边前进的 DT35 目标距离，在这里填写。
+float CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM = 0.0f; // 等机械臂准备第二次拾取前的 DT35 目标距离，在这里填写。
+float CONBAT_PICK_KFS_SECOND_WAIT_DT35_TOL_MM = 10.0f;   // 第二次拾取等待时 DT35 到位允许误差，单位 mm。
+
+float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2 = 0.7f; // KFS 等待阶段车体前进加速度，单位 m/s2。
+float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS = 0.4f;  // KFS 等待阶段车体前进最大速度，单位 m/s。
+
+float CONBAT_COMBINE_CLIMB_FINISH_MM = 255.0f;  // 合体爬升结束时 DT35 判定距离，单位 mm。
+float CONBAT_COMBINE_FORWARD_TARGET_MM = 65.0f; // 合体最后车体前向靠近的 DT35 目标距离，0 表示跳过。
+float CONBAT_COMBINE_FORWARD_TOL_MM = 8.0f;     // 合体最后前向靠近的 DT35 到位允许误差，单位 mm。
+
+float CONBAT_COMBINE_FORWARD_ACC_MPS2 = 0.7f; // 合体最后前向靠近的加速度，单位 m/s2。
+float CONBAT_COMBINE_FORWARD_MAX_MPS = 0.4f;  // 合体最后前向靠近的最大速度，单位 m/s。
+
+float CONBAT_COMBINE_LIFT_ACC_MPS2 = 0.5f;             // 合体举升阶段速度规划加速度，单位 m/s2。
+float CONBAT_COMBINE_LIFT_MAX_MPS = 1.0f;              // 合体举升阶段最大速度，单位 m/s。
+float CONBAT_COMBINE_LIFT_MIN_MPS = 0.25f;             // 合体举升阶段最小速度，单位 m/s。
+float CONBAT_COMBINE_LIFT_HEIGHT_TOLERANCE_MM = 40.0f; // 合体举升目标高度允许误差，单位 mm。
+uint8_t CONBAT_COMBINE_STABLE_COUNT = 10U;             // 合体到位判定需要连续稳定的次数。
 
 // 上坡状态的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_ramp_up_goals[] = {
@@ -112,6 +136,60 @@ static void update_state_by_action_result(uint8_t action_result,
     }
 }
 
+static float conbat_speed_limit(float speed, float max)
+{
+    if (speed > max)
+    {
+        speed = max;
+    }
+    if (speed < -max)
+    {
+        speed = -max;
+    }
+    return speed;
+}
+
+static float conbat_trapezoid_speed(float error, float acc, float max)
+{
+    if (error <= 0.0f || acc <= 0.0f || max <= 0.0f)
+    {
+        return 0.0f;
+    }
+
+    return conbat_speed_limit(sqrtf(2.0f * error * acc), max);
+}
+
+static float conbat_min_abs_speed(float speed, float min_abs, float max_abs)
+{
+    if (speed == 0.0f || min_abs <= 0.0f)
+    {
+        return speed;
+    }
+
+    if (fabsf(speed) < min_abs)
+    {
+        speed = (speed > 0.0f) ? min_abs : -min_abs;
+    }
+
+    return conbat_speed_limit(speed, max_abs);
+}
+
+static uint8_t conbat_stable_confirm(uint8_t condition, uint8_t *stable_count, uint8_t target_count)
+{
+    if (condition == 0U)
+    {
+        *stable_count = 0U;
+        return 0U;
+    }
+
+    if (*stable_count < target_count)
+    {
+        (*stable_count)++;
+    }
+
+    return (*stable_count >= target_count) ? 1U : 0U;
+}
+
 /*
  * 构造函数：上电创建全局 conbat_t 时调用。
  * 这里直接复位所有状态，保证任务启动前处于空闲、安全输出状态。
@@ -134,8 +212,17 @@ void CONBAT_TASK::reset(void)
     path_loaded_ = 0U;
     ramp_up_waiting_ = 0U;
     pick_kfs_step_ = PICK_KFS_PATH_TO_AREA;
+    combine_step_ = COMBINE_PRE_LIFT;
     pick_kfs_meiling_active_ = 0U;
+    pick_kfs_second_forward_done_ = 0U;
     kfs_place_index_ = 0U;
+    combine_pre_lift_ready_ = 0U;
+    combine_crossed_finish_height_ = 0U;
+    combine_stable_count_ = 0U;
+    combine_pre_lift_command_seq_ = 0U;
+    combine_climb_lift_command_seq_ = 0U;
+    lift_switch_target_ = 0U;
+    lift_linear_speed_target_ = 0.0f;
     yaw_target_enabled = 0U;
     yaw_target_degree = 0.0f;
     clearPathOutput();
@@ -177,6 +264,11 @@ void CONBAT_TASK::runOnce(void)
         update_state_by_action_result(action_result, CONBAT_IDLE, &state);
         break;
 
+    case CONBAT_COMBINE:
+        action_result = runCombine();
+        update_state_by_action_result(action_result, CONBAT_IDLE, &state);
+        break;
+
     case CONBAT_IDLE:
         if (conbat_start == 1U)
         {
@@ -187,7 +279,6 @@ void CONBAT_TASK::runOnce(void)
         break;
 
     case CONBAT_PLACE_KFS:
-    case CONBAT_COMBINE:
     case CONBAT_AVOID:
     default:
         /* 未补具体动作的状态先保持安全停车。 */
@@ -282,6 +373,26 @@ void CONBAT_TASK::setYawTarget(float yaw_degree)
     yaw_target_enabled = 1U;
 }
 
+uint8_t CONBAT_TASK::getLiftSwitch(uint8_t manual_switch) const
+{
+    if (state != CONBAT_COMBINE)
+    {
+        return manual_switch;
+    }
+
+    return lift_switch_target_;
+}
+
+float CONBAT_TASK::getLiftLinearSpeedTarget(float manual_target) const
+{
+    if (state != CONBAT_COMBINE)
+    {
+        return manual_target;
+    }
+
+    return lift_linear_speed_target_;
+}
+
 /*
  * 处理状态切换后的清理动作。
  * 每次进入新状态时重置路径跟随器和速度输出，避免沿用上一状态的路径进度或底盘目标。
@@ -293,12 +404,26 @@ void CONBAT_TASK::handleStateChanged(void)
     path_loaded_ = 0U;
     ramp_up_waiting_ = 0U;
     pick_kfs_step_ = PICK_KFS_PATH_TO_AREA;
+    combine_step_ = COMBINE_PRE_LIFT;
     pick_kfs_meiling_active_ = 0U;
+    pick_kfs_second_forward_done_ = 0U;
+    combine_pre_lift_ready_ = 0U;
+    combine_crossed_finish_height_ = 0U;
+    combine_stable_count_ = 0U;
+    combine_pre_lift_command_seq_ = 0U;
+    combine_climb_lift_command_seq_ = 0U;
+    lift_switch_target_ = 0U;
+    lift_linear_speed_target_ = 0.0f;
     clearPathOutput();
 
     if (state == CONBAT_IDLE)
     {
         yaw_target_enabled = 0U;
+    }
+
+    if (state == CONBAT_COMBINE)
+    {
+        combine_pre_lift_command_seq_ = lift_calulate.command_seq;
     }
 
     last_state_ = state;
@@ -392,7 +517,7 @@ uint8_t CONBAT_TASK::runPickKfs(void)
 
     case PICK_KFS_FIRST_ACTION:
         /* 第四步：发送拾取第一个 KFS 的机械臂指令。 */
-       
+
         if (arm_comm.executeAction(ArmComm::ACTION_PICK_FIRST_KFS, 1U) == 0U)
         {
             return 2U;
@@ -402,10 +527,24 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         return 0U;
 
     case PICK_KFS_FIRST_WAIT_DONE:
-        /* 第五步：等待机械臂回传 event=1，表示第一个 KFS 吸取成功。 */
+        /* 第五步：边向前走边吸取，机械臂回传 event=1 后立即停车并进入下一步。 */
         if (arm_comm.rx_data_.event == 1U)
         {
+            clearPathOutput();
             pick_kfs_step_ = PICK_KFS_SECOND_LOC_START;
+            return 0U;
+        }
+
+        clearPathOutput();
+        if (CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM > 0.0f && dt35.ch2.valid != 0U)
+        {
+            const float laser_mm = dt35.ch2.distance_filtered;
+            path_active_ = 1U;
+            path_vx_target_ = conbat_trapezoid_speed((laser_mm - CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM) * 0.001f,
+                                                     CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2,
+                                                     CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS);
+            path_vy_target_ = 0.0f;
+            path_wz_target_ = 0.0f;
         }
         return 0U;
 
@@ -425,6 +564,7 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         {
             pick_kfs_meiling_active_ = 0U;
             clearPathOutput();
+            pick_kfs_second_forward_done_ = 0U;
             pick_kfs_step_ = PICK_KFS_SECOND_WAIT_READY;
         }
         else if (result == MeilingLocator::TIMEOUT)
@@ -437,16 +577,40 @@ uint8_t CONBAT_TASK::runPickKfs(void)
     }
 
     case PICK_KFS_SECOND_WAIT_READY:
-        /* 第八步：等待机械臂回传 event=3，表示可以接收第二次拾取指令。 */
-        if (arm_comm.rx_data_.event == 3U)
+        /* 第八步：先按前向 DT35 距离向前走，到位停车后再等待机械臂回传 event=3。 */
+        if (pick_kfs_second_forward_done_ == 0U)
         {
+            clearPathOutput();
+            if (CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM > 0.0f && dt35.ch2.valid != 0U)
+            {
+                const float laser_mm = dt35.ch2.distance_filtered;
+                const float arrive_mm = CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM + CONBAT_PICK_KFS_SECOND_WAIT_DT35_TOL_MM;
+                if (laser_mm <= arrive_mm)
+                {
+                    pick_kfs_second_forward_done_ = 1U;
+                }
+                else
+                {
+                    path_active_ = 1U;
+                    path_vx_target_ = conbat_trapezoid_speed((laser_mm - CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM) * 0.001f,
+                                                             CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2,
+                                                             CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS);
+                    path_vy_target_ = 0.0f;
+                    path_wz_target_ = 0.0f;
+                }
+            }
+        }
+
+        if (pick_kfs_second_forward_done_ != 0U && arm_comm.rx_data_.event == 3U)
+        {
+            clearPathOutput();
+            pick_kfs_second_forward_done_ = 0U;
             pick_kfs_step_ = PICK_KFS_SECOND_ACTION;
         }
         return 0U;
 
     case PICK_KFS_SECOND_ACTION:
         /* 第九步：发送拾取第二个 KFS 的机械臂指令。 */
-        arm_comm.rx_data_.event = 0U;
         if (arm_comm.executeAction(ArmComm::ACTION_PICK_SECOND_KFS, 2U) == 0U)
         {
             return 2U;
@@ -474,8 +638,160 @@ uint8_t CONBAT_TASK::runPickKfs(void)
 }
 
 /*
+ * 合体状态处理。
+ * 预抬、等待 2 档和 2006 爬升阶段底盘不动，最后才按 ch2 车体前向靠近。
+ */
+uint8_t CONBAT_TASK::runCombine(void)
+{
+    clearPathOutput();
+
+    switch (combine_step_)
+    {
+    case COMBINE_PRE_LIFT:
+        /*
+         * 阶段1：先把升降机构切到 1 档预抬。
+         * 这里不让底盘动，确认 lift_task 已接收到 1 档并完成后，再打开气缸。
+         */
+        lift_switch_target_ = 1U;
+        lift_linear_speed_target_ = 0.0f;
+
+        if (lift_calulate.command_seq != combine_pre_lift_command_seq_)
+        {
+            if (lift_calulate.finished != 0U)
+            {
+                combine_pre_lift_ready_ = 1U;
+            }
+        }
+
+        if (combine_pre_lift_ready_ != 0U)
+        {
+            STEP_UP_CYLINDER_OPEN();
+            combine_climb_lift_command_seq_ = lift_calulate.command_seq;
+            combine_stable_count_ = 0U;
+            combine_step_ = COMBINE_WAIT_CLIMB_HEIGHT;
+        }
+        return 0U;
+
+    case COMBINE_WAIT_CLIMB_HEIGHT:
+    {
+        /*
+         * 阶段2：打开气缸后切到 2 档。
+         * 必须等左右两侧实际高度都接近目标高度，才允许进入 2006 爬升阶段。
+         */
+        lift_switch_target_ = 2U;
+        lift_linear_speed_target_ = 0.0f;
+
+        const uint8_t climb_height_reached =
+            (fabsf(lift_class.left.height - lift_calulate.target_height) <= CONBAT_COMBINE_LIFT_HEIGHT_TOLERANCE_MM &&
+             fabsf(lift_class.right.height - lift_calulate.target_height) <= CONBAT_COMBINE_LIFT_HEIGHT_TOLERANCE_MM)
+                ? 1U
+                : 0U;
+
+        if (lift_calulate.command_seq != combine_climb_lift_command_seq_ &&
+            climb_height_reached != 0U)
+        {
+            combine_stable_count_ = 0U;
+            combine_crossed_finish_height_ = 0U;
+            combine_step_ = COMBINE_CLIMB_FORWARD;
+        }
+        return 0U;
+    }
+
+    case COMBINE_CLIMB_FORWARD:
+    {
+        /*
+         * 阶段3：底盘继续保持不动，只用 ch2 激光逻辑驱动 2006。
+         * 逻辑参考 STEP_UP_CLIMB_FORWARD：先看到距离越过完成阈值，再回落到阈值内才算爬升完成。
+         */
+        lift_switch_target_ = 2U;
+
+        if (dt35.ch2.valid != 0U && dt35.ch2.distance_filtered > CONBAT_COMBINE_CLIMB_FINISH_MM &&
+            combine_crossed_finish_height_ == 0U)
+        {
+            combine_crossed_finish_height_ = 1U;
+        }
+
+        const uint8_t laser_reached =
+            (combine_crossed_finish_height_ != 0U &&
+             dt35.ch2.valid != 0U &&
+             dt35.ch2.distance_filtered <= CONBAT_COMBINE_CLIMB_FINISH_MM)
+                ? 1U
+                : 0U;
+
+        if (laser_reached != 0U)
+        {
+            lift_linear_speed_target_ = 0.0f;
+        }
+        else if (dt35.ch2.valid != 0U && combine_crossed_finish_height_ != 0U)
+        {
+            const float err = (dt35.ch2.distance_filtered - CONBAT_COMBINE_CLIMB_FINISH_MM) * 0.001f;
+            lift_linear_speed_target_ = conbat_trapezoid_speed(err,
+                                                               CONBAT_COMBINE_LIFT_ACC_MPS2,
+                                                               CONBAT_COMBINE_LIFT_MAX_MPS);
+            lift_linear_speed_target_ = conbat_min_abs_speed(lift_linear_speed_target_,
+                                                             CONBAT_COMBINE_LIFT_MIN_MPS,
+                                                             CONBAT_COMBINE_LIFT_MAX_MPS);
+        }
+        else
+        {
+            lift_linear_speed_target_ = 0.0f;
+        }
+
+        if (conbat_stable_confirm(laser_reached, &combine_stable_count_, CONBAT_COMBINE_STABLE_COUNT) != 0U)
+        {
+            lift_linear_speed_target_ = 0.0f;
+            lift_switch_target_ = 1U;
+            STEP_UP_CYLINDER_CLOSE();
+            combine_stable_count_ = 0U;
+            combine_step_ = COMBINE_FINAL_FORWARD;
+        }
+        return 0U;
+    }
+
+    case COMBINE_FINAL_FORWARD:
+        /*
+         * 阶段4：爬升完成后收气缸，并把升降档位保持到 1 档。
+         * 如果配置了 CONBAT_COMBINE_FORWARD_TARGET_MM，则底盘按车体前向 vx 靠 ch2 继续走到目标距离。
+         */
+        lift_switch_target_ = 1U;
+        lift_linear_speed_target_ = 0.0f;
+
+        if (CONBAT_COMBINE_FORWARD_TARGET_MM <= 0.0f)
+        {
+            return 1U;
+        }
+
+        if (dt35.ch2.valid != 0U)
+        {
+            const float laser_mm = dt35.ch2.distance_filtered;       
+            const uint8_t arrived =
+                (laser_mm <= (CONBAT_COMBINE_FORWARD_TARGET_MM + CONBAT_COMBINE_FORWARD_TOL_MM)) ? 1U : 0U;
+
+            if (conbat_stable_confirm(arrived, &combine_stable_count_, CONBAT_COMBINE_STABLE_COUNT) != 0U)
+            {
+                clearPathOutput();
+                return 1U;
+            }
+
+            path_active_ = 1U;
+            path_vx_target_ = conbat_trapezoid_speed((laser_mm - CONBAT_COMBINE_FORWARD_TARGET_MM) * 0.001f,
+                                                     CONBAT_COMBINE_FORWARD_ACC_MPS2,
+                                                     CONBAT_COMBINE_FORWARD_MAX_MPS);
+            path_vy_target_ = 0.0f;
+            path_wz_target_ = 0.0f;
+        }
+        return 0U;
+
+    default:
+        lift_linear_speed_target_ = 0.0f;
+        clearPathOutput();
+        return 2U;
+    }
+}
+
+/*
  * 选择 KFS 放置点位状态处理。
- * 根据 kfs_place_index_ 选择 KFS1、KFS2 或 KFS3 路径，并把路径跟随速度交给底盘。
+ * 根据 kfs_place_index_ 选择对应路径，并把路径跟随速度交给底盘。
  */
 uint8_t CONBAT_TASK::runSelectKfsPlace(void)
 {

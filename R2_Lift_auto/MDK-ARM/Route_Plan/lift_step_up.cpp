@@ -36,7 +36,7 @@ static void step_up_world_error_to_body_error(float x_world, float y_world, floa
 }
 
 // 靠近阶段最大底盘速度 (m/s)
-float STEP_UP_AUTO_APPROACH_MPS = 1.2f;
+float STEP_UP_AUTO_APPROACH_MPS = 1.5f;
 // 底盘靠近阶段升降最大加速度 (m/s)
 float STEP_UP_CHASSIS_ACC_SPEED = 0.7f;
 // 爬升阶段未到完成区时的最小线速度，避免小误差下卡在静摩擦附近。
