@@ -881,6 +881,14 @@ namespace
             return 0U;
 
         case 1:
+            if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) == 0U)
+            {
+                return 0U;
+            }
+            ++g_go_meilin_step_index;
+            return 0U;
+
+        case 2:
             if (RunWuqiquRoutePoint(kWuqiquMeilinWaypointIndex) == 0U)
             {
                 return 0U;
@@ -1251,10 +1259,6 @@ extern "C" void ftm_task(void *argument)
             {
                 if (g_auto_full_flow_active != 0U)
                 {
-                    if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) == 0U)
-                    {
-                        break;
-                    }
                     g_auto_full_flow_active = 0U;
                 }
                 EnterMainState(FTM_MAIN_DONE);
