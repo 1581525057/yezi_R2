@@ -113,6 +113,8 @@ namespace
     uint8_t g_auto_full_flow_active = 0U;
     uint32_t g_last_minipc_control_seq = 0U;
     int16_t g_last_lift_adjust_unused_mark = 0;
+    int g_last_docking_exec = 0;
+    uint8_t g_docking_exec_changed = 0U;
     uint8_t g_docking_lift_adjust_active = 0U;
     uint8_t g_wuqiqu_yaw_turn_active = 0U;
     uint16_t g_wuqiqu_yaw_turn_stable_count = 0U;
@@ -152,8 +154,6 @@ namespace
     uint32_t g_wuqiqu_zero_start_tick = 0U;
     uint32_t g_wuqiqu_zero_last_send_tick = 0U;
     uint8_t g_wuqiqu_zero_active = 0U;
-
-    void SetDockingBrake(uint8_t active);
 
     bool HasElapsed(uint32_t start_tick, uint32_t duration_ms)
     {
@@ -256,6 +256,35 @@ namespace
                 (main_state == FTM_MAIN_AUTO_PICK_ROUTE) ||
                 (main_state == FTM_MAIN_DOCKING) ||
                 (main_state == FTM_MAIN_GO_MEILIN))
+                   ? 1U
+                   : 0U;
+    }
+
+    void ResetDockingExecEdge(void)
+    {
+        g_last_docking_exec = vision.exec;
+        g_docking_exec_changed = 0U;
+    }
+
+    void UpdateDockingExecEdge(void)
+    {
+        const int current_exec = vision.exec;
+        if (g_ftm_main_state == FTM_MAIN_DOCKING)
+        {
+            g_docking_exec_changed = (current_exec != g_last_docking_exec) ? 1U : 0U;
+        }
+        else
+        {
+            g_docking_exec_changed = 0U;
+        }
+        g_last_docking_exec = current_exec;
+    }
+
+    uint8_t IsDockingExecChangedTo(int target_exec)
+    {
+        return ((g_ftm_main_state == FTM_MAIN_DOCKING) &&
+                (g_docking_exec_changed != 0U) &&
+                (vision.exec == target_exec))
                    ? 1U
                    : 0U;
     }
@@ -385,11 +414,7 @@ namespace
 
         if (main_state == FTM_MAIN_DOCKING)
         {
-            SetDockingBrake(1U);
-        }
-        else
-        {
-            SetDockingBrake(0U);
+            ResetDockingExecEdge();
         }
     }
 
@@ -409,19 +434,13 @@ namespace
 
     uint8_t TryEnterGoMeilinFromDocking(void)
     {
-        if ((g_ftm_main_state == FTM_MAIN_DOCKING) && (vision.exec == 1))
+        if (IsDockingExecChangedTo(1) != 0U)
         {
-            SetDockingBrake(0U);
             EnterMainState(FTM_MAIN_GO_MEILIN);
             return 1U;
         }
 
         return 0U;
-    }
-
-    void SetDockingBrake(uint8_t active)
-    {
-        g_ftm_docking_brake_active = (active != 0U) ? 1U : 0U;
     }
 
     void SyncExternalState(void)
@@ -484,7 +503,7 @@ namespace
         if (g_ftm_minipc_claw_release_cmd == 1U)
         {
             claw_open();
-            SetDockingBrake(0U);
+            // 松爪只放开夹爪；底盘转向由后续 exec 变化触发。
         }
     }
 
@@ -831,7 +850,6 @@ namespace
 
         WuqiquTask_Stop();
         g_docking_pre_adjust_started = 0U;
-        SetDockingBrake(1U);
         return true;
     }
 
@@ -1110,9 +1128,6 @@ extern "C" volatile uint8_t g_ftm_minipc_claw_release_cmd = 0U;
 extern "C" volatile uint8_t g_ftm_minipc_lift_dock_adjust_cmd = 0U;
 extern "C" volatile int16_t g_ftm_minipc_unused_mark = 0;
 extern "C" volatile uint32_t g_ftm_minipc_control_seq = 0U;
-extern "C" volatile uint8_t g_ftm_docking_brake_active = 0U;
-extern "C" volatile int32_t g_ftm_docking_brake_current_mA = 5000;
-
 extern "C" uint8_t FTM_GetState(void)
 {
     return g_ftm_main_state;
@@ -1152,16 +1167,6 @@ extern "C" float FTM_GetYawTargetDegree(void)
     return g_ftm_yaw_target_degree;
 }
 
-extern "C" uint8_t FTM_IsDockingBrakeActive(void)
-{
-    return g_ftm_docking_brake_active;
-}
-
-extern "C" int32_t FTM_GetDockingBrakeCurrentmA(void)
-{
-    return (g_ftm_docking_brake_current_mA > 0) ? g_ftm_docking_brake_current_mA : 0;
-}
-
 extern "C" void ftm_task(void *argument)
 {
     (void)argument;
@@ -1171,6 +1176,7 @@ extern "C" void ftm_task(void *argument)
     for (;;)
     {
         SyncExternalState();
+        UpdateDockingExecEdge();
         (void)TryEnterGoMeilinFromDocking();
         ServiceMiniPcFtmCommands();
 
