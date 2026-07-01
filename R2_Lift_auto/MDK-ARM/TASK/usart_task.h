@@ -3,6 +3,7 @@
 
 #include "main.h"
 #include <stdint.h>
+#define Green HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_4)
 
 /* 视觉数据结构体：存储上位机发送的视觉坐标、角度和标定位 */
 typedef struct
@@ -52,6 +53,7 @@ uint8_t vision_block_push(int val);
 uint8_t vision_block_pop(int *out);
 uint8_t vision_block_has_pending(void);
 void vision_block_clear(void);
+void vision_plan_mark_consumed_if_empty(void);
 
 void send_position_to_pc(int16_t behaivor, uint8_t p_diff, float X_diff, float Y_diff, float yaw);
 

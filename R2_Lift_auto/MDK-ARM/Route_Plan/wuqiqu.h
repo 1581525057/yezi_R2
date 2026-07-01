@@ -63,11 +63,6 @@ public:
     uint8_t getWaypointCount(void) const;
     float getWaypointYawDeg(uint8_t waypoint_index) const;
 
-    const Output &getOutput(void) const;
-    PlannerState getState(void) const;
-    bool isFinished(void) const;
-
-private:
     TargetPoint waypoints_[MAX_WAYPOINTS];
     TargetPoint target_;
     uint8_t waypoint_count_;
@@ -76,16 +71,11 @@ private:
     Output output_;
     PlannerState state_;
 
-    float approach_v_max_;
-    float slow_v_max_;
-    float contact_v_max_;
-    float finish_v_max_;
     float min_move_v_;
 
     float slow_dist_;
     float contact_dist_;
     float finish_dist_;
-    float decel_;
 
     float kp_approach_;
     float kd_approach_;
@@ -109,11 +99,16 @@ private:
     uint32_t soft_contact_start_tick_;
     uint16_t soft_contact_stable_count_;
 
+    const Output &getOutput(void) const;
+    PlannerState getState(void) const;
+    bool isFinished(void) const;
+
+private:
     void loadCurrentWaypoint(void);
     void setZeroOutput(void);
     void updateState(float distance_m, uint8_t xy_in_tolerance, uint32_t now_tick);
-    void limitVector(float &vx, float &vy, float max_speed) const;
     void raiseVectorToMin(float &vx, float &vy, float min_speed) const;
+    void limitVectorToMax(float &vx, float &vy, float max_speed) const;
     float limitFloat(float value, float min_value, float max_value) const;
     float normalizeAngleDeg(float angle) const;
     float safeSqrt(float value) const;

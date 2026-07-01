@@ -12,7 +12,7 @@ extern "C" {
 extern volatile uint8_t g_ftm_main_state;
 extern volatile uint8_t wuqiqu_done;
 // Keil Watch 可直接写入：独立小动作状态。
-// 0 无动作，1~19 对应 FTMTask.cpp 中 FTMActionState 的小功能动作；12 第 2 点，13 中间 yaw 转向，14 第 3 点，18 抓取预备高度，19 自动夹取预备流程。
+// 0 无动作，1~20 对应 FTMTask.cpp 中 FTMActionState/扩展动作；12 第 2 点，13 中间 yaw 转向，14 第 3 点，18 抓取预备高度，19 自动夹取预备流程，20 对接前微调。
 extern volatile uint8_t g_ftm_action_state;
 extern volatile uint8_t g_ftm_yaw_target_correction_state;
 extern volatile float g_ftm_yaw_target_degree;
@@ -24,6 +24,8 @@ extern volatile uint8_t g_ftm_minipc_claw_release_cmd;
 extern volatile uint8_t g_ftm_minipc_lift_dock_adjust_cmd;
 extern volatile int16_t g_ftm_minipc_unused_mark;
 extern volatile uint32_t g_ftm_minipc_control_seq;
+extern volatile uint8_t g_ftm_docking_brake_active;
+extern volatile int32_t g_ftm_docking_brake_current_mA;
 
 void ftm_task(void *argument);
 uint8_t FTM_GetState(void);
@@ -33,6 +35,8 @@ uint8_t FTM_IsWuqiquDone(void);
 uint8_t FTM_IsYawTargetCorrectionEnabled(void);
 uint8_t FTM_IsYawTargetTurnActive(void);
 float FTM_GetYawTargetDegree(void);
+uint8_t FTM_IsDockingBrakeActive(void);
+int32_t FTM_GetDockingBrakeCurrentmA(void);
 
 #ifdef __cplusplus
 }

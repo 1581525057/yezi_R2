@@ -92,7 +92,9 @@ static inline uint8_t ChassisAuto_IsRouteYawTurnActive(void)
 
     return ((route_t.state == PHASE_TURN_LEFT90) ||
             (route_t.state == PHASE_TURN_RIGHT90) ||
-            (route_t.state == PHASE_TURN180)) ? 1U : 0U;
+            (route_t.state == PHASE_TURN180))
+               ? 1U
+               : 0U;
 }
 
 // 初始化底盘任务中使用的全部 PID。
@@ -276,7 +278,14 @@ extern "C" void chassis_task(void *argument)
         {
 
             motor_input[i] = omni_chassis.target.rpm[i];
-            VescMotors[i].setRpm(motor_input[i]);
+            if (FTM_IsDockingBrakeActive() != 0U)
+            {
+                VescMotors[i].setHandbrakeCurrent(FTM_GetDockingBrakeCurrentmA());
+            }
+            else
+            {
+                VescMotors[i].setRpm(motor_input[i]);
+            }
         }
 
         // 控制周期约 1 ms。
@@ -297,5 +306,5 @@ static void chassis_pid_init(void)
     pid_F_chassis_linear_y.Init(OUTPUT_CHASSIS_LINEAR, INTERLIMIT_CHASSIS_LINEAR, DEBAND_CHASSIS_LINEAR, KP_CHASSIS_LINEAR, KI_CHASSIS_LINEAR, KD_CHASSIS_LINEAR, 0, 0x00);
 
     // 航向保持 PID。
-    pid_yaw.Init(2.5, 0.8, 0.5, 0.11, 0.1, 0, 0, 0x00);
+    pid_yaw.Init(10, 0, 0.5, 0.052, 0, 2, 0, 0x00);
 }

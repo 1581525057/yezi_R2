@@ -13,6 +13,7 @@ extern "C" void WuqiquTask_Stop(void);
 extern "C" uint8_t WuqiquTask_IsActive(void);
 extern "C" uint8_t WuqiquTask_IsFinished(void);
 extern "C" float WuqiquTask_GetWaypointYawDeg(uint8_t waypoint_index);
+extern "C" void WuqiquTask_StartDockAdjust(void);
 
 enum FTMMainState
 {
@@ -71,12 +72,16 @@ namespace
 
     constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;
     constexpr uint32_t kWuqiquZeroSettleMs = 200U;
+    constexpr float kWuqiquZeroRelocalizeX = 0.0f;
+    constexpr float kWuqiquZeroRelocalizeY = 0.0f;
+    constexpr float kWuqiquZeroRelocalizeYawDeg = -90.0f;
     constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;
     constexpr uint16_t kWuqiquYawTurnStableCycles = 200U;
     constexpr uint8_t kWuqiquSecondWaypointIndex = 1U;
     constexpr uint8_t kWuqiquYawTargetWaypointIndex = 2U;
     constexpr uint8_t kWuqiquMeilinWaypointIndex = 3U;
     constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;
+    constexpr uint8_t kFtmActionDockingPreAdjust = 20U;
 
     struct TimedStep
     {
@@ -111,6 +116,7 @@ namespace
     uint8_t g_docking_lift_adjust_active = 0U;
     uint8_t g_wuqiqu_yaw_turn_active = 0U;
     uint16_t g_wuqiqu_yaw_turn_stable_count = 0U;
+    uint8_t g_docking_pre_adjust_started = 0U;
 
     const uint8_t kSequenceOpenLiftRs05[] = {
         FTM_ACTION_CLAW_OPEN,
@@ -146,6 +152,8 @@ namespace
     uint32_t g_wuqiqu_zero_start_tick = 0U;
     uint32_t g_wuqiqu_zero_last_send_tick = 0U;
     uint8_t g_wuqiqu_zero_active = 0U;
+
+    void SetDockingBrake(uint8_t active);
 
     bool HasElapsed(uint32_t start_tick, uint32_t duration_ms)
     {
@@ -215,6 +223,7 @@ namespace
         g_wuqiqu_route_started = 0U;
         g_wuqiqu_parallel_route_finished = 0U;
         g_wuqiqu_parallel_mechanism_finished = 0U;
+        g_docking_pre_adjust_started = 0U;
     }
 
     uint8_t IsMechanismAction(uint8_t action_state)
@@ -257,7 +266,8 @@ namespace
                 (action_state == FTM_ACTION_WUQIQU_YAW_TURN_180) ||
                 (action_state == FTM_ACTION_WUQIQU_ROUTE_3) ||
                 (action_state == FTM_ACTION_SEQUENCE_ROUTE_BACKTURN) ||
-                (action_state == FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT))
+                (action_state == FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT) ||
+                (action_state == kFtmActionDockingPreAdjust))
                    ? 1U
                    : 0U;
     }
@@ -372,6 +382,15 @@ namespace
         {
             g_m2006_angle_lock_active = 1U;
         }
+
+        if (main_state == FTM_MAIN_DOCKING)
+        {
+            SetDockingBrake(1U);
+        }
+        else
+        {
+            SetDockingBrake(0U);
+        }
     }
 
     void EnterMainState(uint8_t main_state)
@@ -392,11 +411,17 @@ namespace
     {
         if ((g_ftm_main_state == FTM_MAIN_DOCKING) && (vision.exec == 1))
         {
+            SetDockingBrake(0U);
             EnterMainState(FTM_MAIN_GO_MEILIN);
             return 1U;
         }
 
         return 0U;
+    }
+
+    void SetDockingBrake(uint8_t active)
+    {
+        g_ftm_docking_brake_active = (active != 0U) ? 1U : 0U;
     }
 
     void SyncExternalState(void)
@@ -459,6 +484,7 @@ namespace
         if (g_ftm_minipc_claw_release_cmd == 1U)
         {
             claw_open();
+            SetDockingBrake(0U);
         }
     }
 
@@ -790,6 +816,25 @@ namespace
         return ((yaw_turn_finished != false) && (mechanism_finished != false));
     }
 
+    bool RunDockingPreAdjust(void)
+    {
+        if (g_docking_pre_adjust_started == 0U)
+        {
+            WuqiquTask_StartDockAdjust();
+            g_docking_pre_adjust_started = 1U;
+        }
+
+        if (WuqiquTask_IsFinished() == 0U)
+        {
+            return false;
+        }
+
+        WuqiquTask_Stop();
+        g_docking_pre_adjust_started = 0U;
+        SetDockingBrake(1U);
+        return true;
+    }
+
     uint8_t RunGoMeilinYawZero(void)
     {
         if (g_wuqiqu_yaw_turn_active == 0U)
@@ -875,7 +920,10 @@ namespace
             }
 
             ++g_wuqiqu_route_sequence_step_index;
-            return true;
+            return false;
+
+        case 3:
+            return RunDockingPreAdjust();
 
         default:
             return true;
@@ -959,6 +1007,9 @@ namespace
         case FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT:
             return RunRouteAndMechanismSequence();
 
+        case kFtmActionDockingPreAdjust:
+            return RunDockingPreAdjust();
+
         case FTM_ACTION_SEQUENCE_OPEN_RS05_TURN:
             return RunMechanismSequence(kSequenceOpenRs05Turn,
                                         static_cast<uint8_t>(sizeof(kSequenceOpenRs05Turn) / sizeof(kSequenceOpenRs05Turn[0])));
@@ -1010,7 +1061,11 @@ namespace
         if ((g_wuqiqu_zero_last_send_tick == 0U) ||
             HasElapsed(g_wuqiqu_zero_last_send_tick, kWuqiquZeroSendIntervalMs))
         {
-            send_position_to_pc(0, 1, 0, 0, 0);
+            send_position_to_pc(0,
+                                1,
+                                kWuqiquZeroRelocalizeX,
+                                kWuqiquZeroRelocalizeY,
+                                kWuqiquZeroRelocalizeYawDeg);
             g_wuqiqu_zero_last_send_tick = HAL_GetTick();
         }
 
@@ -1039,7 +1094,7 @@ extern "C" volatile uint8_t g_ftm_action_state = FTM_ACTION_NONE;
 extern "C" volatile uint8_t wuqiqu_done = 0U;
 extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
 extern "C" volatile float g_ftm_yaw_target_degree = 0.0f;
-extern "C" volatile float g_ftm_lift_up_target_mm = 70.0f;
+extern "C" volatile float g_ftm_lift_up_target_mm = 78.0f;
 extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 214.0f;
 extern "C" volatile float g_ftm_lift_down_target_mm = 68.0f;
 extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
@@ -1047,6 +1102,8 @@ extern "C" volatile uint8_t g_ftm_minipc_claw_release_cmd = 0U;
 extern "C" volatile uint8_t g_ftm_minipc_lift_dock_adjust_cmd = 0U;
 extern "C" volatile int16_t g_ftm_minipc_unused_mark = 0;
 extern "C" volatile uint32_t g_ftm_minipc_control_seq = 0U;
+extern "C" volatile uint8_t g_ftm_docking_brake_active = 0U;
+extern "C" volatile int32_t g_ftm_docking_brake_current_mA = 5000;
 
 extern "C" uint8_t FTM_GetState(void)
 {
@@ -1085,6 +1142,16 @@ extern "C" uint8_t FTM_IsYawTargetTurnActive(void)
 extern "C" float FTM_GetYawTargetDegree(void)
 {
     return g_ftm_yaw_target_degree;
+}
+
+extern "C" uint8_t FTM_IsDockingBrakeActive(void)
+{
+    return g_ftm_docking_brake_active;
+}
+
+extern "C" int32_t FTM_GetDockingBrakeCurrentmA(void)
+{
+    return (g_ftm_docking_brake_current_mA > 0) ? g_ftm_docking_brake_current_mA : 0;
 }
 
 extern "C" void ftm_task(void *argument)
