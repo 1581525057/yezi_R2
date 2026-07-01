@@ -25,8 +25,8 @@ static const uint32_t kFastLinkContactTimeoutMs = 80U;
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {0.03f, 0.92f, -90.0f, 1.0f, 0.0f, 0.015f, 1.5f},
-    {0.03f, 0.41f, -90.0f, 1.0f, 0.0f, 0.035f, 3.0f},
+    {0.04f, 0.89f, -90.0f, 1.0f, 0.0f, 0.015f, 1.5f},
+    {0.04f, 0.41f, -90.0f, 1.0f, 0.0f, 0.035f, 3.0f},
     {-0.06f, 0.41f, 90.0f, 1.0f, 0.0f, 0.025f, 1.5f},
     {0.96f, -1.64f, 0.0f, 1.0f, 0.0f, 0.030f, 2.0f},
 };

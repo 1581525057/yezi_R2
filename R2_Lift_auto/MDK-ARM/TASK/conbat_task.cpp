@@ -763,7 +763,7 @@ uint8_t CONBAT_TASK::runCombine(void)
 
         if (dt35.ch2.valid != 0U)
         {
-            const float laser_mm = dt35.ch2.distance_filtered;       
+            const float laser_mm = dt35.ch2.distance_filtered;
             const uint8_t arrived =
                 (laser_mm <= (CONBAT_COMBINE_FORWARD_TARGET_MM + CONBAT_COMBINE_FORWARD_TOL_MM)) ? 1U : 0U;
 
