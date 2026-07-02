@@ -92,6 +92,46 @@ float applyCommandFloor(float value, float target, float min_abs)
     return value;
 }
 
+void applyVectorCommandFloor(float &vx, float &vy, float target_vx, float target_vy, float min_abs)
+{
+    if (min_abs <= 0.0f)
+    {
+        return;
+    }
+
+    const float target_speed = sqrtf(target_vx * target_vx + target_vy * target_vy);
+    const float current_speed = sqrtf(vx * vx + vy * vy);
+
+    if (target_speed <= 0.000001f)
+    {
+        if (current_speed < min_abs)
+        {
+            vx = 0.0f;
+            vy = 0.0f;
+        }
+        return;
+    }
+
+    if (current_speed >= min_abs)
+    {
+        return;
+    }
+
+    // 用向量整体抬到最小有效速度，避免 X/Y 分轴补偿改变移动方向。
+    if (current_speed > 0.000001f)
+    {
+        const float scale = min_abs / current_speed;
+        vx *= scale;
+        vy *= scale;
+    }
+    else
+    {
+        const float scale = min_abs / target_speed;
+        vx = target_vx * scale;
+        vy = target_vy * scale;
+    }
+}
+
 float normalizeAngleDeg(float angle)
 {
     while (angle > 180.0f)
@@ -299,8 +339,12 @@ private:
         const float vy_slewed = slewRateLimit(vy_limited, vy_target_, kLinearAccStepMps, kLinearDecStepMps);
         const float wz_slewed = slewRateLimit(wz_limited, wz_target_, kAngularAccStepRadps, kAngularDecStepRadps);
 
-        vx_target_ = applyCommandFloor(vx_slewed, vx_limited, kMinLinearCommandMps);
-        vy_target_ = applyCommandFloor(vy_slewed, vy_limited, kMinLinearCommandMps);
+        float vx_cmd = vx_slewed;
+        float vy_cmd = vy_slewed;
+        applyVectorCommandFloor(vx_cmd, vy_cmd, vx_limited, vy_limited, kMinLinearCommandMps);
+
+        vx_target_ = vx_cmd;
+        vy_target_ = vy_cmd;
         wz_target_ = applyCommandFloor(wz_slewed, wz_limited, kMinAngularCommandRadps);
     }
 

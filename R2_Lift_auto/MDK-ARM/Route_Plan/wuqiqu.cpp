@@ -4,16 +4,23 @@
 
 static const float WUQIQU_PI = 3.14159265358979323846f; // 圆周率，用于角度换算
 static const float kDegToRad = WUQIQU_PI / 180.0f;      // 角度转弧度系数
-static const float kApproachVMaxMps = 4.00f;            // 接近阶段最大平移速度，单位 m/s
+static const float kApproachVMaxMps = 4.60f;            // 接近阶段最大平移速度，单位 m/s
 static const float kSlowVMaxMps = 2.40f;                // 减速阶段最大平移速度，单位 m/s
 static const float kContactVMaxMps = 0.90f;             // 接触/贴近阶段最大平移速度，单位 m/s
 static const float kPlannerMaxAngularSpeedRadps = 2.50f; // 规划器输出角速度上限，单位 rad/s
 static const float kMinYawCommandFloorRadps = 0.18f;     // yaw 修正硬下限，避免比例缩小后转速过低
+static const float kBrakeSpeedMinMps = 0.16f;            // 距离制动保底速度，避免近目标速度被压到无法动作
+static const float kBrakeSpeedGain = 12.0f;              // 距离制动斜率，距离越近允许速度越低
+static const float kSlowMinMoveGain = 2.0f;              // 减速区最小平移速度随距离递减的斜率
+static const float kSlowMinMoveFloorMps = 0.10f;         // 减速区最小平移输出下限，单位 m/s
+static const float kContactMinMoveMaxMps = 0.16f;        // 贴近段最小平移输出上限，避免近目标硬推
 //加快第二个点到第三个点之间的流程连贯性设置的参数
 static const uint8_t kFastLinkWaypointIndex = 1U;       // 快速衔接航点索引，当前对应第 2 个目标点
 static const uint16_t kFastLinkStableCycles = 8U;       // 快速衔接航点姿态稳定计数阈值，按 runOnce 调用周期计数
 static const uint32_t kFastLinkContactHoldMs = 20U;     // 快速衔接航点接触后最短保持时间，单位 ms
 static const uint32_t kFastLinkContactTimeoutMs = 80U;  // 快速衔接航点接触阶段超时时间，单位 ms
+static const float kFastLinkTimeoutXyScale = 1.20f;      // 快速衔接点超时判定时的 XY 放宽倍率
+static const float kFastLinkTimeoutYawExtraDeg = 3.0f;   // 快速衔接点超时判定时额外放宽的 yaw 角度
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
@@ -33,6 +40,11 @@ static const uint8_t kPrelimWeaponHeadCount =
     sizeof(kPrelimWeaponHeadPoints) / sizeof(kPrelimWeaponHeadPoints[0]);
 
 WuqiquPathPlanner wuqiqu;
+
+static bool IsFastLinkWaypoint(uint8_t waypoint_index)
+{
+    return ((waypoint_index == kFastLinkWaypointIndex) || (waypoint_index == 2U));
+}
 
 WuqiquPathPlanner::WuqiquPathPlanner()
 {
@@ -199,6 +211,14 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         v_limit = kContactVMaxMps;
     }
 
+    const float brake_v_limit = limitFloat(kBrakeSpeedMinMps + kBrakeSpeedGain * distance_m,
+                                           kBrakeSpeedMinMps,
+                                           kApproachVMaxMps);
+    if (v_limit > brake_v_limit)
+    {
+        v_limit = brake_v_limit;
+    }
+
     const float yaw_kp_scale = limitFloat(target_.yaw_kp_scale, 0.0f, 3.0f);
 
     float vx_cmd = kp * err_x_m - kd * current_pose.world_speed_x;
@@ -206,7 +226,20 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
 
     if (xy_in_tolerance == 0U && yaw_abs_deg <= 35.0f)
     {
-        raiseVectorToMin(vx_cmd, vy_cmd, min_move_v_);
+        float min_move_speed = min_move_v_;
+        if (state_ == STATE_SLOW_APPROACH)
+        {
+            min_move_speed = limitFloat(kSlowMinMoveGain * distance_m,
+                                        kSlowMinMoveFloorMps,
+                                        min_move_v_);
+        }
+        else if (state_ == STATE_SOFT_CONTACT)
+        {
+            min_move_speed = limitFloat(kSlowMinMoveGain * distance_m,
+                                        0.0f,
+                                        kContactMinMoveMaxMps);
+        }
+        raiseVectorToMin(vx_cmd, vy_cmd, min_move_speed);
     }
     limitVectorToMax(vx_cmd, vy_cmd, v_limit);
 
@@ -233,10 +266,21 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
     if (state_ == STATE_SOFT_CONTACT)
     {
         const uint32_t contact_time_ms = now_tick - soft_contact_start_tick_;
+        const uint8_t is_fast_link_waypoint = IsFastLinkWaypoint(current_index_) ? 1U : 0U;
         const uint8_t pose_stable = (xy_in_tolerance != 0U && yaw_abs_deg <= target_yaw_tolerance_deg) ? 1U : 0U;
-        const uint16_t stable_cycles = (current_index_ == kFastLinkWaypointIndex) ? kFastLinkStableCycles : stable_cycles_;
-        const uint32_t contact_hold_ms = (current_index_ == kFastLinkWaypointIndex) ? kFastLinkContactHoldMs : contact_hold_ms_;
-        const uint32_t contact_timeout_ms = (current_index_ == kFastLinkWaypointIndex) ? kFastLinkContactTimeoutMs : contact_timeout_ms_;
+        const uint16_t stable_cycles = (is_fast_link_waypoint != 0U) ? kFastLinkStableCycles : stable_cycles_;
+        const uint32_t contact_hold_ms = (is_fast_link_waypoint != 0U) ? kFastLinkContactHoldMs : contact_hold_ms_;
+        const uint32_t contact_timeout_ms = (is_fast_link_waypoint != 0U) ? kFastLinkContactTimeoutMs : contact_timeout_ms_;
+        const float timeout_xy_tolerance_m =
+            (is_fast_link_waypoint != 0U) ? (xy_tolerance_m * kFastLinkTimeoutXyScale) : xy_tolerance_m;
+        const float timeout_yaw_tolerance_deg =
+            (is_fast_link_waypoint != 0U) ? (target_yaw_tolerance_deg + kFastLinkTimeoutYawExtraDeg) : target_yaw_tolerance_deg;
+        const uint8_t timeout_pose_ready =
+            (fabsf(err_x_m) <= timeout_xy_tolerance_m &&
+             fabsf(err_y_m) <= timeout_xy_tolerance_m &&
+             yaw_abs_deg <= timeout_yaw_tolerance_deg)
+                ? 1U
+                : 0U;
 
         if (pose_stable != 0U)
         {
@@ -251,7 +295,7 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         }
 
         if ((soft_contact_stable_count_ >= stable_cycles && contact_time_ms >= contact_hold_ms) ||
-            ((pose_stable != 0U) && contact_time_ms >= contact_timeout_ms))
+            ((timeout_pose_ready != 0U) && contact_time_ms >= contact_timeout_ms))
         {
             state_ = STATE_FINISHED;
             setZeroOutput();

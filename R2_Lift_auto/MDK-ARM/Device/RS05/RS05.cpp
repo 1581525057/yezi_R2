@@ -2,17 +2,17 @@
 #include "cmsis_os.h"
 
 constexpr float kRs05DegreesToRadians = 0.01745329251994329577f;  // 角度转弧度比例系数
-constexpr float kRs05PositionLimitCurrent = 13.0f;                 // 速度位置模式电流限幅，单位：A（适度提高到13A，避免过热）
-constexpr float kRs05ZeroLockLimitCurrent = 15.0f;                 // 0 度紧保持电流限幅，单位：A（适度提高到15A）
-constexpr float kRs05CspLimitSpeed = 10.0f;                        // CSP 位置模式速度限制，单位：rad/s
-constexpr float kRs05TorqueLimitNm = 5.5f;                          // RS05 峰值力矩限制，单位：Nm
-constexpr float kRs05ZeroLockTorqueLimitNm = 10.0f;                 // 0 度紧保持转矩限制，单位：Nm
-constexpr float kRs05PositionKp = 100.0f;                            // 位置环 Kp，从75提高到100，平衡刚度和发热
-constexpr float kRs05SpeedKp = 7.5f;                                // 速度环 Kp，从7微调到7.5
-constexpr float kRs05SpeedKi = 0.04f;                               // 速度环 Ki，从0.03微调到0.04
-constexpr float kRs05ZeroLockPositionKp = 140.0f;                   // 0 度紧保持位置环 Kp（从120提高到140）
-constexpr float kRs05ZeroLockSpeedKp = 8.5f;                         // 0 度紧保持速度环 Kp（从8微调到8.5）
-constexpr float kRs05ZeroLockSpeedKi = 0.05f;                        // 0 度紧保持速度环 Ki（从0.04微调到0.05）
+constexpr float kRs05PositionLimitCurrent = 23.0f;                 // 位置模式电流限幅，回到手册默认值
+constexpr float kRs05ZeroLockLimitCurrent = 23.0f;                 // 0 度保持电流限幅，回到手册默认值
+constexpr float kRs05CspLimitSpeed = 2.0f;                         // CSP 位置模式速度限制，回到手册默认值
+constexpr float kRs05TorqueLimitNm = 14.0f;                        // RS05 峰值力矩限制，回到手册默认值
+constexpr float kRs05ZeroLockTorqueLimitNm = 14.0f;                // 0 度保持转矩限制，回到手册默认值
+constexpr float kRs05PositionKp = 40.0f;                            // 位置环 Kp，回到手册默认值
+constexpr float kRs05SpeedKp = 6.0f;                                // 速度环 Kp，回到手册默认值
+constexpr float kRs05SpeedKi = 0.02f;                               // 速度环 Ki，回到手册默认值
+constexpr float kRs05ZeroLockPositionKp = 40.0f;                   // 0 度保持位置环 Kp，回到手册默认值
+constexpr float kRs05ZeroLockSpeedKp = 6.0f;                       // 0 度保持速度环 Kp，回到手册默认值
+constexpr float kRs05ZeroLockSpeedKi = 0.02f;                      // 0 度保持速度环 Ki，回到手册默认值
 constexpr uint8_t kRs05ProactiveReportEnable = 1U;                  // 开启通信类型 24 主动上报
 constexpr uint32_t kRs05CanStartCheckIntervalMs = 1U;              // 等待 CAN3 启动的轮询间隔
 constexpr uint32_t kRs05PowerOnDelayMs = 200U;                     // CAN 启动后等待电机上电完成
@@ -25,7 +25,7 @@ uint8_t g_rs05_zero_lock_enabled = 0U;
 
 RobStride_Motor g_rs05_motor(&hfdcan3, RS05_CANID, false);
 float Angle = -94.0f;  // Keil Watch 可调目标角度，单位：degree
-float Speed = 10.0f;
+float Speed = 2.0f;
 
 namespace
 {
