@@ -8,6 +8,7 @@ static const float kApproachVMaxMps = 4.00f;            // 接近阶段最大平
 static const float kSlowVMaxMps = 2.40f;                // 减速阶段最大平移速度，单位 m/s
 static const float kContactVMaxMps = 0.90f;             // 接触/贴近阶段最大平移速度，单位 m/s
 static const float kPlannerMaxAngularSpeedRadps = 2.50f; // 规划器输出角速度上限，单位 rad/s
+static const float kMinYawCommandFloorRadps = 0.18f;     // yaw 修正硬下限，避免比例缩小后转速过低
 //加快第二个点到第三个点之间的流程连贯性设置的参数
 static const uint8_t kFastLinkWaypointIndex = 1U;       // 快速衔接航点索引，当前对应第 2 个目标点
 static const uint16_t kFastLinkStableCycles = 8U;       // 快速衔接航点姿态稳定计数阈值，按 runOnce 调用周期计数
@@ -16,10 +17,10 @@ static const uint32_t kFastLinkContactTimeoutMs = 80U;  // 快速衔接航点接
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {0.03f, 0.90f, -90.0f, 1.0f, 0.015f, 1.5f},
-    {0.03f, 0.41f, -90.0f, 1.0f, 0.035f, 3.0f},
-    {-0.06f, 0.41f, 90.0f, 1.0f, 0.035f, 1.5f},
-    {0.96f, -1.64f, 0.0f, 1.0f, 0.030f, 2.0f},
+    {0.03f, 0.91f, -90.0f, 1.0f, 0.015f, 1.5f},
+    {0.30f, 0.41f, -90.0f, 1.0f, 0.035f, 3.0f},
+    {0.30f, 0.41f, 90.0f, 1.0f, 0.035f, 2.0f},
+    {0.96f, -1.64f, 0.0f, 1.0f, 0.030f, 1.5f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 
@@ -214,7 +215,10 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
     if (yaw_abs_deg > target_yaw_tolerance_deg)
     {
         const float min_wz = (yaw_abs_deg >= strong_yaw_error_deg_) ? strong_yaw_wz_ : min_yaw_wz_;
-        const float scaled_min_wz = limitFloat(min_wz * yaw_kp_scale, 0.0f, wz_limit);
+        const float min_wz_scaled = min_wz * yaw_kp_scale;
+        const float scaled_min_wz = limitFloat((min_wz_scaled >= kMinYawCommandFloorRadps) ? min_wz_scaled : kMinYawCommandFloorRadps,
+                                               0.0f,
+                                               wz_limit);
         if (fabsf(wz_cmd) < scaled_min_wz)
         {
             wz_cmd = (wz_cmd >= 0.0f) ? scaled_min_wz : -scaled_min_wz;

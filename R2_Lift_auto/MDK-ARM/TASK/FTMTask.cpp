@@ -20,10 +20,10 @@ enum FTMMainState
     FTM_MAIN_INIT = 0,            // 初始化各功能模块，完成后进入空闲。
     FTM_MAIN_IDLE = 1,            // 空闲/手动调试状态，等待 Watch 写入动作状态。
     FTM_MAIN_WUQIQU_ROUTE = 2,    // 独立执行武器区第 1 个跑点。
-    FTM_MAIN_WUQIQU_ZERO = 3,     // 向视觉发送置零命令。
+    FTM_MAIN_WUQIQU_ZERO = 3,     // 向视觉发送置零命令。 0 0 -90
     FTM_MAIN_DONE = 4,            // 全流程完成保持状态。
     FTM_MAIN_AUTO_PICK_ROUTE = 5, // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
-    FTM_MAIN_AUTO_TURN_READY = 6, // 武器区姿态准备流程：张爪、对位、M2006 翻转并让 RS05 回 0。
+    FTM_MAIN_AUTO_TURN_READY = 6, // 武器区调整姿态 再次取武器头流程：张爪、对位、M2006 翻转并让 RS05 回 0。
     FTM_MAIN_DOCKING = 7,         // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
     FTM_MAIN_GO_MEILIN = 8,       // 前往梅林：先回第三点，再修正航向到 0 度，最后跑梅林目标点。
     FTM_MAIN_AUTO_FULL_FLOW = 9,  // 完整自动流程入口：切入 5，之后依次执行 7、8、4。
@@ -39,7 +39,7 @@ enum FTMActionState
     FTM_ACTION_CLAW_CLOSE = 4,                       // 夹爪闭合。
     FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK = 5, // 抬升机构上升到取出武器头对接高度。
     FTM_ACTION_M2006_TURN_180 = 6,                   // M2006 正向翻转 180 度。
-    FTM_ACTION_RS05_TO_RETURN = 7,                   // RS05 回到可调目标角度。
+    FTM_ACTION_RS05_TO_RETURN = 7,                   // RS05 回0度。
     FTM_ACTION_LIFT_DOWN = 8,                        // 抬升机构下降。
     FTM_ACTION_M2006_TURN_BACK_180 = 9,              // M2006 反向翻转 180 度。
     FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05 = 10,         // 夹爪张开、抬升到取出武器头对接高度、RS05 对位。
@@ -880,7 +880,7 @@ namespace
         }
 
         const float yaw_error_deg = NormalizeYawDeg(g_ftm_yaw_target_degree - vision.angle_x);
-        if (fabsf(yaw_error_deg) < kWuqiquYawTurnToleranceDeg)
+        if (fabsf(yaw_error_deg) < (2.0f * kWuqiquYawTurnToleranceDeg))
         {
             if (g_wuqiqu_yaw_turn_stable_count < kWuqiquYawTurnStableCycles)
             {
