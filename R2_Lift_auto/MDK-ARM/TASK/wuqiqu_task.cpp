@@ -23,6 +23,10 @@ constexpr float kLinearDecStepMps = 0.065f;
 constexpr float kAngularAccStepRadps = 0.014f;
 constexpr float kAngularDecStepRadps = 0.022f;
 
+/* wuqiqu 下发到底盘的最小有效速度，避免给了速度但底盘克服不了摩擦力。*/
+constexpr float kMinLinearCommandMps = 0.07f;
+constexpr float kMinAngularCommandRadps = 0.18f;
+
 /*
  * 当前约定雷达 X/Y 与车体 X/Y 对齐：
  * vision.x_diff -> planner X -> 底盘 Vx，
@@ -64,6 +68,28 @@ float slewRateLimit(float target, float current, float acc_step, float dec_step)
         return current - step;
     }
     return target;
+}
+
+float applyCommandFloor(float value, float target, float min_abs)
+{
+    if (min_abs <= 0.0f)
+    {
+        return value;
+    }
+
+    const float value_abs = fabsf(value);
+
+    if (target == 0.0f)
+    {
+        return (value_abs < min_abs) ? 0.0f : value;
+    }
+
+    if (value_abs < min_abs)
+    {
+        return (target > 0.0f) ? min_abs : -min_abs;
+    }
+
+    return value;
 }
 
 float normalizeAngleDeg(float angle)
@@ -255,9 +281,13 @@ private:
         const float wz_limited = limitFloat(output.wz_radps, -kMaxAngularSpeedRadps, kMaxAngularSpeedRadps);
 
         /* 目标速度再经过斜率限制，降低底盘指令突变。 */
-        vx_target_ = slewRateLimit(vx_limited, vx_target_, kLinearAccStepMps, kLinearDecStepMps);
-        vy_target_ = slewRateLimit(vy_limited, vy_target_, kLinearAccStepMps, kLinearDecStepMps);
-        wz_target_ = slewRateLimit(wz_limited, wz_target_, kAngularAccStepRadps, kAngularDecStepRadps);
+        const float vx_slewed = slewRateLimit(vx_limited, vx_target_, kLinearAccStepMps, kLinearDecStepMps);
+        const float vy_slewed = slewRateLimit(vy_limited, vy_target_, kLinearAccStepMps, kLinearDecStepMps);
+        const float wz_slewed = slewRateLimit(wz_limited, wz_target_, kAngularAccStepRadps, kAngularDecStepRadps);
+
+        vx_target_ = applyCommandFloor(vx_slewed, vx_limited, kMinLinearCommandMps);
+        vy_target_ = applyCommandFloor(vy_slewed, vy_limited, kMinLinearCommandMps);
+        wz_target_ = applyCommandFloor(wz_slewed, wz_limited, kMinAngularCommandRadps);
     }
 
     static void worldToChassisVelocity(float world_vx, float world_vy, float yaw_rad, float *chassis_vx, float *chassis_vy)
