@@ -76,7 +76,7 @@ namespace
     constexpr float kWuqiquZeroRelocalizeY = 0.0f;
     constexpr float kWuqiquZeroRelocalizeYawDeg = -90.0f;
     constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;
-    constexpr uint16_t kWuqiquYawTurnStableCycles = 200U;
+    constexpr uint16_t kWuqiquYawTurnStableCycles = 80U;
     constexpr uint8_t kWuqiquSecondWaypointIndex = 1U;
     constexpr uint8_t kWuqiquYawTargetWaypointIndex = 2U;
     constexpr uint8_t kWuqiquMeilinWaypointIndex = 3U;
