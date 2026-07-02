@@ -20,7 +20,7 @@ enum FTMMainState
     FTM_MAIN_INIT = 0,            // 初始化各功能模块，完成后进入空闲。
     FTM_MAIN_IDLE = 1,            // 空闲/手动调试状态，等待 Watch 写入动作状态。
     FTM_MAIN_WUQIQU_ROUTE = 2,    // 独立执行武器区第 1 个跑点。
-    FTM_MAIN_WUQIQU_ZERO = 3,     // 向视觉发送置零命令。 0 0 -90
+    FTM_MAIN_WUQIQU_ZERO = 3,     // 向视觉发送雷达置零命令。 0 0 -90
     FTM_MAIN_DONE = 4,            // 全流程完成保持状态。
     FTM_MAIN_AUTO_PICK_ROUTE = 5, // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
     FTM_MAIN_AUTO_TURN_READY = 6, // 武器区调整姿态 再次取武器头流程：张爪、对位、M2006 翻转并让 RS05 回 0。
@@ -57,38 +57,37 @@ enum FTMActionState
 
 namespace
 {
-    constexpr float kDegToRad = 0.01745329251994329577f;
-    constexpr float kRs05AngleToleranceRad = 0.02f;
-    constexpr uint32_t kRs05CommandIntervalMs = 20U;
-    constexpr uint32_t kRs05SettleMs = 300U;
-    constexpr uint32_t kRs05TimeoutMs = 3500U;
+    constexpr float kDegToRad = 0.01745329251994329577f;              // 角度转弧度系数。
+    constexpr float kRs05AngleToleranceRad = 0.02f;                  // RS05 角度到位判定容差，单位弧度。
+    constexpr uint32_t kRs05CommandIntervalMs = 20U;                 // RS05 位置命令重复下发间隔。
+    constexpr uint32_t kRs05SettleMs = 100U;                         // RS05 动作开始后的最小等待稳定时间。
+    constexpr uint32_t kRs05TimeoutMs = 3500U;                       // RS05 动作超时时间。
 
-    constexpr float kLiftToleranceMm = 5.0f;
-    constexpr float kLiftMoveTimeS = 0.7f;
-    constexpr float kLiftGrabApproachOffsetMm = 20.0f;
+    constexpr float kLiftToleranceMm = 3.0f;                         // 抬升机构高度到位容差，单位 mm。
+    constexpr float kLiftGrabApproachOffsetMm = 15.0f;               // 抓取前预抬高度偏移量，目标高度基础上加 15mm。
 
-    constexpr uint32_t kClawActionDelayMs = 200U;
-    constexpr float kM2006TurnAngleDeg = 180.0f;
-    constexpr float kM2006ToleranceDeg = 3.0f;
-    constexpr uint32_t kM2006TimeoutMs = 3000U;
+    constexpr uint32_t kClawActionDelayMs = 200U;                    // 夹爪开合动作后的等待时间。
+    constexpr float kM2006TurnAngleDeg = 180.0f;                     // M2006 单次正反翻转角度。
+    constexpr float kM2006ToleranceDeg = 2.0f;                       // M2006 角度到位判定容差，单位度。
+    constexpr uint32_t kM2006TimeoutMs = 3000U;                      // M2006 翻转动作超时时间。
 
-    constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;
-    constexpr uint32_t kWuqiquZeroSettleMs = 200U;
-    constexpr float kWuqiquZeroRelocalizeX = 0.0f;
-    constexpr float kWuqiquZeroRelocalizeY = 0.0f;
-    constexpr float kWuqiquZeroRelocalizeYawDeg = -90.0f;
-    constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;
-    constexpr uint16_t kWuqiquYawTurnStableCycles = 80U;
-    constexpr uint8_t kWuqiquSecondWaypointIndex = 1U;
-    constexpr uint8_t kWuqiquYawTargetWaypointIndex = 2U;
-    constexpr uint8_t kWuqiquMeilinWaypointIndex = 3U;
-    constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;
-    constexpr int kPrelimExecGoMeilin = 1;
-    constexpr int kPrelimExecFirstWeapon = 2;
-    constexpr int kPrelimExecSecondWeapon = 3;
-    constexpr int kPrelimExecThirdWeapon = 4;
-    constexpr uint8_t kPrelimWeaponCount = 3U;
-    constexpr uint8_t kPrelimPickWaypointIndex = 0U;
+    constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;              // 武器区归零重定位命令重复下发间隔。
+    constexpr uint32_t kWuqiquZeroSettleMs = 200U;                   // 武器区归零重定位命令下发后的等待时间。
+    constexpr float kWuqiquZeroRelocalizeX = 0.0f;                   // 武器区归零时发送给上位机的重定位 X 坐标。
+    constexpr float kWuqiquZeroRelocalizeY = 0.0f;                   // 武器区归零时发送给上位机的重定位 Y 坐标。
+    constexpr float kWuqiquZeroRelocalizeYawDeg = -90.0f;            // 武器区归零时发送给上位机的重定位航向角。
+    constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;               // 武器区原地转向的角度稳定容差。
+    constexpr uint16_t kWuqiquYawTurnStableCycles = 80U;             // 武器区原地转向连续稳定计数门限。
+    constexpr uint8_t kWuqiquSecondWaypointIndex = 1U;               // 武器区流程中的第 2 个跑点索引。
+    constexpr uint8_t kWuqiquYawTargetWaypointIndex = 2U;            // 武器区中间原地转向后使用的目标跑点索引。
+    constexpr uint8_t kWuqiquMeilinWaypointIndex = 3U;               // 前往梅林区域时使用的武器区后续跑点索引。
+    constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;              // 小电脑对接微调抬升高度的单步调整量。
+    constexpr int kPrelimExecGoMeilin = 1;                           // 预选赛流程：exec=1 表示跳转梅林。
+    constexpr int kPrelimExecFirstWeapon = 2;                         // 预选赛流程：exec=2 表示第 1 个武器头。
+    constexpr int kPrelimExecSecondWeapon = 3;                        // 预选赛流程：exec=3 表示第 2 个武器头。
+    constexpr int kPrelimExecThirdWeapon = 4;                         // 预选赛流程：exec=4 表示第 3 个武器头。
+    constexpr uint8_t kPrelimWeaponCount = 3U;                        // 预选赛连续夹取的武器头数量。
+    constexpr uint8_t kPrelimPickWaypointIndex = 0U;                  // 预选赛每次夹取从第 1 个跑点开始。
 
     struct TimedStep
     {
@@ -648,7 +647,7 @@ namespace
         if ((g_lift_commanded == 0U) ||
             (fabsf(target_height_mm - g_lift_last_target_height_mm) > 0.001f))
         {
-            FTMLiftAction_MoveTo(target_height_mm, kLiftMoveTimeS);
+            FTMLiftAction_MoveTo(target_height_mm);
             g_lift_commanded = 1U;
             g_lift_last_target_height_mm = target_height_mm;
             return false;

@@ -19,12 +19,11 @@ void FTMLiftAction_Reset(void)
     g_ftm_lift_takeover = 0U;
 }
 
-void FTMLiftAction_MoveTo(float target_height_mm, float move_time_s)
+void FTMLiftAction_MoveTo(float target_height_mm)
 {
     g_ftm_lift_takeover = 1U;
     lift_debug.height_target = target_height_mm;
     lift_debug.flag = 1.0f;
-    (void)move_time_s;
     g_last_command_seq = lift_calulate.command_seq;
 }
 

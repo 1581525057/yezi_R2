@@ -4,10 +4,10 @@
 
 static const float WUQIQU_PI = 3.14159265358979323846f; // 圆周率，用于角度换算
 static const float kDegToRad = WUQIQU_PI / 180.0f;      // 角度转弧度系数
-static const float kApproachVMaxMps = 4.60f;            // 接近阶段最大平移速度，单位 m/s
-static const float kSlowVMaxMps = 2.40f;                // 减速阶段最大平移速度，单位 m/s
-static const float kContactVMaxMps = 0.90f;             // 接触/贴近阶段最大平移速度，单位 m/s
-static const float kPlannerMaxAngularSpeedRadps = 2.50f; // 规划器输出角速度上限，单位 rad/s
+static const float kApproachVMaxMps = 5.20f;            // 接近阶段最大平移速度，单位 m/s
+static const float kSlowVMaxMps = 2.80f;                // 减速阶段最大平移速度，单位 m/s
+static const float kContactVMaxMps = 0.95f;             // 接触/贴近阶段最大平移速度，单位 m/s
+static const float kPlannerMaxAngularSpeedRadps = 2.80f; // 规划器输出角速度上限，单位 rad/s
 static const float kMinYawCommandFloorRadps = 0.18f;     // yaw 修正硬下限，避免比例缩小后转速过低
 static const float kBrakeSpeedMinMps = 0.16f;            // 距离制动保底速度，避免近目标速度被压到无法动作
 static const float kBrakeSpeedGain = 12.0f;              // 距离制动斜率，距离越近允许速度越低
@@ -25,9 +25,9 @@ static const float kFastLinkTimeoutYawExtraDeg = 3.0f;   // 快速衔接点超�
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
     {0.04f, 0.91f, -90.0f, 1.0f, 0.015f, 1.5f},
-    {0.30f, 0.41f, -90.0f, 1.0f, 0.035f, 3.0f},
-    {0.30f, 0.41f, 90.0f, 1.0f, 0.035f, 2.0f},
-    {0.96f, -1.64f, 0.0f, 1.0f, 0.030f, 1.5f},
+    {0.30f, 0.55f, -90.0f, 1.0f, 0.035f, 3.0f},
+    {0.30f, 0.55f, 90.0f, 1.0f, 0.035f, 2.0f},
+    {0.96f, -1.64f, 0.0f, 1.0f, 0.020f, 1.5f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 
@@ -50,23 +50,23 @@ WuqiquPathPlanner::WuqiquPathPlanner()
 {
     reset();
 
-    min_move_v_ = 0.40f;          // 平移输出下限，避免小误差时底盘不动，单位 m/s
+    min_move_v_ = 0.45f;          // 平移输出下限，避免小误差时底盘不动，单位 m/s
 
-    slow_dist_ = 0.15f;           // 距目标小于该值后进入减速区，单位 m
-    contact_dist_ = 0.025f;       // 距目标小于该值后进入接触/贴近段，单位 m
+    slow_dist_ = 0.12f;           // 距目标小于该值后进入减速区，单位 m
+    contact_dist_ = 0.020f;       // 距目标小于该值后进入接触/贴近段，单位 m
     finish_dist_ = 0.010f;        // XY 到点判定距离，单位 m
 
-    kp_approach_ = 6.5f;          // 接近阶段位置比例增益
-    kd_approach_ = 0.9f;          // 接近阶段位置微分增益
-    kp_slow_ = 5.5f;              // 减速阶段位置比例增益
-    kd_slow_ = 0.8f;              // 减速阶段位置微分增益
-    kp_contact_ = 3.5f;           // 接触/贴近阶段位置比例增益
-    kd_contact_ = 0.8f;           // 接触/贴近阶段位置微分增益
+    kp_approach_ = 7.0f;          // 接近阶段位置比例增益
+    kd_approach_ = 0.8f;          // 接近阶段位置微分增益
+    kp_slow_ = 6.0f;              // 减速阶段位置比例增益
+    kd_slow_ = 0.75f;             // 减速阶段位置微分增益
+    kp_contact_ = 3.8f;           // 接触/贴近阶段位置比例增益
+    kd_contact_ = 0.75f;          // 接触/贴近阶段位置微分增益
 
     yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
-    yaw_kp_ = 2.4f;               // yaw 角度误差比例增益
-    min_yaw_wz_ = 0.50f;          // yaw 最小角速度输出，单位 rad/s
-    strong_yaw_wz_ = 0.80f;       // 大角度误差时的最小角速度输出，单位 rad/s
+    yaw_kp_ = 2.8f;               // yaw 角度误差比例增益
+    min_yaw_wz_ = 0.55f;          // yaw 最小角速度输出，单位 rad/s
+    strong_yaw_wz_ = 0.90f;       // 大角度误差时的最小角速度输出，单位 rad/s
     strong_yaw_error_deg_ = 6.0f; // 判定为大角度误差的阈值，单位 deg
     yaw_tolerance_deg_ = 2.0f;    // yaw 到位判定角度误差，单位 deg
 
