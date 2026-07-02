@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 void FTMLiftAction_Reset(void);
-void FTMLiftAction_MoveTo(float target_height_mm, float move_time_s);
+void FTMLiftAction_MoveTo(float target_height_mm);
 uint8_t FTMLiftAction_IsFinished(float tolerance_mm);
 void FTMLiftAction_SetTakeover(uint8_t enable);
 uint8_t FTMLiftAction_IsTakeover(void);

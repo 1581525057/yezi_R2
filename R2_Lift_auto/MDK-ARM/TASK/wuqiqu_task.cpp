@@ -15,7 +15,7 @@ constexpr float kPi = 3.14159265358979323846f;
 constexpr float kDegToRad = kPi / 180.0f;
 
 /* 下发给底盘的角速度上限。 */
-constexpr float kMaxAngularSpeedRadps = 2.5f;
+constexpr float kMaxAngularSpeedRadps = 2.8f;
 
 /* 每个控制周期允许的速度变化量，用于让目标速度平滑变化。 */
 constexpr float kLinearAccStepMps = 0.045f;
