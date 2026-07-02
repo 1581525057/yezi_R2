@@ -2,7 +2,6 @@
 #include "cmsis_os.h"
 #include "omni_chassis.h"
 #include "usart_task.h"
-#include "laser_distance.h"
 #include <math.h>
 #include <stdint.h>
 
@@ -24,19 +23,9 @@ constexpr float kLinearDecStepMps = 0.065f;
 constexpr float kAngularAccStepRadps = 0.014f;
 constexpr float kAngularDecStepRadps = 0.022f;
 
-/* 第三点到位后的对接前微调参数。 */
-constexpr float kDockAdjustLaserMinM = 0.060f;
-constexpr float kDockAdjustLaserMaxM = 0.070f;
-constexpr float kDockAdjustLaserTargetM = 0.0625f;
-constexpr float kDockAdjustLaserKp = 8.0f;
-constexpr float kDockAdjustLaserMinVyMps = 0.15f;
-constexpr float kDockAdjustLaserMaxVyMps = 0.35f;
-constexpr float kDockAdjustYawTargetDeg = 90.0f;
-constexpr float kDockAdjustYawToleranceDeg = 1.0f;
-constexpr float kDockAdjustYawKp = 1.8f;
-constexpr float kDockAdjustYawMinWzRadps = 0.12f;
-constexpr float kDockAdjustYawMaxWzRadps = 0.80f;
-constexpr uint16_t kDockAdjustStableCycles = 80U;
+/* wuqiqu 下发到底盘的最小有效速度，避免给了速度但底盘克服不了摩擦力。*/
+constexpr float kMinLinearCommandMps = 0.07f;
+constexpr float kMinAngularCommandRadps = 0.18f;
 
 /*
  * 当前约定雷达 X/Y 与车体 X/Y 对齐：
@@ -81,6 +70,28 @@ float slewRateLimit(float target, float current, float acc_step, float dec_step)
     return target;
 }
 
+float applyCommandFloor(float value, float target, float min_abs)
+{
+    if (min_abs <= 0.0f)
+    {
+        return value;
+    }
+
+    const float value_abs = fabsf(value);
+
+    if (target == 0.0f)
+    {
+        return (value_abs < min_abs) ? 0.0f : value;
+    }
+
+    if (value_abs < min_abs)
+    {
+        return (target > 0.0f) ? min_abs : -min_abs;
+    }
+
+    return value;
+}
+
 float normalizeAngleDeg(float angle)
 {
     while (angle > 180.0f)
@@ -101,8 +112,6 @@ public:
     WuqiquTask()
         : active_(0U),
           finished_(0U),
-          dock_adjust_mode_(0U),
-          dock_adjust_stable_count_(0U),
           vx_target_(0.0f),
           vy_target_(0.0f),
           wz_target_(0.0f)
@@ -118,8 +127,6 @@ public:
     {
         active_ = 0U;
         finished_ = 0U;
-        dock_adjust_mode_ = 0U;
-        dock_adjust_stable_count_ = 0U;
         wuqiqu.resetRoute();
         clearOutput();
 
@@ -137,22 +144,10 @@ public:
         active_ = 1U;
     }
 
-    void startDockAdjust()
-    {
-        active_ = 1U;
-        finished_ = 0U;
-        dock_adjust_mode_ = 1U;
-        dock_adjust_stable_count_ = 0U;
-        clearOutput();
-        wuqiqu.reset();
-    }
-
     void stop()
     {
         active_ = 0U;
         finished_ = 0U;
-        dock_adjust_mode_ = 0U;
-        dock_adjust_stable_count_ = 0U;
         clearOutput();
         wuqiqu.reset();
     }
@@ -166,11 +161,6 @@ public:
         }
 
         /* 每周期读取当前位姿，运行规划器，并更新底盘速度目标。 */
-        if (dock_adjust_mode_ != 0U)
-        {
-            return runDockAdjustOnce();
-        }
-
         const WuqiquPathPlanner::Pose pose = buildPose();
         const int finished = wuqiqu.follow(pose);
         updateOutput(wuqiqu.getOutput());
@@ -240,8 +230,6 @@ private:
     /* active_ 为 1 表示当前任务接管底盘速度目标。 */
     volatile uint8_t active_;
     volatile uint8_t finished_;
-    volatile uint8_t dock_adjust_mode_;
-    volatile uint16_t dock_adjust_stable_count_;
 
     /* 下发到底盘的车体系目标速度，单位 m/s、rad/s。 */
     volatile float vx_target_;
@@ -253,74 +241,6 @@ private:
         vx_target_ = 0.0f;
         vy_target_ = 0.0f;
         wz_target_ = 0.0f;
-    }
-
-    uint8_t runDockAdjustOnce()
-    {
-        const uint8_t laser_valid = laser_left.data.valid;
-        const float laser_distance_m = laser_left.data.distance_m;
-        const uint8_t laser_ok =
-            (laser_valid != 0U &&
-             laser_distance_m >= kDockAdjustLaserMinM &&
-             laser_distance_m <= kDockAdjustLaserMaxM)
-                ? 1U
-                : 0U;
-
-        const float yaw_error_deg = normalizeAngleDeg(kDockAdjustYawTargetDeg - vision.angle_x);
-        const uint8_t yaw_ok = (fabsf(yaw_error_deg) <= kDockAdjustYawToleranceDeg) ? 1U : 0U;
-
-        float vy_cmd = 0.0f;
-        if (laser_valid != 0U && laser_ok == 0U)
-        {
-            const float laser_error_m = laser_distance_m - kDockAdjustLaserTargetM;
-            vy_cmd = limitFloat(kDockAdjustLaserKp * laser_error_m,
-                                -kDockAdjustLaserMaxVyMps,
-                                kDockAdjustLaserMaxVyMps);
-            if (fabsf(vy_cmd) < kDockAdjustLaserMinVyMps)
-            {
-                vy_cmd = (vy_cmd >= 0.0f) ? kDockAdjustLaserMinVyMps : -kDockAdjustLaserMinVyMps;
-            }
-        }
-
-        float wz_cmd = 0.0f;
-        if (yaw_ok == 0U)
-        {
-            const float yaw_control_deg = normalizeAngleDeg(vision.angle_x - kDockAdjustYawTargetDeg);
-            wz_cmd = limitFloat(kDockAdjustYawKp * yaw_control_deg * kDegToRad,
-                                -kDockAdjustYawMaxWzRadps,
-                                kDockAdjustYawMaxWzRadps);
-            if (fabsf(wz_cmd) < kDockAdjustYawMinWzRadps)
-            {
-                wz_cmd = (wz_cmd >= 0.0f) ? kDockAdjustYawMinWzRadps : -kDockAdjustYawMinWzRadps;
-            }
-        }
-
-        vx_target_ = 0.0f;
-        vy_target_ = slewRateLimit(vy_cmd, vy_target_, kLinearAccStepMps, kLinearDecStepMps);
-        wz_target_ = slewRateLimit(wz_cmd, wz_target_, kAngularAccStepRadps, kAngularDecStepRadps);
-
-        if (laser_ok != 0U && yaw_ok != 0U)
-        {
-            if (dock_adjust_stable_count_ < kDockAdjustStableCycles)
-            {
-                ++dock_adjust_stable_count_;
-            }
-        }
-        else
-        {
-            dock_adjust_stable_count_ = 0U;
-        }
-
-        if (dock_adjust_stable_count_ >= kDockAdjustStableCycles)
-        {
-            active_ = 0U;
-            finished_ = 1U;
-            dock_adjust_mode_ = 0U;
-            clearOutput();
-            return 1U;
-        }
-
-        return 0U;
     }
 
     WuqiquPathPlanner::Pose buildPose() const
@@ -361,9 +281,13 @@ private:
         const float wz_limited = limitFloat(output.wz_radps, -kMaxAngularSpeedRadps, kMaxAngularSpeedRadps);
 
         /* 目标速度再经过斜率限制，降低底盘指令突变。 */
-        vx_target_ = slewRateLimit(vx_limited, vx_target_, kLinearAccStepMps, kLinearDecStepMps);
-        vy_target_ = slewRateLimit(vy_limited, vy_target_, kLinearAccStepMps, kLinearDecStepMps);
-        wz_target_ = slewRateLimit(wz_limited, wz_target_, kAngularAccStepRadps, kAngularDecStepRadps);
+        const float vx_slewed = slewRateLimit(vx_limited, vx_target_, kLinearAccStepMps, kLinearDecStepMps);
+        const float vy_slewed = slewRateLimit(vy_limited, vy_target_, kLinearAccStepMps, kLinearDecStepMps);
+        const float wz_slewed = slewRateLimit(wz_limited, wz_target_, kAngularAccStepRadps, kAngularDecStepRadps);
+
+        vx_target_ = applyCommandFloor(vx_slewed, vx_limited, kMinLinearCommandMps);
+        vy_target_ = applyCommandFloor(vy_slewed, vy_limited, kMinLinearCommandMps);
+        wz_target_ = applyCommandFloor(wz_slewed, wz_limited, kMinAngularCommandRadps);
     }
 
     static void worldToChassisVelocity(float world_vx, float world_vy, float yaw_rad, float *chassis_vx, float *chassis_vy)
@@ -406,11 +330,6 @@ extern "C" void WuqiquTask_Start(void)
 extern "C" void WuqiquTask_StartAt(uint8_t waypoint_index)
 {
     g_wuqiqu_task.startAt(waypoint_index);
-}
-
-extern "C" void WuqiquTask_StartDockAdjust(void)
-{
-    g_wuqiqu_task.startDockAdjust();
 }
 
 extern "C" void WuqiquTask_Stop(void)
