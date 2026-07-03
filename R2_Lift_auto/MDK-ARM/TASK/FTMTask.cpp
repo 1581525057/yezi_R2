@@ -49,8 +49,7 @@ enum FTMActionState
     FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT = 16,       // 跑武器区 1 号点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
     FTM_ACTION_SEQUENCE_OPEN_RS05_TURN = 17,         // 夹爪张开、RS05 对位、M2006 正向翻转 180 度。
     FTM_ACTION_LIFT_UP_GRAB_APPROACH = 18,           // 抬升机构上升到抓取预备高度：抓取高度 + 20mm。
-    FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05 = 19, // 自动夹取专用：夹爪张开、抬升到抓取高度+20、RS05 对位。
-    FTM_ACTION_GRAB_SETTLE_DELAY = 20                // 到抓取高度后等待稳定，再闭合夹爪。
+    FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05 = 19 // 自动夹取专用：夹爪张开、抬升到抓取高度+20、RS05 对位。
 };
 
 namespace
@@ -133,7 +132,6 @@ namespace
 
     const uint8_t kSequenceGrabClose[] = {
         FTM_ACTION_LIFT_UP_GRAB,
-        FTM_ACTION_GRAB_SETTLE_DELAY,
         FTM_ACTION_CLAW_CLOSE,
         FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK};
 
@@ -233,8 +231,7 @@ namespace
                 (action_state == FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT) ||
                 (action_state == FTM_ACTION_SEQUENCE_OPEN_RS05_TURN) ||
                 (action_state == FTM_ACTION_LIFT_UP_GRAB_APPROACH) ||
-                (action_state == FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05) ||
-                (action_state == FTM_ACTION_GRAB_SETTLE_DELAY))
+                (action_state == FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05))
                    ? 1U
                    : 0U;
     }
@@ -588,29 +585,6 @@ namespace
         return false;
     }
 
-    bool RunTimedDelay(uint32_t delay_ms)
-    {
-        if (g_step.finished != 0U)
-        {
-            return true;
-        }
-
-        if (g_step.active == 0U)
-        {
-            g_step.active = 1U;
-            g_step.start_tick = HAL_GetTick();
-            return false;
-        }
-
-        if (HasElapsed(g_step.start_tick, delay_ms))
-        {
-            g_step.finished = 1U;
-            return true;
-        }
-
-        return false;
-    }
-
     bool RunClawDelay(void (*action)(void))
     {
         if (g_step.finished != 0U)
@@ -678,9 +652,6 @@ namespace
 
         case FTM_ACTION_LIFT_UP_GRAB_APPROACH:
             return RunLiftState(GetLiftGrabApproachTargetMm());
-
-        case FTM_ACTION_GRAB_SETTLE_DELAY:
-            return RunTimedDelay(g_ftm_grab_settle_delay_ms);
 
         case FTM_ACTION_CLAW_OPEN:
             return RunClawDelay(claw_open);
@@ -1009,7 +980,6 @@ namespace
         case FTM_ACTION_LIFT_DOWN:
         case FTM_ACTION_M2006_TURN_BACK_180:
         case FTM_ACTION_LIFT_UP_GRAB_APPROACH:
-        case FTM_ACTION_GRAB_SETTLE_DELAY:
             return RunMechanismStep(action_state);
 
         case FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05:
@@ -1123,7 +1093,6 @@ extern "C" volatile float g_ftm_lift_up_target_mm = 77.0f;
 extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 214.0f;
 extern "C" volatile float g_ftm_lift_down_target_mm = 68.0f;
 extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
-extern "C" volatile uint32_t g_ftm_grab_settle_delay_ms = 200U;
 extern "C" volatile uint8_t g_ftm_minipc_claw_release_cmd = 0U;
 extern "C" volatile uint8_t g_ftm_minipc_lift_dock_adjust_cmd = 0U;
 extern "C" volatile int16_t g_ftm_minipc_unused_mark = 0;

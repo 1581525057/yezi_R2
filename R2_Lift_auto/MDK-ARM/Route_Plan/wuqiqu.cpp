@@ -13,7 +13,7 @@ static const float kBrakeSpeedMinMps = 0.16f;            // 距离制动保底�
 static const float kBrakeSpeedGain = 12.0f;              // 距离制动斜率，距离越近允许速度越低
 static const float kSlowMinMoveGain = 2.0f;              // 减速区最小平移速度随距离递减的斜率
 static const float kSlowMinMoveFloorMps = 0.10f;         // 减速区最小平移输出下限，单位 m/s
-static const float kContactMinMoveMaxMps = 0.16f;        // 贴近段最小平移输出上限，避免近目标硬推
+static const float kContactMinMoveMaxMps = 0.12f;        // 贴近段最小平移输出上限，避免近目标硬推
 //加快第二个点到第三个点之间的流程连贯性设置的参数
 static const uint8_t kFastLinkWaypointIndex = 1U;       // 快速衔接航点索引，当前对应第 2 个目标点
 static const uint16_t kFastLinkStableCycles = 8U;       // 快速衔接航点姿态稳定计数阈值，按 runOnce 调用周期计数
@@ -23,8 +23,8 @@ static const float kFastLinkTimeoutXyScale = 1.20f;      // 快速衔接点超�
 static const float kFastLinkTimeoutYawExtraDeg = 3.0f;   // 快速衔接点超时判定时额外放宽的 yaw 角度
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
-static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {0.04f, 0.91f, -90.0f, 1.0f, 0.015f, 1.5f},
+WuqiquPathPlanner::TargetPoint kWaypoints[] = {
+    {0.04f, 0.91f, -90.0f, 1.0f, 0.015f, 2.0f},
     {0.30f, 0.55f, -90.0f, 1.0f, 0.035f, 3.0f},
     {0.30f, 0.55f, 90.0f, 1.0f, 0.035f, 2.0f},
     {0.96f, -1.64f, 0.0f, 1.0f, 0.020f, 1.5f},
@@ -32,6 +32,20 @@ static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 
 WuqiquPathPlanner wuqiqu;
+
+void Wuqiqu_SetFirstWaypointX(float x_m)
+{
+    // 同步默认点表和规划器当前副本，避免运行中只改一处导致目标不一致。
+    kWaypoints[0].x_m = x_m;
+    if (wuqiqu.waypoint_count_ > 0U)
+    {
+        wuqiqu.waypoints_[0].x_m = x_m;
+        if (wuqiqu.current_index_ == 0U)
+        {
+            wuqiqu.target_.x_m = x_m;
+        }
+    }
+}
 
 static bool IsFastLinkWaypoint(uint8_t waypoint_index)
 {
@@ -52,7 +66,7 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     kd_approach_ = 0.8f;          // 接近阶段位置微分增益
     kp_slow_ = 6.0f;              // 减速阶段位置比例增益
     kd_slow_ = 0.75f;             // 减速阶段位置微分增益
-    kp_contact_ = 3.8f;           // 接触/贴近阶段位置比例增益
+    kp_contact_ = 3.2f;           // 接触/贴近阶段位置比例增益
     kd_contact_ = 0.75f;          // 接触/贴近阶段位置微分增益
 
     yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
@@ -64,7 +78,7 @@ WuqiquPathPlanner::WuqiquPathPlanner()
 
     stable_cycles_ = 35U;         // 软接触稳定计数阈值，按 runOnce 调用周期计数
     contact_hold_ms_ = 120U;      // 接触后最短保持时间，单位 ms
-    contact_timeout_ms_ = 450U;   // 接触阶段超时时间，单位 ms
+    contact_timeout_ms_ = 300U;   // 接触阶段超时时间，单位 ms
 
     waypoint_count_ = kWaypointCount;
     if (waypoint_count_ > MAX_WAYPOINTS)

@@ -11,6 +11,7 @@
 #include "FTMTask.h"
 #include "PID.h"
 #include "route_task.h"
+#include "wuqiqu.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -575,6 +576,7 @@ extern "C" void usart_task(void *argument)
         if (Orange == 1)
         {
             flag_bottom = 1;
+            Wuqiqu_SetFirstWaypointX(0.24f); // 橙色触发时把取器路线第一个点的 X 改为 0.24m
         }
 
         if (Red == 1)
