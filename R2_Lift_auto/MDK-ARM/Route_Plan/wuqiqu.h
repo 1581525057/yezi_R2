@@ -114,5 +114,6 @@ private:
 };
 
 extern WuqiquPathPlanner wuqiqu;
+void Wuqiqu_SetFirstWaypointX(float x_m);
 
 #endif
