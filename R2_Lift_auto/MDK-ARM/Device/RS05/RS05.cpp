@@ -2,17 +2,14 @@
 #include "cmsis_os.h"
 
 constexpr float kRs05DegreesToRadians = 0.01745329251994329577f;  // 角度转弧度比例系数
-constexpr float kRs05PositionLimitCurrent = 23.0f;                 // 位置模式电流限幅，回到手册默认值
-constexpr float kRs05ZeroLockLimitCurrent = 23.0f;                 // 0 度保持电流限幅，回到手册默认值
-constexpr float kRs05CspLimitSpeed = 2.0f;                         // CSP 位置模式速度限制，回到手册默认值
-constexpr float kRs05TorqueLimitNm = 14.0f;                        // RS05 峰值力矩限制，回到手册默认值
-constexpr float kRs05ZeroLockTorqueLimitNm = 14.0f;                // 0 度保持转矩限制，回到手册默认值
-constexpr float kRs05PositionKp = 40.0f;                            // 位置环 Kp，回到手册默认值
-constexpr float kRs05SpeedKp = 6.0f;                                // 速度环 Kp，回到手册默认值
-constexpr float kRs05SpeedKi = 0.02f;                               // 速度环 Ki，回到手册默认值
-constexpr float kRs05ZeroLockPositionKp = 40.0f;                   // 0 度保持位置环 Kp，回到手册默认值
-constexpr float kRs05ZeroLockSpeedKp = 6.0f;                       // 0 度保持速度环 Kp，回到手册默认值
-constexpr float kRs05ZeroLockSpeedKi = 0.02f;                      // 0 度保持速度环 Ki，回到手册默认值
+constexpr float kRs05PositionLimitCurrent = 11.0f;                 // 位置模式电流限幅
+constexpr float kRs05CspLimitSpeed = 33.0f;                        // CSP 位置模式速度限制
+constexpr float kRs05TorqueLimitNm = 5.5f;                         // RS05 峰值力矩限制
+constexpr float kRs05PositionKp = 40.0f;                           // 位置环 Kp
+constexpr float kRs05SpeedKp = 6.0f;                               // 速度环 Kp
+constexpr float kRs05SpeedKi = 0.02f;                              // 速度环 Ki
+constexpr float kRs05ZeroDegreeSpeed = 5.0f;                       // RS05 回 0 度时使用的速度限制
+constexpr float kRs05ZeroTargetToleranceRad = 0.001f;              // 目标角接近 0 度的判定容差
 constexpr uint8_t kRs05ProactiveReportEnable = 1U;                  // 开启通信类型 24 主动上报
 constexpr uint32_t kRs05CanStartCheckIntervalMs = 1U;              // 等待 CAN3 启动的轮询间隔
 constexpr uint32_t kRs05PowerOnDelayMs = 200U;                     // CAN 启动后等待电机上电完成
@@ -25,10 +22,12 @@ uint8_t g_rs05_zero_lock_enabled = 0U;
 
 RobStride_Motor g_rs05_motor(&hfdcan3, RS05_CANID, false);
 float Angle = -94.0f;  // Keil Watch 可调目标角度，单位：degree
-float Speed = 2.0f;
+float Speed = 20.0f;
 
 namespace
 {
+float g_rs05_current_csp_speed_limit = -1.0f;
+
 void RS05_WaitCan3Started(void)
 {
     while (HAL_FDCAN_GetState(&hfdcan3) != HAL_FDCAN_STATE_BUSY)
@@ -43,6 +42,27 @@ void RS05_WriteParameter(uint16_t index, float value)
     osDelay(kRs05ParamWriteDelayMs);
 }
 
+float RS05_SelectCommandSpeed(float speed, float angle)
+{
+    if ((angle >= -kRs05ZeroTargetToleranceRad) && (angle <= kRs05ZeroTargetToleranceRad))
+    {
+        return kRs05ZeroDegreeSpeed;
+    }
+
+    return speed;
+}
+
+void RS05_WriteCspSpeedLimitIfChanged(float speed)
+{
+    if (g_rs05_current_csp_speed_limit == speed)
+    {
+        return;
+    }
+
+    RS05_WriteParameter(0x7017, speed);
+    g_rs05_current_csp_speed_limit = speed;
+}
+
 void RS05_ApplyCspHoldParameters(void)
 {
     RS05_WriteParameter(0x700B, kRs05TorqueLimitNm);
@@ -51,16 +71,18 @@ void RS05_ApplyCspHoldParameters(void)
     RS05_WriteParameter(0x701F, kRs05SpeedKp);
     RS05_WriteParameter(0x7020, kRs05SpeedKi);
     RS05_WriteParameter(0x7017, kRs05CspLimitSpeed);
+    g_rs05_current_csp_speed_limit = kRs05CspLimitSpeed;
 }
 
 void RS05_ApplyZeroLockParameters(void)
 {
-    RS05_WriteParameter(0x700B, kRs05ZeroLockTorqueLimitNm);
-    RS05_WriteParameter(0x7018, kRs05ZeroLockLimitCurrent);
-    RS05_WriteParameter(0x701E, kRs05ZeroLockPositionKp);
-    RS05_WriteParameter(0x701F, kRs05ZeroLockSpeedKp);
-    RS05_WriteParameter(0x7020, kRs05ZeroLockSpeedKi);
+    RS05_WriteParameter(0x700B, kRs05TorqueLimitNm);
+    RS05_WriteParameter(0x7018, kRs05PositionLimitCurrent);
+    RS05_WriteParameter(0x701E, kRs05PositionKp);
+    RS05_WriteParameter(0x701F, kRs05SpeedKp);
+    RS05_WriteParameter(0x7020, kRs05SpeedKi);
     RS05_WriteParameter(0x7017, kRs05CspLimitSpeed);
+    g_rs05_current_csp_speed_limit = kRs05CspLimitSpeed;
 }
 
 void RS05_EnableProactiveReport(void)
@@ -147,7 +169,9 @@ void RS05_SetZeroLock(uint8_t enable)
  */
 void RS05_PositionControl(float speed, float angle)
 {
-    g_rs05_motor.RobStride_Motor_CSP_control(angle, speed);
+    const float command_speed = RS05_SelectCommandSpeed(speed, angle);
+    RS05_WriteCspSpeedLimitIfChanged(command_speed);
+    g_rs05_motor.RobStride_Motor_CSP_control(angle, command_speed);
 }
 
 /**

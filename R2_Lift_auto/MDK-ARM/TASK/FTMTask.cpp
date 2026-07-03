@@ -62,9 +62,9 @@ namespace
     constexpr uint32_t kRs05TimeoutMs = 3500U;                       // RS05 动作超时时间。
 
     constexpr float kLiftToleranceMm = 3.0f;                         // 抬升机构高度到位容差，单位 mm。
-    constexpr float kLiftGrabApproachOffsetMm = 15.0f;               // 抓取前预抬高度偏移量，目标高度基础上加 20mm。
+    constexpr float kLiftGrabApproachOffsetMm = 10.0f;               // 抓取前预抬高度偏移量，目标高度基础上加 20mm。
 
-    constexpr uint32_t kClawActionDelayMs = 200U;                    // 夹爪开合动作后的等待时间。
+    constexpr uint32_t kClawActionDelayMs = 50U;                    // 夹爪开合动作后的等待时间。
     constexpr float kM2006TurnAngleDeg = 180.0f;                     // M2006 单次正反翻转角度。
     constexpr float kM2006ToleranceDeg = 2.0f;                       // M2006 角度到位判定容差，单位度。
     constexpr uint32_t kM2006TimeoutMs = 3000U;                      // M2006 翻转动作超时时间。
@@ -1119,7 +1119,7 @@ extern "C" volatile uint8_t g_ftm_action_state = FTM_ACTION_NONE;
 extern "C" volatile uint8_t wuqiqu_done = 0U;
 extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
 extern "C" volatile float g_ftm_yaw_target_degree = 0.0f;
-extern "C" volatile float g_ftm_lift_up_target_mm = 78.0f;
+extern "C" volatile float g_ftm_lift_up_target_mm = 77.0f;
 extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 214.0f;
 extern "C" volatile float g_ftm_lift_down_target_mm = 68.0f;
 extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
