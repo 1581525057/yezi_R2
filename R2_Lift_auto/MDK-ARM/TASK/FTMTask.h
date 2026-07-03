@@ -13,7 +13,7 @@ extern volatile uint8_t g_ftm_main_state;
 extern volatile uint8_t wuqiqu_done;
 
 // Keil Watch 可直接写入：独立小动作状态。
-// 0 无动作，1~20 对应 FTMTask.cpp 中 FTMActionState；12 第 2 点，13 中间 yaw 转向，14 第 3 点，18 抓取预备高度，19 自动夹取预备流程，20 抓取前稳定延时。
+// 0 无动作，1~19 对应 FTMTask.cpp 中 FTMActionState；12 第 2 点，13 中间 yaw 转向，14 第 3 点，18 抓取预备高度，19 自动夹取预备流程。
 extern volatile uint8_t g_ftm_action_state;
 extern volatile uint8_t g_ftm_yaw_target_correction_state;
 extern volatile float g_ftm_yaw_target_degree;
@@ -21,7 +21,6 @@ extern volatile float g_ftm_lift_up_target_mm;
 extern volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm;
 extern volatile float g_ftm_lift_down_target_mm;
 extern volatile float g_ftm_rs05_return_target_degree;
-extern volatile uint32_t g_ftm_grab_settle_delay_ms;
 extern volatile uint8_t g_ftm_minipc_claw_release_cmd;
 extern volatile uint8_t g_ftm_minipc_lift_dock_adjust_cmd;
 extern volatile int16_t g_ftm_minipc_unused_mark;
