@@ -1,4 +1,5 @@
 ﻿#include "FTMTask.h"
+#include "wuqiqu_task.h"
 #include "FTMLiftAction.h"
 #include "M2006AngleMotor.h"
 #include "RS05.h"
@@ -6,13 +7,6 @@
 #include "usart_task.h"
 #include "cmsis_os.h"
 #include <math.h>
-
-extern "C" void WuqiquTask_Start(void);
-extern "C" void WuqiquTask_StartAt(uint8_t waypoint_index);
-extern "C" void WuqiquTask_Stop(void);
-extern "C" uint8_t WuqiquTask_IsActive(void);
-extern "C" uint8_t WuqiquTask_IsFinished(void);
-extern "C" float WuqiquTask_GetWaypointYawDeg(uint8_t waypoint_index);
 
 enum FTMMainState
 {
@@ -58,10 +52,10 @@ namespace
     constexpr float kRs05AngleToleranceRad = 0.02f;                  // RS05 角度到位判定容差，单位弧度。
     constexpr uint32_t kRs05CommandIntervalMs = 20U;                 // RS05 位置命令重复下发间隔。
     constexpr uint32_t kRs05SettleMs = 100U;                         // RS05 动作开始后的最小等待稳定时间。
-    constexpr uint32_t kRs05TimeoutMs = 3500U;                       // RS05 动作超时时间。
+    constexpr uint32_t kRs05TimeoutMs = 2000U;                       // RS05 动作超时时间。
 
-    constexpr float kLiftToleranceMm = 3.0f;                         // 抬升机构高度到位容差，单位 mm。
-    constexpr float kLiftGrabApproachOffsetMm = 10.0f;               // 抓取前预抬高度偏移量，目标高度基础上加 20mm。
+    constexpr float kLiftToleranceMm = 2.0f;                         // 抬升机构高度到位容差，单位 mm。
+    constexpr float kLiftGrabApproachOffsetMm = 5.0f;               // 抓取前预抬高度偏移量，目标高度基础上10mm
 
     constexpr uint32_t kClawActionDelayMs = 50U;                    // 夹爪开合动作后的等待时间。
     constexpr float kM2006TurnAngleDeg = 180.0f;                     // M2006 单次正反翻转角度。

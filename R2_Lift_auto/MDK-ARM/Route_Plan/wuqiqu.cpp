@@ -8,7 +8,7 @@ static const float kApproachVMaxMps = 5.20f;            // 接近阶段最大平
 static const float kSlowVMaxMps = 2.80f;                // 减速阶段最大平移速度，单位 m/s
 static const float kContactVMaxMps = 0.95f;             // 接触/贴近阶段最大平移速度，单位 m/s
 static const float kPlannerMaxAngularSpeedRadps = 2.80f; // 规划器输出角速度上限，单位 rad/s
-static const float kMinYawCommandFloorRadps = 0.18f;     // yaw 修正硬下限，避免比例缩小后转速过低
+static const float kMinYawCommandFloorRadps = 0.18f;     // yaw 修正硬下限，避免小角度误差时转速过低
 static const float kBrakeSpeedMinMps = 0.16f;            // 距离制动保底速度，避免近目标速度被压到无法动作
 static const float kBrakeSpeedGain = 12.0f;              // 距离制动斜率，距离越近允许速度越低
 static const float kSlowMinMoveGain = 2.0f;              // 减速区最小平移速度随距离递减的斜率
@@ -24,10 +24,10 @@ static const float kFastLinkTimeoutYawExtraDeg = 3.0f;   // 快速衔接点超�
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {0.04f, 0.91f, -90.0f, 1.0f, 0.015f, 2.0f},
-    {0.30f, 0.55f, -90.0f, 1.0f, 0.035f, 3.0f},
-    {0.30f, 0.55f, 90.0f, 1.0f, 0.035f, 2.0f},
-    {0.96f, -1.64f, 0.0f, 1.0f, 0.020f, 1.5f},
+    {0.04f, 0.91f, -90.0f, 0.015f, 2.0f},
+    {0.30f, 0.55f, -90.0f, 0.035f, 3.0f},
+    {0.30f, 0.55f, 90.0f, 0.035f, 2.0f},
+    {0.96f, -1.64f, 0.0f, 0.020f, 1.5f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 
@@ -204,8 +204,6 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         v_limit = brake_v_limit;
     }
 
-    const float yaw_kp_scale = limitFloat(target_.yaw_kp_scale, 0.0f, 3.0f);
-
     float vx_cmd = kp * err_x_m - kd * current_pose.world_speed_x;
     float vy_cmd = kp * err_y_m - kd * current_pose.world_speed_y;
 
@@ -228,13 +226,12 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
     }
     limitVectorToMax(vx_cmd, vy_cmd, v_limit);
 
-    float wz_cmd = yaw_sign_ * yaw_kp_ * yaw_kp_scale * yaw_control_deg * kDegToRad;
+    float wz_cmd = yaw_sign_ * yaw_kp_ * yaw_control_deg * kDegToRad;
     wz_cmd = limitFloat(wz_cmd, -wz_limit, wz_limit);
     if (yaw_abs_deg > target_yaw_tolerance_deg)
     {
         const float min_wz = (yaw_abs_deg >= strong_yaw_error_deg_) ? strong_yaw_wz_ : min_yaw_wz_;
-        const float min_wz_scaled = min_wz * yaw_kp_scale;
-        const float scaled_min_wz = limitFloat((min_wz_scaled >= kMinYawCommandFloorRadps) ? min_wz_scaled : kMinYawCommandFloorRadps,
+        const float scaled_min_wz = limitFloat((min_wz >= kMinYawCommandFloorRadps) ? min_wz : kMinYawCommandFloorRadps,
                                                0.0f,
                                                wz_limit);
         if (fabsf(wz_cmd) < scaled_min_wz)

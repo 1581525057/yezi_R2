@@ -23,7 +23,6 @@ public:
         float x_m;
         float y_m;
         float yaw_deg;
-        float yaw_kp_scale;
         float xy_tolerance_m;
         float yaw_tolerance_deg;
     };

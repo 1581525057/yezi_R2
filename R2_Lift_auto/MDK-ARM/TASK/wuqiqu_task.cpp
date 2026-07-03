@@ -1,4 +1,5 @@
 #include "wuqiqu.h"
+#include "wuqiqu_task.h"
 #include "cmsis_os.h"
 #include "omni_chassis.h"
 #include "usart_task.h"
@@ -355,7 +356,9 @@ private:
 
 WuqiquTask g_wuqiqu_task;
 
-extern "C" void wuqiqu_task(void *argument)
+extern "C" {
+
+void wuqiqu_task(void *argument)
 {
     (void)argument;
 
@@ -366,62 +369,64 @@ extern "C" void wuqiqu_task(void *argument)
     }
 }
 
-extern "C" void WuqiquTask_Start(void)
+void WuqiquTask_Start(void)
 {
     g_wuqiqu_task.start();
 }
 
-extern "C" void WuqiquTask_StartAt(uint8_t waypoint_index)
+void WuqiquTask_StartAt(uint8_t waypoint_index)
 {
     g_wuqiqu_task.startAt(waypoint_index);
 }
 
-extern "C" void WuqiquTask_Stop(void)
+void WuqiquTask_Stop(void)
 {
     g_wuqiqu_task.stop();
 }
 
-extern "C" uint8_t WuqiquTask_RunOnce(void)
+uint8_t WuqiquTask_RunOnce(void)
 {
     return g_wuqiqu_task.runOnce();
 }
 
-extern "C" uint8_t WuqiquTask_IsActive(void)
+uint8_t WuqiquTask_IsActive(void)
 {
     return g_wuqiqu_task.isActive();
 }
 
-extern "C" uint8_t WuqiquTask_IsFinished(void)
+uint8_t WuqiquTask_IsFinished(void)
 {
     return g_wuqiqu_task.isFinished();
 }
 
-extern "C" float WuqiquTask_GetChassisVxTarget(float manual)
+float WuqiquTask_GetChassisVxTarget(float manual)
 {
     return g_wuqiqu_task.getChassisVxTarget(manual);
 }
 
-extern "C" float WuqiquTask_GetChassisVyTarget(float manual)
+float WuqiquTask_GetChassisVyTarget(float manual)
 {
     return g_wuqiqu_task.getChassisVyTarget(manual);
 }
 
-extern "C" float WuqiquTask_GetChassisVzTarget(float manual)
+float WuqiquTask_GetChassisVzTarget(float manual)
 {
     return g_wuqiqu_task.getChassisVzTarget(manual);
 }
 
-extern "C" void WuqiquTask_AdvanceToNext(void)
+void WuqiquTask_AdvanceToNext(void)
 {
     g_wuqiqu_task.advanceToNext();
 }
 
-extern "C" uint8_t WuqiquTask_IsAllFinished(void)
+uint8_t WuqiquTask_IsAllFinished(void)
 {
     return g_wuqiqu_task.isAllFinished();
 }
 
-extern "C" float WuqiquTask_GetWaypointYawDeg(uint8_t waypoint_index)
+float WuqiquTask_GetWaypointYawDeg(uint8_t waypoint_index)
 {
     return g_wuqiqu_task.getWaypointYawDeg(waypoint_index);
+}
+
 }
