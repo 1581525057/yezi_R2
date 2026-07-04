@@ -3,6 +3,11 @@
 
 #include "main.h"
 
+#ifdef __cplusplus
+#include "path_follow.h"
+#include "BR_McuBsplinePathGenerator.h"
+#endif
+
 enum Route_state
 {
     PHASE_IDLE = 0,
@@ -21,15 +26,20 @@ enum Route_state
     PHASE_GET_KFS_HEIGHT_200, // 取高 200mm 的 KFS
     PHASE_GET_KFS_HEIGHT_400, // 取高 400mm 的 KFS
     PHASE_GET_KFS_SHORT_200,  // 取低 200mm 的 KFS4
-    PHASE_GO_2,
     PHASE_GO_3
 };
 
 class ROUTE_TASK
 {
 private:
+    enum
+    {
+        ROUTE_GENERATE_PATH_MAX_POINTS = 256U
+    };
+
     uint8_t flag_relocation;
     uint8_t relocation_number;
+    uint8_t relocation_position_sent_; // 是否已经同步过第一次重定位坐标。
     uint16_t yaw_stable_count;
     uint8_t yaw_target_valid_;       // 当前转向阶段是否已经锁存相对 yaw 目标。
     int8_t last_turn_90_direction_;  // 根据雷达 yaw 分类的当前朝向：0 为 0 度，1 为 +90 度，-1 为 -90 度。
@@ -48,13 +58,17 @@ private:
     float path_vy_target_;           // 1 区跑点底盘 Y 速度目标，单位 m/s。
     float path_wz_target_;           // 1 区跑点底盘旋转速度目标，单位 rad/s。
     uint16_t entrence_KFS;           // KFS的入口对应的KFS位置
+    BRPathPoint generated_path_[ROUTE_GENERATE_PATH_MAX_POINTS];
+    PathFollower::PathPoint generated_follow_path_[ROUTE_GENERATE_PATH_MAX_POINTS];
     void start_turn_target(float yaw_delta_deg);
     void clear_path_output(void);
     uint8_t load_follow_plan(void);
-    uint8_t one_go_two(void);
     uint8_t find_KFS1(void);
     uint8_t find_KFS2(void);
     uint8_t find_KFS3(void);
+    uint8_t loadGeneratedPathToGoal(const BRPathPose &goal,
+                                    const BRPathControlPoint *middle_points,
+                                    std::size_t middle_point_count);
 
 public:
     Route_state state;

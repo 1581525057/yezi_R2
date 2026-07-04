@@ -11,7 +11,6 @@
 #include "FTMTask.h"
 #include "PID.h"
 #include "route_task.h"
-#include "wuqiqu.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -48,8 +47,8 @@ static uint8_t vision_last_block_count = 0U;
 
 // 每个方块的中心坐标
 Block_Vision block_vision_middle[16];
-float block_middle_x = 3.44f;
-float block_middle_y = -1.58f;
+float block_middle_x = 3.45f;
+float block_middle_y = -1.5f;
 
 // 通过第2个方块来计算得到其他8个的坐标位置
 
@@ -333,12 +332,13 @@ void vision_plan_mark_consumed_if_empty(void)
 /**
  * @brief  解析视觉帧
  *
- * 帧格式：S,<exec>,<x>,<y>,<yaw>,C,<action...>,B,<block...>,A,<release>,<claw_vertical>,<unused>,E
+ * 帧格式：S,<exec>,<x>,<y>,<yaw>,C,<action...>,B,<block...>,A,<release>,<claw_vertical>,<unused>,P,<can_up>,E
  * - exec：是否前往第二区标志（整数）
  * - x、y、yaw：坐标和角度（浮点数）
  * - C：后接不定长梅花林动作，存入动作队列
  * - B：后接不定长梅花林格子编号，存入方块队列
  * - A：后接是否松手、夹爪上下和无用标定位三个整数
+ * - P：后接 CAN 上升标定位
  *
  * @param  data  输入字节数组
  * @param  len   数组长度
@@ -499,14 +499,25 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
         return 0;
     parsed.unused_flag = static_cast<int>(fast_atof(&p, e));
 
-    if (p < e)
-    {
-        if (*p != ',')
-            return 0;
-        ++p;
-        if (p != e)
-            return 0;
-    }
+    if (p >= e || *p != ',')
+        return 0;
+    ++p;
+    if (p >= e || *p != 'P')
+        return 0;
+    ++p;
+
+    if (p >= e || *p != ',')
+        return 0;
+    ++p;
+    if (p >= e)
+        return 0;
+    parsed.can_up = static_cast<int16_t>(fast_atoi_field(&p, e));
+
+    if (p >= e || *p != ',')
+        return 0;
+    ++p;
+    if (p != e)
+        return 0;
 
     if (vision_plan_locked == 0U &&
         vision_plan_is_same(parsed_commands, parsed_command_count, parsed_blocks, parsed_block_count) == 0U)
@@ -572,18 +583,22 @@ extern "C" void usart_task(void *argument)
         if (Green == 1)
         {
             flag_bottom = 1;
-            g_ftm_main_state = 3; // 先执行视觉置零
         }
         if (Orange == 1)
         {
             flag_bottom = 1;
-            Wuqiqu_SetFirstWaypointX(0.24f); // 橙色触发时把取器路线第一个点的 X 改为 0.24m
         }
 
         if (Red == 1)
         {
-            static uint8_t red_step = 1; //1=待触发, 2=已完成
-            if (red_step == 1)
+            static uint8_t red_step = 0; // 0=待触发3, 1=待触发9, 2=已完成
+            if (red_step == 0)
+            {
+                g_ftm_main_state = 3; // 先执行视觉置零
+                osDelay(1000);
+                red_step = 1;
+            }
+            else if (red_step == 1)
             {
                 g_ftm_main_state = 9; // 再执行完整自动流程
                 red_step = 2;         // 不再触发
@@ -594,7 +609,7 @@ extern "C" void usart_task(void *argument)
         {
             flag_bottom = 1;
         }
-        
+
         /* 更新传感器数据 */
         // as5047.updata();
         dt35.update();

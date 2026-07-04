@@ -46,7 +46,7 @@ float STEP_DOWN_LIFT_HEIGHT_TOLERANCE_MM = 40.0f;
 // 下台阶前准备阶段离方块中心点的距离，单位为 m。
 float STEP_DOWN_PREPARE_DISTANCE_L = 0.35f;
 // 下台阶下降阶段离开当前坐标的距离，单位为 m。
-float STEP_DOWN_DESCEND_DISTANCE_D = 0.58f;
+float STEP_DOWN_DESCEND_DISTANCE_D = 0.52f;
 
 // 全局实例由任务层调用，调用方式与现有上台阶自动流程保持一致。
 LiftStepDown lift_step_down;
