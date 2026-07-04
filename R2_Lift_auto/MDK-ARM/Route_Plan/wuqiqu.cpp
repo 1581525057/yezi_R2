@@ -23,6 +23,7 @@ static const float kFastLinkTimeoutXyScale = 1.20f;      // 快速衔接点超�
 static const float kFastLinkTimeoutYawExtraDeg = 3.0f;   // 快速衔接点超时判定时额外放宽的 yaw 角度
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
+// 参数：x y yaw xy_tolerance yaw_tolerance
 WuqiquPathPlanner::TargetPoint kWaypoints[] = {
     {0.04f, 0.91f, -90.0f, 0.015f, 2.0f},
     {0.30f, 0.55f, -90.0f, 0.035f, 3.0f},
