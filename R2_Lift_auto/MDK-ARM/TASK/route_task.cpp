@@ -6,7 +6,7 @@
 #include "bsp_dwt.h"
 #include "bsp_usart.h"
 #include "lift_step_up.h"
-#include "mieling.h"
+#include "reolcation.h"
 #include "usart_task.h"
 #include <math.h>
 #include "lift_step_down.h"
@@ -19,6 +19,42 @@ ROUTE_TASK route_t;
 extern float yaw_target;
 extern Block_Vision block_vision_middle[16];
 
+float ROUTE_FIND_KFS_GENERATE_PATH_MAX_VEL_M_S = 4.0f;  // 寻找 KFS 自动生成路径的最大线速度，单位 m/s。
+float ROUTE_FIND_KFS_GENERATE_PATH_MAX_ACC_M_S2 = 1.2f; // 寻找 KFS 自动生成路径的最大加速度，单位 m/s2。
+float ROUTE_FIND_KFS_GENERATE_PATH_GAP_M = 0.04f;       // 寻找 KFS 自动生成路径点的间距，单位 m。
+
+float ROUTE_RELOCATION_STOP_SPEED_LIMIT = 0.01f; // 一区重定位累计前，底盘解算速度需接近 0。
+
+// 寻找 KFS 的终点表，单位：x/y 为 m，yaw 为 rad；按 entrence_KFS 0/1/2 选择。
+static BRPathPose route_find_kfs_goals[] = {
+    {2.36f, -2.78f, 0.0f},
+    {2.36f, -1.56f, 0.0f},
+    {2.33f, -0.39f, 0.0f},
+};
+// 寻找 KFS1 的中间点表，单位：x/y 为 m；按顺序依次经过。
+static BRPathControlPoint route_find_kfs_0_middle_points[] = {
+    {1.69f, -2.135f}};
+
+// 寻找 KFS2 的中间点表，单位：x/y 为 m；按顺序依次经过。
+static BRPathControlPoint route_find_kfs_1_middle_points[] = {
+    {1.615f, -1.545f}};
+
+// 寻找 KFS3 的中间点表，单位：x/y 为 m；按顺序依次经过。
+static BRPathControlPoint route_find_kfs_2_middle_points[] = {
+    {1.60f, -0.935f}};
+
+static const BRPathControlPoint *route_find_kfs_middle_points[] = {
+    route_find_kfs_0_middle_points,
+    route_find_kfs_1_middle_points,
+    route_find_kfs_2_middle_points,
+};
+
+static const std::size_t route_find_kfs_middle_point_counts[] = {
+    sizeof(route_find_kfs_0_middle_points) / sizeof(route_find_kfs_0_middle_points[0]),
+    sizeof(route_find_kfs_1_middle_points) / sizeof(route_find_kfs_1_middle_points[0]),
+    sizeof(route_find_kfs_2_middle_points) / sizeof(route_find_kfs_2_middle_points[0]),
+};
+
 #ifndef ROUTE_DEBUG_MANUAL_STEP_CMD
 #define ROUTE_DEBUG_MANUAL_STEP_CMD 0
 #endif
@@ -29,40 +65,6 @@ uint8_t route_debug_step_next_cmd = 0U; // 调试用：置 1 后只执行一条�
 
 namespace
 {
-    MeilingTarget_t first_relocation = {
-        .preset_id = 0,
-        .L_ref = 0.0f,
-        .R_ref = 2678.0f,
-        .F_ref = 0.0f,
-        .tol_lat = 20.0f,
-        .tol_lon = 10.0f,
-        .timeout_ms = 500000U,
-        .sensor_mask = SENSOR_RIGHT,
-    };
-
-    MeilingTarget_t second_relocation = {
-        .preset_id = 0,
-        .L_ref = 2630.0f,
-        .R_ref = 0.0f,
-        .F_ref = 500.0f,
-        .tol_lat = 20.0f,
-        .tol_lon = 20.0f,
-        .timeout_ms = 500000U,
-        .sensor_mask = SENSOR_FRONT | SENSOR_LEFT,
-
-    };
-
-    MeilingTarget_t third_relocation = {
-        .preset_id = 0,
-        .L_ref = 3830.0f,
-        .R_ref = 0.0f,
-        .F_ref = 500.0f,
-        .tol_lat = 40.0f,
-        .tol_lon = 40.0f,
-        .timeout_ms = 500000U,
-        .sensor_mask = SENSOR_FRONT | SENSOR_LEFT,
-    };
-
     // 将 yaw 角限制到 [-180, 180]，后面做角度差时统一走最短方向。
     static float normalize_yaw_deg(float yaw_deg)
     {
@@ -197,6 +199,7 @@ void ROUTE_TASK::route_reset()
     flag_relocation = 0;
     flag_vision = 0;
     relocation_number = 0;
+    relocation_position_sent_ = 0U;
 
     // 清空转弯目标锁存和到位稳定计数。
     yaw_stable_count = 0;
@@ -247,16 +250,6 @@ void ROUTE_TASK::update_number_KFS_by_cmd()
     number_KFS = (uint8_t)(rx_data.car_kfs + rx_data.arm_kfs + 1);
 }
 
-uint8_t ROUTE_TASK::one_go_two(void)
-{
-    if (path_loaded_ == 0U)
-    {
-        path_follow.loadPath(first_area, first_area_count);
-        path_loaded_ = 1U;
-    }
-    return load_follow_plan();
-}
-
 uint8_t ROUTE_TASK::find_KFS1(void)
 
 {
@@ -285,6 +278,49 @@ uint8_t ROUTE_TASK::find_KFS3(void)
         path_follow.loadPath(KFS3_area, KFS3_count);
         path_loaded_ = 1U;
     }
+    return load_follow_plan();
+}
+
+uint8_t ROUTE_TASK::loadGeneratedPathToGoal(const BRPathPose &goal,
+                                            const BRPathControlPoint *middle_points,
+                                            std::size_t middle_point_count)
+{
+    if (path_loaded_ == 0U)
+    {
+        BRPathPose start;
+        start.x_m = vision.x_diff;
+        start.y_m = vision.y_diff;
+        start.yaw_rad = vision.angle_x * 3.1415926f / 180.0f;
+
+        std::size_t point_count = 0U;
+        BRPathStatus status = generateBsplinePath(start,
+                                                  middle_points,
+                                                  middle_point_count,
+                                                  goal,
+                                                  ROUTE_FIND_KFS_GENERATE_PATH_MAX_VEL_M_S,
+                                                  ROUTE_FIND_KFS_GENERATE_PATH_MAX_ACC_M_S2,
+                                                  generated_path_,
+                                                  ROUTE_GENERATE_PATH_MAX_POINTS,
+                                                  &point_count,
+                                                  ROUTE_FIND_KFS_GENERATE_PATH_GAP_M);
+        if (status != BR_PATH_OK || point_count < 3U)
+        {
+            return 2U;
+        }
+
+        for (std::size_t i = 0U; i < point_count; ++i)
+        {
+            generated_follow_path_[i].vx = generated_path_[i].vx_mm_s;
+            generated_follow_path_[i].vy = generated_path_[i].vy_mm_s;
+            generated_follow_path_[i].x = generated_path_[i].x_mm;
+            generated_follow_path_[i].y = generated_path_[i].y_mm;
+            generated_follow_path_[i].theta = generated_path_[i].yaw_rad;
+        }
+
+        path_follow.loadPath(generated_follow_path_, (uint16_t)point_count);
+        path_loaded_ = 1U;
+    }
+
     return load_follow_plan();
 }
 
@@ -456,52 +492,40 @@ void ROUTE_TASK::meiling_route()
 
     switch (state)
     {
-    case PHASE_GO_2:
-    {
-        uint8_t path_result = one_go_two();
-        if (path_result == 1U)
-        {
-            path_loaded_ = 0U;
-            state = PHASE_VISION;
-        }
-
-        break;
-    }
 
     case FIRST_RELOCATION:
     {
+        // 根据入口 KFS 选择侧向激光：0 用右激光，1 用左右激光，2 用左激光。
+        uint8_t relocation_sensor_mask = SENSOR_FRONT | SENSOR_LEFT;
+        if (entrence_KFS == 0)
+        {
+            relocation_sensor_mask = SENSOR_FRONT | SENSOR_RIGHT;
+        }
+        else if (entrence_KFS == 1)
+        {
+            relocation_sensor_mask = SENSOR_ALL;
+        }
+
         if (relocation_number == 0U)
         {
-            meiling.start(first_relocation);
+            // 本次进入该阶段时，重新累计一区重定位稳定周期。
+            area_one_relocation.reset();
             relocation_number = 1U;
             break;
         }
 
-        uint8_t relocation_result = meiling.update();
+        const uint8_t chassis_speed_zero =
+            (fabsf(omni_chassis.now.Vx) <= ROUTE_RELOCATION_STOP_SPEED_LIMIT &&
+             fabsf(omni_chassis.now.Vy) <= ROUTE_RELOCATION_STOP_SPEED_LIMIT &&
+             fabsf(omni_chassis.now.Vz) <= ROUTE_RELOCATION_STOP_SPEED_LIMIT)
+                ? 1U
+                : 0U;
 
-        if (relocation_result == MeilingLocator::SUCCESS)
+        if (area_one_relocation.update(relocation_sensor_mask, chassis_speed_zero) == AreaOneRelocation::SENT)
         {
-            relocation_number = 2U;
-
-            if (entrence_KFS == 0)
-            {
-                send_position_to_pc(0, 1, 0.96, -1.6, 0.0f);
-            }
-            else if (entrence_KFS == 1)
-            {
-                send_position_to_pc(0, 1, 0.96, -1.6, 0.0f);
-            }
-            else
-            {
-                send_position_to_pc(0, 1, 0.96, -1.6, 0.0f);
-            }
-
-            // 第一次重定位完成，回到视觉命令等待阶段。
+            relocation_number = 0U;
+            relocation_position_sent_ = 1U;
             state = PHASE_VISION;
-        }
-        else if (relocation_result == MeilingLocator::TIMEOUT)
-        {
-            meiling.start(first_relocation);
         }
         break;
     }
@@ -511,35 +535,44 @@ void ROUTE_TASK::meiling_route()
         {
         case 0:
         {
-            uint8_t path_result = find_KFS1();
-            // 跑到KFS为一的位置去
+            uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[0],
+                                                          route_find_kfs_middle_points[0],
+                                                          route_find_kfs_middle_point_counts[0]);
+            // 跑到 KFS1 的位置去。
             if (path_result == 1U)
             {
                 path_loaded_ = 0U;
-                state = PHASE_VISION;
+                // 只在第一次到达 KFS 后进入重定位，之后直接回视觉阶段。
+                state = (relocation_position_sent_ == 0U) ? FIRST_RELOCATION : PHASE_VISION;
             }
             break;
         }
         case 1:
         {
-            uint8_t path_result = find_KFS2();
+            uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[1],
+                                                          route_find_kfs_middle_points[1],
+                                                          route_find_kfs_middle_point_counts[1]);
+            // 跑到 KFS2 的位置去。
             if (path_result == 1U)
             {
                 path_loaded_ = 0U;
-                state = PHASE_VISION;
+                // 只在第一次到达 KFS 后进入重定位，之后直接回视觉阶段。
+                state = (relocation_position_sent_ == 0U) ? FIRST_RELOCATION : PHASE_VISION;
             }
-            // 跑到KFS为2的位置去
             break;
         }
         case 2:
         {
-            uint8_t path_result = find_KFS3();
+            uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[2],
+                                                          route_find_kfs_middle_points[2],
+                                                          route_find_kfs_middle_point_counts[2]);
+            // 跑到 KFS3 的位置去。
             if (path_result == 1U)
             {
                 path_loaded_ = 0U;
-                state = PHASE_VISION;
+                // 只在第一次到达 KFS 后进入重定位，之后直接回视觉阶段。
+                state = (relocation_position_sent_ == 0U) ? FIRST_RELOCATION : PHASE_VISION;
             }
-            // 跑到KFS为3的位置去
             break;
         }
         }
@@ -869,6 +902,16 @@ extern "C" void plan_route(void *argument)
         {
             route_t.flag_start = 1U;
             ftm_done_route_started = 1U;
+        }
+
+        if (flag_step == 1)
+        {
+            area_one_relocation.update(SENSOR_FRONT | SENSOR_LEFT, 1);
+        }
+
+        if (flag_step == 2)
+        {
+            area_one_relocation.update(SENSOR_FRONT | SENSOR_RIGHT, 1);
         }
 
         // 更新现在几个KFS

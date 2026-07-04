@@ -112,6 +112,7 @@ private:
         PICK_KFS_IDLE = 0,
         PICK_KFS_MOVE,
         PICK_KFS_SEND,
+        PICK_KFS_WAIT_DONE,
         PICK_KFS_RETURN_CENTER,
     };
 

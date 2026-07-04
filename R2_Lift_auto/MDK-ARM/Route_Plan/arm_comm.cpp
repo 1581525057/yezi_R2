@@ -2,7 +2,7 @@
 #include "usart.h"
 #include <math.h>
 
-// 全局机械臂通信对象，和 lift_auto、meiling 等模块保持同样的使用方式。
+// 全局机械臂通信对象，和其他路线模块保持同样的使用方式。
 ArmComm arm_comm;
 
 // 取 KFS 前底盘预走阶段的最大速度，单位 m/s。
@@ -82,12 +82,12 @@ uint8_t ArmComm::executeAction(uint8_t action_code, uint8_t num_KFS)
         setFrame(0x01U, num_KFS, 0x03U, 0x00U, 0x00U);
         break;
 
-    case ACTION_ZONE3_READY:
-        setFrame(0x01U, 0x00U, 0x00U, 0x01U, 0x00U);
+    case ACTION_ZONE3_READY: // 去九宫格预备位
+        setFrame(0x01U, 0x02U, 0x04U, 0x01U, 0x00U);
         break;
 
-    case ACTION_ZONE3_PLACE_HAND:
-        setFrame(0x01U, 0x00U, 0x00U, 0x02U, 0x00U);
+    case ACTION_ZONE3_PLACE_HAND: // 放手持KFS
+        setFrame(0x01U, 0x02U, 0x04U, 0x02U, 0x00U);
         break;
 
     case ACTION_ZONE3_FETCH_UPPER:
@@ -195,19 +195,20 @@ uint8_t ArmComm::pickKFS(uint8_t action_code,
         {
             if (before_step_x_m == 0.0f)
             {
-                pick_kfs_state_ = PICK_KFS_SEND;
+                pick_kfs_target_x_m_ = current_x_m;
+                pick_kfs_target_y_m_ = current_y_m;
             }
             else
             {
                 pick_kfs_target_x_m_ = current_x_m + before_step_x_m;
                 pick_kfs_target_y_m_ = current_y_m;
                 pick_kfs_zero_yaw_move_ = 1U;
-                pick_kfs_state_ = PICK_KFS_MOVE;
             }
         }
         else if (after_step_x_m == 0.0f)
         {
-            pick_kfs_state_ = PICK_KFS_SEND;
+            pick_kfs_target_x_m_ = current_x_m;
+            pick_kfs_target_y_m_ = current_y_m;
         }
         else
         {
@@ -228,7 +229,20 @@ uint8_t ArmComm::pickKFS(uint8_t action_code,
             {
                 pick_kfs_target_x_m_ = center_x_m + after_step_x_m;
             }
+        }
 
+        pick_kfs_state_ = PICK_KFS_SEND;
+    }
+
+    if (pick_kfs_state_ == PICK_KFS_SEND)
+    {
+        pick_kfs_vx_target_ = 0.0f;
+        pick_kfs_vy_target_ = 0.0f;
+
+        if (rx_data_.event == 5U)
+        {
+            rx_data_.event = 0U;
+            pick_kfs_stable_count_ = 0U;
             pick_kfs_state_ = PICK_KFS_MOVE;
         }
     }
@@ -269,12 +283,12 @@ uint8_t ArmComm::pickKFS(uint8_t action_code,
             else
             {
                 pick_kfs_stable_count_ = 0U;
-                pick_kfs_state_ = PICK_KFS_SEND;
+                pick_kfs_state_ = PICK_KFS_WAIT_DONE;
             }
         }
     }
 
-    if (pick_kfs_state_ == PICK_KFS_SEND)
+    if (pick_kfs_state_ == PICK_KFS_WAIT_DONE)
     {
         pick_kfs_vx_target_ = 0.0f;
         pick_kfs_vy_target_ = 0.0f;

@@ -1,4 +1,5 @@
 ﻿#include "FTMTask.h"
+#include "wuqiqu_task.h"
 #include "FTMLiftAction.h"
 #include "M2006AngleMotor.h"
 #include "RS05.h"
@@ -7,20 +8,14 @@
 #include "cmsis_os.h"
 #include <math.h>
 
-extern "C" void WuqiquTask_Start(void);
-extern "C" void WuqiquTask_StartAt(uint8_t waypoint_index);
-extern "C" void WuqiquTask_StartAtPrelimWeaponHead(uint8_t weapon_index);
-extern "C" void WuqiquTask_Stop(void);
-extern "C" uint8_t WuqiquTask_IsActive(void);
-extern "C" uint8_t WuqiquTask_IsFinished(void);
-extern "C" float WuqiquTask_GetWaypointYawDeg(uint8_t waypoint_index);
+extern "C" volatile uint32_t g_ftm_grab_settle_delay_ms;
 
 enum FTMMainState
 {
     FTM_MAIN_INIT = 0,            // 初始化各功能模块，完成后进入空闲。
     FTM_MAIN_IDLE = 1,            // 空闲/手动调试状态，等待 Watch 写入动作状态。
     FTM_MAIN_WUQIQU_ROUTE = 2,    // 独立执行武器区第 1 个跑点。
-    FTM_MAIN_WUQIQU_ZERO = 3,     // 向视觉发送雷达置零命令。 0 0 -90
+    FTM_MAIN_WUQIQU_ZERO = 3,     // 向视觉发送置零命令。 0 0 -90
     FTM_MAIN_DONE = 4,            // 全流程完成保持状态。
     FTM_MAIN_AUTO_PICK_ROUTE = 5, // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
     FTM_MAIN_AUTO_TURN_READY = 6, // 武器区调整姿态 再次取武器头流程：张爪、对位、M2006 翻转并让 RS05 回 0。
@@ -32,62 +27,62 @@ enum FTMMainState
 
 enum FTMActionState
 {
-    FTM_ACTION_NONE = 0,                             // 不执行小动作。
-    FTM_ACTION_RS05_TO_TARGET = 1,                   // RS05 转到 Angle 指定角度。
-    FTM_ACTION_LIFT_UP_GRAB = 2,                     // 抬升机构上升到抓取高度。
-    FTM_ACTION_CLAW_OPEN = 3,                        // 夹爪张开。
-    FTM_ACTION_CLAW_CLOSE = 4,                       // 夹爪闭合。
-    FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK = 5, // 抬升机构上升到取出武器头对接高度。
-    FTM_ACTION_M2006_TURN_180 = 6,                   // M2006 正向翻转 180 度。
-    FTM_ACTION_RS05_TO_RETURN = 7,                   // RS05 回0度。
-    FTM_ACTION_LIFT_DOWN = 8,                        // 抬升机构下降。
-    FTM_ACTION_M2006_TURN_BACK_180 = 9,              // M2006 反向翻转 180 度。
-    FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05 = 10,         // 夹爪张开、抬升到取出武器头对接高度、RS05 对位。
-    FTM_ACTION_SEQUENCE_BACKTURN_RS05 = 11,          // M2006 反向翻转 180 度、RS05 回位。
-    FTM_ACTION_WUQIQU_ROUTE_2 = 12,                  // 武器区第 2 个跑点。
-    FTM_ACTION_WUQIQU_YAW_TURN_180 = 13,             // 武器区第 2 点到第 3 点之间原地转向 180 度。
-    FTM_ACTION_WUQIQU_ROUTE_3 = 14,                  // 武器区第 3 个跑点。
-    FTM_ACTION_SEQUENCE_ROUTE_BACKTURN = 15,         // 完成武器区 2/3 号跑点和中间转向后，执行 M2006 反转和 RS05 回位。
-    FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT = 16,       // 跑武器区 1 号点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
-    FTM_ACTION_SEQUENCE_OPEN_RS05_TURN = 17,         // 夹爪张开、RS05 对位、M2006 正向翻转 180 度。
-    FTM_ACTION_LIFT_UP_GRAB_APPROACH = 18,           // 抬升机构上升到抓取预备高度：抓取高度 + 20mm。
+    FTM_ACTION_NONE = 0,                              // 不执行小动作。
+    FTM_ACTION_RS05_TO_TARGET = 1,                    // RS05 转到 Angle 指定角度。
+    FTM_ACTION_LIFT_UP_GRAB = 2,                      // 抬升机构上升到抓取高度。
+    FTM_ACTION_CLAW_OPEN = 3,                         // 夹爪张开。
+    FTM_ACTION_CLAW_CLOSE = 4,                        // 夹爪闭合。
+    FTM_ACTION_LIFT_UP_WEAPON_HEAD_TAKEOUT_DOCK = 5,  // 抬升机构上升到取出武器头对接高度。
+    FTM_ACTION_M2006_TURN_180 = 6,                    // M2006 正向翻转 180 度。
+    FTM_ACTION_RS05_TO_RETURN = 7,                    // RS05 回0度。
+    FTM_ACTION_LIFT_DOWN = 8,                         // 抬升机构下降。
+    FTM_ACTION_M2006_TURN_BACK_180 = 9,               // M2006 反向翻转 180 度。
+    FTM_ACTION_SEQUENCE_OPEN_LIFT_RS05 = 10,          // 夹爪张开、抬升到取出武器头对接高度、RS05 对位。
+    FTM_ACTION_SEQUENCE_BACKTURN_RS05 = 11,           // M2006 反向翻转 180 度、RS05 回位。
+    FTM_ACTION_WUQIQU_ROUTE_2 = 12,                   // 武器区第 2 个跑点。
+    FTM_ACTION_WUQIQU_YAW_TURN_180 = 13,              // 武器区第 2 点到第 3 点之间原地转向 180 度。
+    FTM_ACTION_WUQIQU_ROUTE_3 = 14,                   // 武器区第 3 个跑点。
+    FTM_ACTION_SEQUENCE_ROUTE_BACKTURN = 15,          // 完成武器区 2/3 号跑点和中间转向后，执行 M2006 反转和 RS05 回位。
+    FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT = 16,        // 跑武器区 1 号点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
+    FTM_ACTION_SEQUENCE_OPEN_RS05_TURN = 17,          // 夹爪张开、RS05 对位、M2006 正向翻转 180 度。
+    FTM_ACTION_LIFT_UP_GRAB_APPROACH = 18,            // 抬升机构上升到抓取预备高度：抓取高度 + 20mm。
     FTM_ACTION_SEQUENCE_OPEN_GRAB_APPROACH_RS05 = 19, // 自动夹取专用：夹爪张开、抬升到抓取高度+20、RS05 对位。
-    FTM_ACTION_GRAB_SETTLE_DELAY = 20                // 到抓取高度后等待稳定，再闭合夹爪。
+    FTM_ACTION_GRAB_SETTLE_DELAY = 20                 // 到抓取高度后等待稳定，再闭合夹爪。
 };
 
 namespace
 {
-    constexpr float kDegToRad = 0.01745329251994329577f;              // 角度转弧度系数。
-    constexpr float kRs05AngleToleranceRad = 0.02f;                  // RS05 角度到位判定容差，单位弧度。
-    constexpr uint32_t kRs05CommandIntervalMs = 20U;                 // RS05 位置命令重复下发间隔。
-    constexpr uint32_t kRs05SettleMs = 100U;                         // RS05 动作开始后的最小等待稳定时间。
-    constexpr uint32_t kRs05TimeoutMs = 3500U;                       // RS05 动作超时时间。
+    constexpr float kDegToRad = 0.01745329251994329577f;
+    constexpr float kRs05AngleToleranceRad = 0.02f;
+    constexpr uint32_t kRs05CommandIntervalMs = 20U;
+    constexpr uint32_t kRs05SettleMs = 300U;
+    constexpr uint32_t kRs05TimeoutMs = 3500U;
 
-    constexpr float kLiftToleranceMm = 3.0f;                         // 抬升机构高度到位容差，单位 mm。
-    constexpr float kLiftGrabApproachOffsetMm = 10.0f;               // 抓取前预抬高度偏移量，目标高度基础上加 10mm。
+    constexpr float kLiftToleranceMm = 5.0f;
+    constexpr float kLiftGrabApproachOffsetMm = 20.0f;
 
-    constexpr uint32_t kClawActionDelayMs = 50U;                    // 夹爪开合动作后的等待时间。
-    constexpr float kM2006TurnAngleDeg = 180.0f;                     // M2006 单次正反翻转角度。
-    constexpr float kM2006ToleranceDeg = 2.0f;                       // M2006 角度到位判定容差，单位度。
-    constexpr uint32_t kM2006TimeoutMs = 3000U;                      // M2006 翻转动作超时时间。
+    constexpr uint32_t kClawActionDelayMs = 200U;
+    constexpr float kM2006TurnAngleDeg = 180.0f;
+    constexpr float kM2006ToleranceDeg = 3.0f;
+    constexpr uint32_t kM2006TimeoutMs = 3000U;
 
-    constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;              // 武器区归零重定位命令重复下发间隔。
-    constexpr uint32_t kWuqiquZeroSettleMs = 200U;                   // 武器区归零重定位命令下发后的等待时间。
-    constexpr float kWuqiquZeroRelocalizeX = 0.0f;                   // 武器区归零时发送给上位机的重定位 X 坐标。
-    constexpr float kWuqiquZeroRelocalizeY = 0.0f;                   // 武器区归零时发送给上位机的重定位 Y 坐标。
-    constexpr float kWuqiquZeroRelocalizeYawDeg = -90.0f;            // 武器区归零时发送给上位机的重定位航向角。
-    constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;               // 武器区原地转向的角度稳定容差。
-    constexpr uint16_t kWuqiquYawTurnStableCycles = 80U;             // 武器区原地转向连续稳定计数门限。
-    constexpr uint8_t kWuqiquSecondWaypointIndex = 1U;               // 武器区流程中的第 2 个跑点索引。
-    constexpr uint8_t kWuqiquYawTargetWaypointIndex = 2U;            // 武器区中间原地转向后使用的目标跑点索引。
-    constexpr uint8_t kWuqiquMeilinWaypointIndex = 3U;               // 前往梅林区域时使用的武器区后续跑点索引。
-    constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;              // 小电脑对接微调抬升高度的单步调整量。
-    constexpr int kPrelimExecGoMeilin = 1;                           // 预选赛流程：exec=1 表示跳转梅林。
-    constexpr int kPrelimExecFirstWeapon = 2;                         // 预选赛流程：exec=2 表示第 1 个武器头。
-    constexpr int kPrelimExecSecondWeapon = 3;                        // 预选赛流程：exec=3 表示第 2 个武器头。
-    constexpr int kPrelimExecThirdWeapon = 4;                         // 预选赛流程：exec=4 表示第 3 个武器头。
-    constexpr uint8_t kPrelimWeaponCount = 3U;                        // 预选赛连续夹取的武器头数量。
-    constexpr uint8_t kPrelimPickWaypointIndex = 0U;                  // 预选赛每次夹取从第 1 个跑点开始。
+    constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;
+    constexpr uint32_t kWuqiquZeroSettleMs = 200U;
+    constexpr float kWuqiquZeroRelocalizeX = 0.0f;
+    constexpr float kWuqiquZeroRelocalizeY = 0.0f;
+    constexpr float kWuqiquZeroRelocalizeYawDeg = -90.0f;
+    constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;
+    constexpr uint16_t kWuqiquYawTurnStableCycles = 200U;
+    constexpr uint8_t kWuqiquSecondWaypointIndex = 1U;
+    constexpr uint8_t kWuqiquYawTargetWaypointIndex = 2U;
+    constexpr uint8_t kWuqiquMeilinWaypointIndex = 3U;
+    constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;
+    constexpr int kPrelimExecGoMeilin = 1;           // 预选赛流程：exec=1 表示跳转梅林。
+    constexpr int kPrelimExecFirstWeapon = 2;        // 预选赛流程：exec=2 表示第 1 个武器头。
+    constexpr int kPrelimExecSecondWeapon = 3;       // 预选赛流程：exec=3 表示第 2 个武器头。
+    constexpr int kPrelimExecThirdWeapon = 4;        // 预选赛流程：exec=4 表示第 3 个武器头。
+    constexpr uint8_t kPrelimWeaponCount = 3U;       // 预选赛连续夹取的武器头数量。
+    constexpr uint8_t kPrelimPickWaypointIndex = 0U; // 预选赛每次夹取从第 1 个跑点开始。
 
     struct TimedStep
     {
@@ -1234,7 +1229,7 @@ extern "C" volatile uint8_t g_ftm_action_state = FTM_ACTION_NONE;
 extern "C" volatile uint8_t wuqiqu_done = 0U;
 extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
 extern "C" volatile float g_ftm_yaw_target_degree = 0.0f;
-extern "C" volatile float g_ftm_lift_up_target_mm = 77.0f;
+extern "C" volatile float g_ftm_lift_up_target_mm = 80.0f;
 extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 214.0f;
 extern "C" volatile float g_ftm_lift_down_target_mm = 68.0f;
 extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;

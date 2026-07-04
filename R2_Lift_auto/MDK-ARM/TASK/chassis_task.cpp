@@ -12,17 +12,13 @@
 #include "lift_step_up.h"
 #include "lift_step_down.h"
 #include "VescMotor.h"
-#include "mieling.h"
+#include "reolcation.h"
 #include "usart_task.h"
 #include "route_task.h"
 #include "arm_comm.h"
 #include "FTMTask.h"
+#include "wuqiqu_task.h"
 #include "conbat_task.h"
-
-extern "C" float WuqiquTask_GetChassisVxTarget(float manual);
-extern "C" float WuqiquTask_GetChassisVyTarget(float manual);
-extern "C" float WuqiquTask_GetChassisVzTarget(float manual);
-extern "C" uint8_t WuqiquTask_IsActive(void);
 
 typedef enum
 {
@@ -191,9 +187,6 @@ extern "C" void chassis_task(void *argument)
             break;
         case CHASSIS_AUTO_MEILING:
             // 梅林区接管底盘速度。
-            target_vx = meiling.getChassisVxTarget(target_vx);
-            target_vy = meiling.getChassisVyTarget(target_vy);
-            target_vz = meiling.getChassisVzTarget(target_vz);
             break;
         case CHASSIS_AUTO_ROUTE_PATH:
             // 1 区跑点接管底盘速度。
