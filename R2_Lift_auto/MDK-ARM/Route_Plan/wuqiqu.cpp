@@ -26,8 +26,8 @@ static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 
 static const WuqiquPathPlanner::TargetPoint kPrelimWeaponHeadPoints[] = {
-    {0.03f, 0.90f, -90.0f, 0.015f, 1.5f},
-    {0.24f, 0.90f, -90.0f, 0.015f, 1.5f},
+    {0.04f, 0.90f, -90.0f, 0.015f, 1.5f},
+    {0.23f, 0.90f, -90.0f, 0.015f, 1.5f},
     {0.44f, 0.90f, -90.0f, 0.015f, 1.5f},
 };
 static const uint8_t kPrelimWeaponHeadCount =
