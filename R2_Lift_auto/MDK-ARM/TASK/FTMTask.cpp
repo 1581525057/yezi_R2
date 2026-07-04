@@ -1,4 +1,5 @@
 ﻿#include "FTMTask.h"
+#include "wuqiqu_task.h"
 #include "FTMLiftAction.h"
 #include "M2006AngleMotor.h"
 #include "RS05.h"
@@ -7,12 +8,6 @@
 #include "cmsis_os.h"
 #include <math.h>
 
-extern "C" void WuqiquTask_Start(void);
-extern "C" void WuqiquTask_StartAt(uint8_t waypoint_index);
-extern "C" void WuqiquTask_Stop(void);
-extern "C" uint8_t WuqiquTask_IsActive(void);
-extern "C" uint8_t WuqiquTask_IsFinished(void);
-extern "C" float WuqiquTask_GetWaypointYawDeg(uint8_t waypoint_index);
 extern "C" volatile uint32_t g_ftm_grab_settle_delay_ms;
 
 enum FTMMainState

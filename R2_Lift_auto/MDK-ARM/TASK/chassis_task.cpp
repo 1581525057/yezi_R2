@@ -17,12 +17,8 @@
 #include "route_task.h"
 #include "arm_comm.h"
 #include "FTMTask.h"
+#include "wuqiqu_task.h"
 #include "conbat_task.h"
-
-extern "C" float WuqiquTask_GetChassisVxTarget(float manual);
-extern "C" float WuqiquTask_GetChassisVyTarget(float manual);
-extern "C" float WuqiquTask_GetChassisVzTarget(float manual);
-extern "C" uint8_t WuqiquTask_IsActive(void);
 
 typedef enum
 {
