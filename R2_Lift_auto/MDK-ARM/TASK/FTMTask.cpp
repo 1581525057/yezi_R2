@@ -18,7 +18,7 @@ enum FTMMainState
     FTM_MAIN_WUQIQU_ZERO = 3,     // 向视觉发送置零命令。 0 0 -90
     FTM_MAIN_DONE = 4,            // 全流程完成保持状态。
     FTM_MAIN_AUTO_PICK_ROUTE = 5, // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
-    FTM_MAIN_AUTO_TURN_READY = 6, // 武器区调整姿态 再次取武器头流程：张爪、对位、M2006 翻转并让 RS05 回 0。
+    FTM_MAIN_AUTO_TURN_READY = 6, // 武器区调整姿态 再次取武器头流程：张爪、对位、M2006 翻转。
     FTM_MAIN_DOCKING = 7,         // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
     FTM_MAIN_GO_MEILIN = 8,       // 前往梅林：先回第三点，再修正航向到 0 度，最后跑梅林目标点。
     FTM_MAIN_AUTO_FULL_FLOW = 9,  // 完整自动流程入口：切入 5，之后依次执行 7、8、4。
@@ -123,6 +123,7 @@ namespace
     uint8_t g_wuqiqu_yaw_turn_active = 0U;
     uint8_t g_wuqiqu_yaw_turn_target_waypoint_index = kWuqiquYawTargetWaypointIndex;
     uint16_t g_wuqiqu_yaw_turn_stable_count = 0U;
+    uint8_t g_turn_ready_yaw_turn_finished = 0U;
 
     const uint8_t kSequenceOpenLiftRs05[] = {
         FTM_ACTION_CLAW_OPEN,
@@ -153,8 +154,7 @@ namespace
         FTM_ACTION_SEQUENCE_ROUTE_CLOSE_LIFT};
 
     const uint8_t kMainSequenceTurnReady[] = {
-        FTM_ACTION_SEQUENCE_OPEN_RS05_TURN,
-        FTM_ACTION_RS05_TO_RETURN};
+        FTM_ACTION_SEQUENCE_OPEN_RS05_TURN};
 
     uint32_t g_wuqiqu_zero_start_tick = 0U;
     uint32_t g_wuqiqu_zero_last_send_tick = 0U;
@@ -419,6 +419,7 @@ namespace
         UpdateYawTargetCorrectionState(main_state);
         ResetActionRuntime();
         g_main_action_step_index = 0U;
+        g_turn_ready_yaw_turn_finished = 0U;
 
         if (IsAutoFullFlowCarryState(main_state) == 0U)
         {
@@ -935,6 +936,36 @@ namespace
         return ((yaw_turn_finished != false) && (mechanism_finished != false));
     }
 
+    bool RunPrelimTurnReadyAndYawTurnSequence(void)
+    {
+        if (g_wuqiqu_parallel_mechanism_finished == 0U)
+        {
+            if (g_ftm_action_state != FTM_ACTION_SEQUENCE_OPEN_RS05_TURN)
+            {
+                EnterActionState(FTM_ACTION_SEQUENCE_OPEN_RS05_TURN);
+            }
+
+            if (RunMechanismSequence(kSequenceOpenRs05Turn,
+                                     static_cast<uint8_t>(sizeof(kSequenceOpenRs05Turn) / sizeof(kSequenceOpenRs05Turn[0]))) != false)
+            {
+                g_wuqiqu_parallel_mechanism_finished = 1U;
+            }
+        }
+
+        if (g_turn_ready_yaw_turn_finished == 0U)
+        {
+            // 预选赛再次取头前，机械准备和底盘转向并行执行；底盘先完成时锁存，避免重复启动转向。
+            SelectWuqiquYawTurnTarget(kWuqiquSecondWaypointIndex);
+            if (RunWuqiquYawTurn180() != 0U)
+            {
+                g_turn_ready_yaw_turn_finished = 1U;
+            }
+        }
+
+        return ((g_wuqiqu_parallel_mechanism_finished != 0U) &&
+                (g_turn_ready_yaw_turn_finished != 0U));
+    }
+
     uint8_t RunGoMeilinYawZero(void)
     {
         if (g_wuqiqu_yaw_turn_active == 0U)
@@ -1346,19 +1377,17 @@ extern "C" void ftm_task(void *argument)
 
         // 主状态 6：武器区姿态准备流程；完成后回到主状态 1。
         case FTM_MAIN_AUTO_TURN_READY:
-            if (RunMainActionSequence(kMainSequenceTurnReady,
-                                      static_cast<uint8_t>(sizeof(kMainSequenceTurnReady) / sizeof(kMainSequenceTurnReady[0]))))
+            if (g_prelim_auto_full_flow_active != 0U)
             {
-                if (g_prelim_auto_full_flow_active != 0U)
+                if (RunPrelimTurnReadyAndYawTurnSequence() != false)
                 {
-                    SelectWuqiquYawTurnTarget(kWuqiquSecondWaypointIndex);
-                    if (RunWuqiquYawTurn180() == 0U)
-                    {
-                        break;
-                    }
                     EnterMainState(FTM_MAIN_AUTO_PICK_ROUTE);
                 }
-                else
+            }
+            else
+            {
+                if (RunMainActionSequence(kMainSequenceTurnReady,
+                                          static_cast<uint8_t>(sizeof(kMainSequenceTurnReady) / sizeof(kMainSequenceTurnReady[0]))))
                 {
                     EnterMainState(FTM_MAIN_IDLE);
                 }
