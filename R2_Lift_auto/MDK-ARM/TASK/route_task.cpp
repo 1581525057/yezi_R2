@@ -23,10 +23,9 @@ float ROUTE_FIND_KFS_GENERATE_PATH_MAX_VEL_M_S = 4.0f;  // 寻找 KFS 自动生�
 float ROUTE_FIND_KFS_GENERATE_PATH_MAX_ACC_M_S2 = 1.2f; // 寻找 KFS 自动生成路径的最大加速度，单位 m/s2。
 float ROUTE_FIND_KFS_GENERATE_PATH_GAP_M = 0.04f;       // 寻找 KFS 自动生成路径点的间距，单位 m。
 
-float ROUTE_FIND_KFS_POSITION_KP = 1.6f;           // B 样条结束后 KFS 终点精定位的二维位置 P 闭环系数。
-float ROUTE_FIND_KFS_POSITION_MAX_VEL_M_S = 0.6f;  // KFS 终点精定位的最大线速度，单位 m/s。
-float ROUTE_FIND_KFS_POSITION_MAX_ACC_M_S2 = 1.2f; // KFS 终点精定位的最大加速度，单位 m/s2。
-
+float ROUTE_FIND_KFS_POSITION_KP = 1.6f;                          // B 样条结束后 KFS 终点精定位的二维位置 P 闭环系数。
+float ROUTE_FIND_KFS_POSITION_MAX_VEL_M_S = 0.6f;                 // KFS 终点精定位的最大线速度，单位 m/s。
+float ROUTE_FIND_KFS_POSITION_MAX_ACC_M_S2 = 1.2f;                // KFS 终点精定位的最大加速度，单位 m/s2。
 float ROUTE_FIND_KFS_POSITION_X_TOL_M = 0.10f;                    // KFS 终点精定位 X 允许误差，单位 m。
 float ROUTE_FIND_KFS_POSITION_Y_TOL_M = 0.05f;                    // KFS 终点精定位 Y 允许误差，单位 m。
 static const uint16_t ROUTE_FIND_KFS_POSITION_STABLE_COUNT = 10U; // KFS 终点精定位连续到位次数。
@@ -550,6 +549,10 @@ void ROUTE_TASK::vision_choice()
         lift_auto.setStepUpHeightMode(200U); // 设置200的高度
         lift_auto.setStepUpBlockNum(block_num);
         lift_auto.setStepUpRadarClimbDirection(last_turn_90_direction_);
+        if (last_step_center_valid_ != 0U && (block_num < 1 || block_num > 3))
+        {
+            lift_auto.setStepUpLastMiddle(last_step_center_x_, last_step_center_y_);
+        }
         lift_auto.setStepUpRadarTarget(middle_x, middle_y);
         lift_auto.setStepUpReturnMiddle((next_command_skips_step_up_middle() != 0U) ? 0U : 1U); // 是否上台阶后回中点
         last_step_center_x_ = middle_x;                                                         // 这次坐标变成下一次
@@ -569,6 +572,10 @@ void ROUTE_TASK::vision_choice()
         lift_auto.setStepUpHeightMode(400U);
         lift_auto.setStepUpBlockNum(block_num);
         lift_auto.setStepUpRadarClimbDirection(last_turn_90_direction_);
+        if (last_step_center_valid_ != 0U && (block_num < 1 || block_num > 3))
+        {
+            lift_auto.setStepUpLastMiddle(last_step_center_x_, last_step_center_y_);
+        }
         lift_auto.setStepUpRadarTarget(middle_x, middle_y);
         lift_auto.setStepUpReturnMiddle((next_command_skips_step_up_middle() != 0U) ? 0U : 1U); // 是否上台阶后回中点
         last_step_center_x_ = middle_x;
