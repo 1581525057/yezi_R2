@@ -17,7 +17,7 @@ uint8_t ARM_COMM_PICK_KFS_STABLE_COUNT = 10U;
 // 未上台阶取 KFS 前沿当前 X 轴预走距离，单位 cm。
 float PICK_KFS_BEFORE_STEP_ADVANCE_CM = 42.0f;
 // 已上台阶取 KFS 前按当前 yaw 方向预走距离，单位 cm。
-float PICK_KFS_AFTER_STEP_ADVANCE_CM = 35.0f;
+float PICK_KFS_AFTER_STEP_ADVANCE_CM = 38.0f;
 
 namespace
 {
