@@ -23,7 +23,8 @@ float ROUTE_FIND_KFS_GENERATE_PATH_MAX_VEL_M_S = 4.0f;  // 寻找 KFS 自动生�
 float ROUTE_FIND_KFS_GENERATE_PATH_MAX_ACC_M_S2 = 1.2f; // 寻找 KFS 自动生成路径的最大加速度，单位 m/s2。
 float ROUTE_FIND_KFS_GENERATE_PATH_GAP_M = 0.04f;       // 寻找 KFS 自动生成路径点的间距，单位 m。
 
-float ROUTE_RELOCATION_STOP_SPEED_LIMIT = 0.01f; // 一区重定位累计前，底盘解算速度需接近 0。
+float ROUTE_RELOCATION_STOP_SPEED_LIMIT = 0.01f;                 // 一区重定位累计前，底盘解算速度需接近 0。
+static const uint16_t ROUTE_RELOCATION_STOP_STABLE_COUNT = 100U; // 底盘速度连续达标次数。
 
 // 寻找 KFS 的终点表，单位：x/y 为 m，yaw 为 rad；按 entrence_KFS 0/1/2 选择。
 static BRPathPose route_find_kfs_goals[] = {
@@ -200,6 +201,7 @@ void ROUTE_TASK::route_reset()
     flag_vision = 0;
     relocation_number = 0;
     relocation_position_sent_ = 0U;
+    relocation_stop_stable_count_ = 0U;
 
     // 清空转弯目标锁存和到位稳定计数。
     yaw_stable_count = 0;
@@ -510,20 +512,37 @@ void ROUTE_TASK::meiling_route()
         {
             // 本次进入该阶段时，重新累计一区重定位稳定周期。
             area_one_relocation.reset();
+            relocation_stop_stable_count_ = 0U;
             relocation_number = 1U;
             break;
         }
 
-        const uint8_t chassis_speed_zero =
+        const uint8_t chassis_speed_in_limit =
             (fabsf(omni_chassis.now.Vx) <= ROUTE_RELOCATION_STOP_SPEED_LIMIT &&
              fabsf(omni_chassis.now.Vy) <= ROUTE_RELOCATION_STOP_SPEED_LIMIT &&
              fabsf(omni_chassis.now.Vz) <= ROUTE_RELOCATION_STOP_SPEED_LIMIT)
                 ? 1U
                 : 0U;
 
+        if (chassis_speed_in_limit != 0U)
+        {
+            if (relocation_stop_stable_count_ < ROUTE_RELOCATION_STOP_STABLE_COUNT)
+            {
+                relocation_stop_stable_count_++;
+            }
+        }
+        else
+        {
+            relocation_stop_stable_count_ = 0U;
+        }
+
+        const uint8_t chassis_speed_zero =
+            (relocation_stop_stable_count_ >= ROUTE_RELOCATION_STOP_STABLE_COUNT) ? 1U : 0U;
+
         if (area_one_relocation.update(relocation_sensor_mask, chassis_speed_zero) == AreaOneRelocation::SENT)
         {
             relocation_number = 0U;
+            relocation_stop_stable_count_ = 0U;
             relocation_position_sent_ = 1U;
             state = PHASE_VISION;
         }
@@ -896,13 +915,13 @@ extern "C" void plan_route(void *argument)
             arm_comm.send();
         }
 
-        // if ((FTM_GetMainState() == 4U) &&
-        //     (route_t.state == PHASE_IDLE) &&
-        //     (ftm_done_route_started == 0U))
-        // {
-        //     route_t.flag_start = 1U;
-        //     ftm_done_route_started = 1U;
-        // }
+        if ((FTM_GetMainState() == 4U) &&
+            (route_t.state == PHASE_IDLE) &&
+            (ftm_done_route_started == 0U))
+        {
+            route_t.flag_start = 1U;
+            ftm_done_route_started = 1U;
+        }
 
         if (flag_step == 1)
         {
