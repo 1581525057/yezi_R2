@@ -490,23 +490,14 @@ void ROUTE_TASK::meiling_route()
         return;
 
     if (state == PHASE_IDLE)
-        state = PHASE_VISION;
+        state = FIRST_RELOCATION;
 
     switch (state)
     {
 
     case FIRST_RELOCATION:
     {
-        // 根据入口 KFS 选择侧向激光：0 用右激光，1 用左右激光，2 用左激光。
-        uint8_t relocation_sensor_mask = SENSOR_FRONT | SENSOR_LEFT;
-        if (entrence_KFS == 0)
-        {
-            relocation_sensor_mask = SENSOR_FRONT | SENSOR_RIGHT;
-        }
-        else if (entrence_KFS == 1)
-        {
-            relocation_sensor_mask = SENSOR_ALL;
-        }
+        const uint8_t relocation_sensor_mask = SENSOR_FRONT | SENSOR_LEFT;
 
         if (relocation_number == 0U)
         {
@@ -561,8 +552,7 @@ void ROUTE_TASK::meiling_route()
             if (path_result == 1U)
             {
                 path_loaded_ = 0U;
-                // 只在第一次到达 KFS 后进入重定位，之后直接回视觉阶段。
-                state = (relocation_position_sent_ == 0U) ? FIRST_RELOCATION : PHASE_VISION;
+                state = PHASE_VISION;
             }
             break;
         }
@@ -575,8 +565,7 @@ void ROUTE_TASK::meiling_route()
             if (path_result == 1U)
             {
                 path_loaded_ = 0U;
-                // 只在第一次到达 KFS 后进入重定位，之后直接回视觉阶段。
-                state = (relocation_position_sent_ == 0U) ? FIRST_RELOCATION : PHASE_VISION;
+                state = PHASE_VISION;
             }
             break;
         }
@@ -589,8 +578,7 @@ void ROUTE_TASK::meiling_route()
             if (path_result == 1U)
             {
                 path_loaded_ = 0U;
-                // 只在第一次到达 KFS 后进入重定位，之后直接回视觉阶段。
-                state = (relocation_position_sent_ == 0U) ? FIRST_RELOCATION : PHASE_VISION;
+                state = PHASE_VISION;
             }
             break;
         }
