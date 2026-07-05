@@ -22,6 +22,12 @@ extern Block_Vision block_vision_middle[16];
 float ROUTE_FIND_KFS_GENERATE_PATH_MAX_VEL_M_S = 4.0f;  // 寻找 KFS 自动生成路径的最大线速度，单位 m/s。
 float ROUTE_FIND_KFS_GENERATE_PATH_MAX_ACC_M_S2 = 1.2f; // 寻找 KFS 自动生成路径的最大加速度，单位 m/s2。
 float ROUTE_FIND_KFS_GENERATE_PATH_GAP_M = 0.04f;       // 寻找 KFS 自动生成路径点的间距，单位 m。
+float ROUTE_FIND_KFS_POSITION_KP = 2.0f;                // B 样条结束后 KFS 终点精定位的二维位置 P 闭环系数。
+float ROUTE_FIND_KFS_POSITION_MAX_VEL_M_S = 0.6f;       // KFS 终点精定位的最大线速度，单位 m/s。
+float ROUTE_FIND_KFS_POSITION_MAX_ACC_M_S2 = 1.2f;      // KFS 终点精定位的最大加速度，单位 m/s2。
+float ROUTE_FIND_KFS_POSITION_X_TOL_M = 0.10f;          // KFS 终点精定位 X 允许误差，单位 m。
+float ROUTE_FIND_KFS_POSITION_Y_TOL_M = 0.05f;          // KFS 终点精定位 Y 允许误差，单位 m。
+static const uint16_t ROUTE_FIND_KFS_POSITION_STABLE_COUNT = 50U; // KFS 终点精定位连续到位次数。
 
 float ROUTE_RELOCATION_STOP_SPEED_LIMIT = 0.01f;                 // 一区重定位累计前，底盘解算速度需接近 0。
 static const uint16_t ROUTE_RELOCATION_STOP_STABLE_COUNT = 100U; // 底盘速度连续达标次数。
@@ -227,6 +233,8 @@ void ROUTE_TASK::route_reset()
 
     // 清空 1 区跑点底盘接管输出。
     path_loaded_ = 0U;
+    find_kfs_positioning_ = 0U;
+    find_kfs_position_stable_count_ = 0U;
     clear_path_output();
 
     // 清空 KFS 数量和机械臂取 KFS 子状态。
@@ -324,6 +332,161 @@ uint8_t ROUTE_TASK::loadGeneratedPathToGoal(const BRPathPose &goal,
     }
 
     return load_follow_plan();
+}
+
+void ROUTE_TASK::route_position_p_speed(float x_err,
+                                        float y_err,
+                                        float kp,
+                                        float max_vel,
+                                        float max_acc,
+                                        float dt_s,
+                                        float last_vx,
+                                        float last_vy,
+                                        float *vx,
+                                        float *vy)
+{
+    if (vx == 0 || vy == 0)
+    {
+        return;
+    }
+
+    *vx = 0.0f;
+    *vy = 0.0f;
+
+    if (kp <= 0.0f || max_vel <= 0.0f)
+    {
+        return;
+    }
+
+    const float dist = sqrtf(x_err * x_err + y_err * y_err);
+    if (dist <= 0.0f)
+    {
+        return;
+    }
+
+    float speed = kp * dist;
+    if (speed > max_vel)
+    {
+        speed = max_vel;
+    }
+
+    const float target_vx = x_err / dist * speed;
+    const float target_vy = y_err / dist * speed;
+
+    if (max_acc <= 0.0f || dt_s <= 0.0f)
+    {
+        *vx = target_vx;
+        *vy = target_vy;
+        return;
+    }
+
+    const float dvx = target_vx - last_vx;
+    const float dvy = target_vy - last_vy;
+    const float dv = sqrtf(dvx * dvx + dvy * dvy);
+    const float max_dv = max_acc * dt_s;
+
+    if (dv > max_dv && max_dv > 0.0f)
+    {
+        const float scale = max_dv / dv;
+        *vx = last_vx + dvx * scale;
+        *vy = last_vy + dvy * scale;
+    }
+    else
+    {
+        *vx = target_vx;
+        *vy = target_vy;
+    }
+}
+
+uint8_t ROUTE_TASK::runFindKfsPositionCloseLoop(const BRPathPose &goal)
+{
+    const float x_err = goal.x_m - vision.x_diff;
+    const float y_err = goal.y_m - vision.y_diff;
+    const uint8_t arrived =
+        (fabsf(x_err) < ROUTE_FIND_KFS_POSITION_X_TOL_M &&
+         fabsf(y_err) < ROUTE_FIND_KFS_POSITION_Y_TOL_M)
+            ? 1U
+            : 0U;
+
+    if (arrived != 0U)
+    {
+        if (find_kfs_position_stable_count_ < ROUTE_FIND_KFS_POSITION_STABLE_COUNT)
+        {
+            find_kfs_position_stable_count_++;
+        }
+
+        if (find_kfs_position_stable_count_ >= ROUTE_FIND_KFS_POSITION_STABLE_COUNT)
+        {
+            find_kfs_positioning_ = 0U;
+            find_kfs_position_stable_count_ = 0U;
+            clear_path_output();
+            return 1U;
+        }
+    }
+    else
+    {
+        find_kfs_position_stable_count_ = 0U;
+    }
+
+    const float yaw_rad = vision.angle_x * 3.1415926f / 180.0f;
+    const float cos_yaw = cosf(yaw_rad);
+    const float sin_yaw = sinf(yaw_rad);
+    const float last_world_vx = cos_yaw * path_vx_target_ - sin_yaw * path_vy_target_;
+    const float last_world_vy = sin_yaw * path_vx_target_ + cos_yaw * path_vy_target_;
+    float world_vx = 0.0f;
+    float world_vy = 0.0f;
+
+    route_position_p_speed(x_err,
+                           y_err,
+                           ROUTE_FIND_KFS_POSITION_KP,
+                           ROUTE_FIND_KFS_POSITION_MAX_VEL_M_S,
+                           ROUTE_FIND_KFS_POSITION_MAX_ACC_M_S2,
+                           0.001f,
+                           last_world_vx,
+                           last_world_vy,
+                           &world_vx,
+                           &world_vy);
+
+    PathFollower::worldToBody(world_vx,
+                              world_vy,
+                              yaw_rad,
+                              &path_vx_target_,
+                              &path_vy_target_);
+    path_wz_target_ = 0.0f;
+    path_active_ = 1U;
+    return 0U;
+}
+
+uint8_t ROUTE_TASK::runFindKfsToGoal(uint8_t index)
+{
+    if (index > 2U)
+    {
+        return 2U;
+    }
+
+    if (find_kfs_positioning_ == 0U)
+    {
+        const uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[index],
+                                                            route_find_kfs_middle_points[index],
+                                                            route_find_kfs_middle_point_counts[index]);
+        if (path_result == 0U)
+        {
+            return 0U;
+        }
+
+        path_loaded_ = 0U;
+        find_kfs_position_stable_count_ = 0U;
+
+        if (path_result != 1U)
+        {
+            clear_path_output();
+            return path_result;
+        }
+
+        find_kfs_positioning_ = 1U;
+    }
+
+    return runFindKfsPositionCloseLoop(route_find_kfs_goals[index]);
 }
 
 void ROUTE_TASK::vision_choice()
@@ -541,47 +704,9 @@ void ROUTE_TASK::meiling_route()
     }
 
     case PHASE_FIND_KFS: // 寻找对应的KFS的位置
-        switch (entrence_KFS)
+        if (runFindKfsToGoal((uint8_t)entrence_KFS) == 1U)
         {
-        case 0:
-        {
-            uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[0],
-                                                          route_find_kfs_middle_points[0],
-                                                          route_find_kfs_middle_point_counts[0]);
-            // 跑到 KFS1 的位置去。
-            if (path_result == 1U)
-            {
-                path_loaded_ = 0U;
-                state = PHASE_VISION;
-            }
-            break;
-        }
-        case 1:
-        {
-            uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[1],
-                                                          route_find_kfs_middle_points[1],
-                                                          route_find_kfs_middle_point_counts[1]);
-            // 跑到 KFS2 的位置去。
-            if (path_result == 1U)
-            {
-                path_loaded_ = 0U;
-                state = PHASE_VISION;
-            }
-            break;
-        }
-        case 2:
-        {
-            uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[2],
-                                                          route_find_kfs_middle_points[2],
-                                                          route_find_kfs_middle_point_counts[2]);
-            // 跑到 KFS3 的位置去。
-            if (path_result == 1U)
-            {
-                path_loaded_ = 0U;
-                state = PHASE_VISION;
-            }
-            break;
-        }
+            state = PHASE_VISION;
         }
         break;
 
