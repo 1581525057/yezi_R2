@@ -22,12 +22,14 @@ extern Block_Vision block_vision_middle[16];
 float ROUTE_FIND_KFS_GENERATE_PATH_MAX_VEL_M_S = 4.0f;  // 寻找 KFS 自动生成路径的最大线速度，单位 m/s。
 float ROUTE_FIND_KFS_GENERATE_PATH_MAX_ACC_M_S2 = 1.2f; // 寻找 KFS 自动生成路径的最大加速度，单位 m/s2。
 float ROUTE_FIND_KFS_GENERATE_PATH_GAP_M = 0.04f;       // 寻找 KFS 自动生成路径点的间距，单位 m。
-float ROUTE_FIND_KFS_POSITION_KP = 2.0f;                // B 样条结束后 KFS 终点精定位的二维位置 P 闭环系数。
-float ROUTE_FIND_KFS_POSITION_MAX_VEL_M_S = 0.6f;       // KFS 终点精定位的最大线速度，单位 m/s。
-float ROUTE_FIND_KFS_POSITION_MAX_ACC_M_S2 = 1.2f;      // KFS 终点精定位的最大加速度，单位 m/s2。
-float ROUTE_FIND_KFS_POSITION_X_TOL_M = 0.10f;          // KFS 终点精定位 X 允许误差，单位 m。
-float ROUTE_FIND_KFS_POSITION_Y_TOL_M = 0.05f;          // KFS 终点精定位 Y 允许误差，单位 m。
-static const uint16_t ROUTE_FIND_KFS_POSITION_STABLE_COUNT = 50U; // KFS 终点精定位连续到位次数。
+
+float ROUTE_FIND_KFS_POSITION_KP = 1.6f;           // B 样条结束后 KFS 终点精定位的二维位置 P 闭环系数。
+float ROUTE_FIND_KFS_POSITION_MAX_VEL_M_S = 0.6f;  // KFS 终点精定位的最大线速度，单位 m/s。
+float ROUTE_FIND_KFS_POSITION_MAX_ACC_M_S2 = 1.2f; // KFS 终点精定位的最大加速度，单位 m/s2。
+
+float ROUTE_FIND_KFS_POSITION_X_TOL_M = 0.10f;                    // KFS 终点精定位 X 允许误差，单位 m。
+float ROUTE_FIND_KFS_POSITION_Y_TOL_M = 0.05f;                    // KFS 终点精定位 Y 允许误差，单位 m。
+static const uint16_t ROUTE_FIND_KFS_POSITION_STABLE_COUNT = 10U; // KFS 终点精定位连续到位次数。
 
 float ROUTE_RELOCATION_STOP_SPEED_LIMIT = 0.01f;                 // 一区重定位累计前，底盘解算速度需接近 0。
 static const uint16_t ROUTE_RELOCATION_STOP_STABLE_COUNT = 100U; // 底盘速度连续达标次数。
