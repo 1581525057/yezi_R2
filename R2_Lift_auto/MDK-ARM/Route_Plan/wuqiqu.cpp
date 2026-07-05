@@ -2,21 +2,22 @@
 #include "main.h"
 #include <math.h>
 
-static const float WUQIQU_PI = 3.14159265358979323846f;  // 圆周率，用于角度换算
+static const float WUQIQU_PI = 3.14159265358979323846f;  // 圆周率，用于角度转弧度
 static const float kDegToRad = WUQIQU_PI / 180.0f;       // 角度转弧度系数
-static const float kApproachVMaxMps = 4.00f;             // 接近阶段最大平移速度，单位 m/s
-static const float kSlowVMaxMps = 2.40f;                 // 减速阶段最大平移速度，单位 m/s
+static const float kApproachVMaxMps = 4.80f;             // 接近阶段最大平移速度，单位 m/s
+static const float kSlowVMaxMps = 2.80f;                 // 减速阶段最大平移速度，单位 m/s
 static const float kContactVMaxMps = 0.90f;              // 接触/贴近阶段最大平移速度，单位 m/s
-static const float kPlannerMaxAngularSpeedRadps = 2.50f; // 规划器输出角速度上限，单位 rad/s
+static const float kPlannerMaxAngularSpeedRadps = 2.80f; // 规划器输出角速度上限，单位 rad/s
 static const float kMinYawCommandFloorRadps = 0.18f;     // yaw 修正硬下限，避免比例缩小后转速过低
-// 加快第二个点到第三个点之间的流程连贯性设置的参数
-static const uint8_t kFastLinkWaypointIndex = 1U;      // 快速衔接航点索引，当前对应第 2 个目标点
-static const uint16_t kFastLinkStableCycles = 8U;      // 快速衔接航点姿态稳定计数阈值，按 runOnce 调用周期计数
-static const uint32_t kFastLinkContactHoldMs = 20U;    // 快速衔接航点接触后最短保持时间，单位 ms
-static const uint32_t kFastLinkContactTimeoutMs = 80U; // 快速衔接航点接触阶段超时时间，单位 ms
+
+// 加快第二个点到第三个点之间的切换，减少到点后等待时间
+static const uint8_t kFastLinkWaypointIndex = 1U;      // 当前对应第 2 个目标点
+static const uint16_t kFastLinkStableCycles = 8U;      // 快速衔接点的姿态稳定计数阈值
+static const uint32_t kFastLinkContactHoldMs = 20U;    // 快速衔接点接触后的最短保持时间
+static const uint32_t kFastLinkContactTimeoutMs = 80U; // 快速衔接点接触阶段超时时间
 
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
-// 参数：x y yaw xy_tolerance yaw_tolerance
+// 参数顺序：x y yaw xy_tolerance yaw_tolerance
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
     {0.04f, 0.91f, -90.0f, 0.015f, 1.5f},
     {0.08f, 0.48f, -90.0f, 0.035f, 3.0f},
@@ -39,23 +40,23 @@ WuqiquPathPlanner::WuqiquPathPlanner()
 {
     reset();
 
-    min_move_v_ = 0.40f; // 平移输出下限，避免小误差时底盘不动，单位 m/s
+    min_move_v_ = 0.45f; // 平移输出下限，避免小误差时底盘不动，单位 m/s
 
-    slow_dist_ = 0.15f;     // 距目标小于该值后进入减速区，单位 m
-    contact_dist_ = 0.025f; // 距目标小于该值后进入接触/贴近段，单位 m
+    slow_dist_ = 0.12f;     // 距目标小于该值后进入减速区，单位 m
+    contact_dist_ = 0.020f; // 距目标小于该值后进入接触/贴近段，单位 m
     finish_dist_ = 0.010f;  // XY 到点判定距离，单位 m
 
-    kp_approach_ = 6.5f; // 接近阶段位置比例增益
-    kd_approach_ = 0.9f; // 接近阶段位置微分增益
-    kp_slow_ = 5.5f;     // 减速阶段位置比例增益
-    kd_slow_ = 0.8f;     // 减速阶段位置微分增益
+    kp_approach_ = 7.0f; // 接近阶段位置比例增益
+    kd_approach_ = 0.8f; // 接近阶段位置微分增益
+    kp_slow_ = 6.0f;     // 减速阶段位置比例增益
+    kd_slow_ = 0.75f;    // 减速阶段位置微分增益
     kp_contact_ = 3.5f;  // 接触/贴近阶段位置比例增益
     kd_contact_ = 0.8f;  // 接触/贴近阶段位置微分增益
 
     yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
-    yaw_kp_ = 2.4f;               // yaw 角度误差比例增益
-    min_yaw_wz_ = 0.50f;          // yaw 最小角速度输出，单位 rad/s
-    strong_yaw_wz_ = 0.80f;       // 大角度误差时的最小角速度输出，单位 rad/s
+    yaw_kp_ = 2.8f;               // yaw 角度误差比例增益
+    min_yaw_wz_ = 0.55f;          // yaw 最小角速度输出，单位 rad/s
+    strong_yaw_wz_ = 0.90f;       // 大角度误差时的最小角速度输出，单位 rad/s
     strong_yaw_error_deg_ = 6.0f; // 判定为大角度误差的阈值，单位 deg
     yaw_tolerance_deg_ = 2.0f;    // yaw 到位判定角度误差，单位 deg
 
@@ -234,7 +235,8 @@ int WuqiquPathPlanner::follow(const Pose &current_pose)
         const uint8_t pose_stable = (xy_in_tolerance != 0U && yaw_abs_deg <= target_yaw_tolerance_deg) ? 1U : 0U;
         const uint16_t stable_cycles = (current_index_ == kFastLinkWaypointIndex) ? kFastLinkStableCycles : stable_cycles_;
         const uint32_t contact_hold_ms = (current_index_ == kFastLinkWaypointIndex) ? kFastLinkContactHoldMs : contact_hold_ms_;
-        const uint32_t contact_timeout_ms = (current_index_ == kFastLinkWaypointIndex) ? kFastLinkContactTimeoutMs : contact_timeout_ms_;
+        const uint32_t contact_timeout_ms =
+            (current_index_ == kFastLinkWaypointIndex) ? kFastLinkContactTimeoutMs : contact_timeout_ms_;
 
         if (pose_stable != 0U)
         {
@@ -367,5 +369,6 @@ float WuqiquPathPlanner::safeSqrt(float value) const
     {
         return 0.0f;
     }
+
     return sqrtf(value);
 }
