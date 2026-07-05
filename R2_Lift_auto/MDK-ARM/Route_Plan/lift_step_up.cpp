@@ -669,6 +669,14 @@ void LiftAuto::setStepUpRadarClimbDirection(int8_t y_direction)
     }
 }
 
+// 同步路线层记录的最近一次台阶中心，供下一次上台阶计算爬升基准。
+void LiftAuto::setStepUpLastMiddle(float x_ref_middle, float y_ref_middle)
+{
+    step_up_radar_last_x_ref_middle_ = x_ref_middle;
+    step_up_radar_last_y_ref_middle_ = y_ref_middle;
+    step_up_radar_last_middle_valid_ = 1U;
+}
+
 void LiftAuto::setStepUpBlockNum(int num)
 {
     step_up_block_num_ = num;
