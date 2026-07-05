@@ -98,10 +98,13 @@ uint8_t ArmComm::executeAction(uint8_t action_code, uint8_t num_KFS)
         setFrame(0x01U, 0x00U, 0x00U, 0x02U, 0x00U);
         break;
 
-    case ACTION_ZONE3_FETCH_LOWER:
-        setFrame(0x01U, num_KFS, 0x00U, 0x00U, 0x00U);
+    case ACTION_ZONE3_FETCH_LOWER: // 取车底层KFS
+        setFrame(0x01U, 0x02U, 0x04U, 0x03U, 0x00U);
         break;
 
+    case ACTION_ZONE3_PLACE_LOWER: // 放车底层KFS
+        setFrame(0x01U, 0x02U, 0x04U, 0x04U, 0x00U);
+        break;
     case ACTION_ZONE3_RESET:
         setFrame(0x01U, 0x00U, 0x00U, 0x00U, 0x00U);
         break;
