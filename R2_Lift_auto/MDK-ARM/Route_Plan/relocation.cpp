@@ -17,6 +17,7 @@ namespace
     const float FRONT_DT35_TO_CENTER_MM = 308.18f;   // 前方 DT35 到车中心的安装距离，单位 mm。
     const float SIDE_LASER_TO_CENTER_MM = 309.23f;   // 左右激光到车中心的安装距离，单位 mm。
     const float SIDE_LASER_TO_WALL = 125.0f;         // 墙的距离 单位mm。
+    const float LEFT_LASER_Y_COMPENSATION_MM = 50.0f; // 左侧单激光重定位后 Y 偏 -5cm，补回 50mm。
     const float SIDE_Y_ERROR_LIMIT_MM = 10.0f;       // 左右两侧推算出的 Y 误差阈值，单位 mm。
     const uint16_t RELOCATION_STABLE_COUNT = 100U;   // 误差连续满足要求的周期数。
 
@@ -84,7 +85,7 @@ uint8_t AreaOneRelocation::update(uint8_t sensor_mask, uint8_t chassis_speed_zer
     else if (use_left != 0U)
     {
         const float left_mm = static_cast<float>(laser_left.data.distance_mm);
-        y_mm = AREA_ONE_ORIGIN_L_MM - (left_mm + SIDE_LASER_TO_CENTER_MM + SIDE_LASER_TO_WALL);
+        y_mm = AREA_ONE_ORIGIN_L_MM - (left_mm + SIDE_LASER_TO_CENTER_MM + SIDE_LASER_TO_WALL) + LEFT_LASER_Y_COMPENSATION_MM;
     }
     else
     {

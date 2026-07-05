@@ -17,7 +17,7 @@ uint8_t ARM_COMM_PICK_KFS_STABLE_COUNT = 10U;
 // 未上台阶取 KFS 前沿当前 X 轴预走距离，单位 cm。
 float PICK_KFS_BEFORE_STEP_ADVANCE_CM = 42.0f;
 // 已上台阶取 KFS 前按当前 yaw 方向预走距离，单位 cm。
-float PICK_KFS_AFTER_STEP_ADVANCE_CM = 38.0f;
+float PICK_KFS_AFTER_STEP_ADVANCE_CM = 34.0f;
 
 namespace
 {
@@ -90,35 +90,28 @@ uint8_t ArmComm::executeAction(uint8_t action_code, uint8_t num_KFS)
         setFrame(0x01U, 0x02U, 0x04U, 0x02U, 0x00U);
         break;
 
-    case ACTION_ZONE3_FETCH_UPPER:
-        setFrame(0x01U, num_KFS, 0x00U, 0x00U, 0x00U);
-        break;
-
-    case ACTION_ZONE3_PLACE_UPPER:
-        setFrame(0x01U, 0x00U, 0x00U, 0x02U, 0x00U);
-        break;
-
-    case ACTION_ZONE3_FETCH_LOWER: // 取车底层KFS
-        setFrame(0x01U, 0x02U, 0x04U, 0x03U, 0x00U);
-        break;
-
     case ACTION_ZONE3_PLACE_LOWER: // 放车底层KFS
         setFrame(0x01U, 0x02U, 0x04U, 0x04U, 0x00U);
         break;
-    case ACTION_ZONE3_RESET:
-        setFrame(0x01U, 0x00U, 0x00U, 0x00U, 0x00U);
+    case ACTION_ZONE3_PLACE_FINALL: // 放最后一个KFS
+        setFrame(0x01U, 0x02U, 0x04U, 0x06U, 0x00U);
+
+    case ACTION_PICK_FIRST_KFS: // 取第一个KFS
+        setFrame(0x01U, 0x01U, 0x04U, 0x00U, 0x00U);
+        break;
+
+    case ACTION_PICK_SECOND_KFS: // 取第二个KFS
+        setFrame(0x01U, 0x02U, 0x04U, 0x00U, 0x00U);
+        break;
+
+    case ACTION_PICK_THIRD_KFS: // 取二层KFS 第三个
+        setFrame(0x01U, 0x03U, 0x04U, 0x00U, 0x00U);
         break;
 
     case ACTION_POWER_OFF:
         setFrame(0x00U, 0x00U, 0x00U, 0x00U, 0x00U);
         break;
 
-    case ACTION_PICK_FIRST_KFS:
-        setFrame(0x01U, 0x01U, 0x04U, 0x00U, 0x00U);
-        break;
-
-    case ACTION_PICK_SECOND_KFS:
-        setFrame(0x01U, 0x02U, 0x04U, 0x00U, 0x00U);
         break;
 
     default:

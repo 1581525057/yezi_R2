@@ -48,7 +48,7 @@ static uint8_t vision_last_block_count = 0U;
 // 每个方块的中心坐标
 Block_Vision block_vision_middle[16];
 float block_middle_x = 3.45f;
-float block_middle_y = -1.5f;
+float block_middle_y = -1.59f;
 
 // 通过第2个方块来计算得到其他8个的坐标位置
 
@@ -592,7 +592,7 @@ extern "C" void usart_task(void *argument)
 
         if (Red == 1)
         {
-            static uint8_t red_step = 1; //1=待触发9, 2=已完成
+            static uint8_t red_step = 1; // 1=待触发9, 2=已完成
             if (red_step == 1)
             {
                 g_ftm_main_state = 9; // 再执行完整自动流程

@@ -8,7 +8,7 @@
 class ArmComm
 {
 public:
-       enum
+    enum
     {
         FRAME_LENGTH = 7,
         RX_FRAME_LENGTH = 6
@@ -39,7 +39,10 @@ public:
         ACTION_POWER_OFF,         // 关机
         ACTION_PICK_FIRST_KFS,    // 拾取第一个 KFS
         ACTION_PICK_SECOND_KFS,   // 拾取第二个 KFS
-        ACTION_ZONE3_PLACE_LOWER,
+        ACTION_ZONE3_PLACE_LOWER, // 放车底层KFS
+        ACTION_PICK_THIRD_KFS,    // 拾取第三个KFS
+        ACTION_ZONE3_PLACE_FINALL, //放最后一个KFS
+
     };
 
     ArmComm();

@@ -64,8 +64,9 @@ private:
         COMBINE_ZONE3_READY,             // 阶段4：发送九宫格预备机械臂命令。
         COMBINE_WAIT_FINAL_LIFT_HEIGHT,  // 阶段5-1：收气缸后等待升降实际回到 1 档高度。
         COMBINE_FINAL_FORWARD,           // 阶段5-2：1 档到位后，底盘按 ch2 车体前向靠近。
-        COMBINE_PLACE_HAND,              // 阶段5-3：等待手持 KFS 激光松开后发送放置命令。
-        COMBINE_PLACE_LOWER_KFS          // 阶段5-4：等待车内 KFS 激光松开后发送放置命令。
+        COMBINE_WAIT_PLACE_HAND_DT35,    // 阶段5-3：等待前方 DT35 大于 10cm 后进入放手持 KFS。
+        COMBINE_PLACE_HAND,              // 阶段5-4：等待手持 KFS 激光松开后发送放置命令。
+        COMBINE_PLACE_LOWER_KFS          // 阶段5-5：等待车内 KFS 激光松开后发送放置命令。
     };
 
     enum PickKfsStep
@@ -102,7 +103,9 @@ private:
     uint8_t pick_kfs_meiling_active_;
     uint8_t pick_kfs_second_forward_done_;
     uint8_t pick_kfs_path_stable_count_;
+    uint16_t kfs_place_stop_stable_count_;
     uint8_t kfs_place_index_;
+    uint8_t kfs_place_precision_active_;
     uint8_t kfs_place_laser_blocked_;
     uint8_t combine_pre_lift_ready_;
     uint8_t combine_crossed_finish_height_;
