@@ -334,6 +334,10 @@ uint8_t ROUTE_TASK::loadGeneratedPathToGoal(const BRPathPose &goal,
     return load_follow_plan();
 }
 
+/*
+ * 二维位置 P 闭环速度规划。
+ * 输入世界系 x/y 坐标误差，输出世界系目标速度，并限制最大速度和单周期速度变化量。
+ */
 void ROUTE_TASK::route_position_p_speed(float x_err,
                                         float y_err,
                                         float kp,
@@ -380,6 +384,7 @@ void ROUTE_TASK::route_position_p_speed(float x_err,
         return;
     }
 
+    // 用二维速度变化量统一限加速度，避免斜向运动时合速度突变。
     const float dvx = target_vx - last_vx;
     const float dvy = target_vy - last_vy;
     const float dv = sqrtf(dvx * dvx + dvy * dvy);
@@ -402,6 +407,8 @@ uint8_t ROUTE_TASK::runFindKfsPositionCloseLoop(const BRPathPose &goal)
 {
     const float x_err = goal.x_m - vision.x_diff;
     const float y_err = goal.y_m - vision.y_diff;
+
+    // x/y 都进入允许误差后，连续稳定一段时间才认为真正到位。
     const uint8_t arrived =
         (fabsf(x_err) < ROUTE_FIND_KFS_POSITION_X_TOL_M &&
          fabsf(y_err) < ROUTE_FIND_KFS_POSITION_Y_TOL_M)
@@ -428,6 +435,7 @@ uint8_t ROUTE_TASK::runFindKfsPositionCloseLoop(const BRPathPose &goal)
         find_kfs_position_stable_count_ = 0U;
     }
 
+    // 限加速度需要以上一周期世界系速度为起点，因此先把底盘速度转回世界系。
     const float yaw_rad = vision.angle_x * 3.1415926f / 180.0f;
     const float cos_yaw = cosf(yaw_rad);
     const float sin_yaw = sinf(yaw_rad);
@@ -447,6 +455,7 @@ uint8_t ROUTE_TASK::runFindKfsPositionCloseLoop(const BRPathPose &goal)
                            &world_vx,
                            &world_vy);
 
+    // 底盘接管接口使用车体系速度，P 闭环算完后再转回车体系输出。
     PathFollower::worldToBody(world_vx,
                               world_vy,
                               yaw_rad,
@@ -466,6 +475,7 @@ uint8_t ROUTE_TASK::runFindKfsToGoal(uint8_t index)
 
     if (find_kfs_positioning_ == 0U)
     {
+        // 第一步先跑 B 样条到 KFS 粗略终点。
         const uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[index],
                                                             route_find_kfs_middle_points[index],
                                                             route_find_kfs_middle_point_counts[index]);
@@ -483,9 +493,11 @@ uint8_t ROUTE_TASK::runFindKfsToGoal(uint8_t index)
             return path_result;
         }
 
+        // B 样条完成后，同一个状态里立刻接 KFS 终点 P 闭环精定位。
         find_kfs_positioning_ = 1U;
     }
 
+    // 第二步持续做终点精定位，到位后返回 1，让外层切回视觉阶段。
     return runFindKfsPositionCloseLoop(route_find_kfs_goals[index]);
 }
 

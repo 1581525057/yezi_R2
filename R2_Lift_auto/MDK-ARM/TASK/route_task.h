@@ -72,8 +72,8 @@ private:
     uint8_t loadGeneratedPathToGoal(const BRPathPose &goal,
                                     const BRPathControlPoint *middle_points,
                                     std::size_t middle_point_count);
-    uint8_t runFindKfsToGoal(uint8_t index);
-    uint8_t runFindKfsPositionCloseLoop(const BRPathPose &goal);
+    uint8_t runFindKfsToGoal(uint8_t index); // 寻找 KFS：先跑 B 样条，结束后接终点精定位。
+    uint8_t runFindKfsPositionCloseLoop(const BRPathPose &goal); // 对 KFS 终点做二维位置 P 闭环。
     static void route_position_p_speed(float x_err,
                                        float y_err,
                                        float kp,
