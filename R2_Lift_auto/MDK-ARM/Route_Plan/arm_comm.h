@@ -39,6 +39,7 @@ public:
         ACTION_POWER_OFF,         // 关机
         ACTION_PICK_FIRST_KFS,    // 拾取第一个 KFS
         ACTION_PICK_SECOND_KFS,   // 拾取第二个 KFS
+        ACTION_ZONE3_PLACE_LOWER,
     };
 
     ArmComm();
