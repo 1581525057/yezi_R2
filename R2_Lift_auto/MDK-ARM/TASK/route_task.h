@@ -40,6 +40,7 @@ private:
     uint8_t flag_relocation;
     uint8_t relocation_number;
     uint8_t relocation_position_sent_; // 是否已经同步过第一次重定位坐标。
+    uint16_t relocation_stop_stable_count_; // 底盘速度连续达标计数。
     uint16_t yaw_stable_count;
     uint8_t yaw_target_valid_;       // 当前转向阶段是否已经锁存相对 yaw 目标。
     int8_t last_turn_90_direction_;  // 根据雷达 yaw 分类的当前朝向：0 为 0 度，1 为 +90 度，-1 为 -90 度。
