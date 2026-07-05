@@ -22,6 +22,8 @@ float CONBAT_PICK_KFS_PATH_MAX_VEL_M_S = 1.0f;            // 捡 KFS 跑点的�
 float CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2 = 0.8f;           // 捡 KFS 跑点的最大加速度，单位 m/s2。
 float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2 = 0.9f; // KFS 等待阶段车体前进加速度，单位 m/s2。
 float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS = 1.0f;  // KFS 等待阶段车体前进最大速度，单位 m/s。
+float CONBAT_PICK_KFS_FIRST_BACK_DISTANCE_M = 0.06f;      // 第一个 KFS 吸取成功后沿 X 轴后退距离，单位 m。
+float CONBAT_PICK_KFS_FIRST_BACK_SPEED_MPS = 0.4f;        // 第一个 KFS 吸取成功后沿 X 轴后退速度，单位 m/s。
 float CONBAT_PICK_GO_TO_COMBINE_KP = 1.6f;                // 去合体目标点的二维位置 P 闭环系数。
 float CONBAT_PICK_GO_TO_COMBINE_TOL_M = 0.03f;            // 去合体目标点的到位误差，单位 m。
 
@@ -46,7 +48,7 @@ uint8_t CONBAT_COMBINE_STABLE_COUNT = 10U;             // 合体到位判定需�
 // 上坡状态的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_ramp_up_goals[] = {
     // {3.43f, 1.6f, 0.0f},
-    {3.23f, 1.6f, 0.0f}};
+    {2.93f, 1.6f, 0.0f}};
 
 // 上坡状态的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint conbat_ramp_up_middle_points[] = {
@@ -54,16 +56,17 @@ static BRPathControlPoint conbat_ramp_up_middle_points[] = {
     {1.69f, -0.04f},
     {3.46f, -0.06f},
     {3.36f, 0.53f},
-    {3.28f, 1.5f},
-    {3.43f, 1.6f},
+    {3.18f, 1.5f},
+    {3.18f, 1.6f},
 };
 static const std::size_t conbat_ramp_up_middle_point_count =
     sizeof(conbat_ramp_up_middle_points) / sizeof(conbat_ramp_up_middle_points[0]);
 
 // 捡 KFS 状态的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_pick_kfs_goals[] = {
-    {3.05f, 2.33f, 0.0f},
-    {3.05f, 3.06f, 0.0f},
+    {3.05f, 1.81f, 0.0f},
+    {3.00f, 2.52f, 0.0f},
+    {3.05f, 3.24f, 0.0f},
 };
 
 // 合体目标终点表，单位：x/y 为 m，yaw 为 rad；后续直接改这里。
@@ -78,31 +81,21 @@ static BRPathPose conbat_kfs_place_goals[] = {
     {0.0f, 0.0f, 0.0f},
 };
 
-// 放 KFS1 状态的中间点表，单位：x/y 为 m；按顺序依次经过。
-static BRPathControlPoint conbat_kfs_place_0_middle_points[] = {
-    {0.0f, 0.0f},
-};
-
-// 放 KFS2 状态的中间点表，单位：x/y 为 m；按顺序依次经过。
-static BRPathControlPoint conbat_kfs_place_1_middle_points[] = {
-    {0.0f, 0.0f},
-};
-
-// 放 KFS3 状态的中间点表，单位：x/y 为 m；按顺序依次经过。
-static BRPathControlPoint conbat_kfs_place_2_middle_points[] = {
+// 放 KFS 状态共用的中间点表，单位：x/y 为 m；按顺序依次经过。
+static BRPathControlPoint conbat_kfs_place_middle_point_table[] = {
     {0.0f, 0.0f},
 };
 
 static const BRPathControlPoint *conbat_kfs_place_middle_points[] = {
-    conbat_kfs_place_0_middle_points,
-    conbat_kfs_place_1_middle_points,
-    conbat_kfs_place_2_middle_points,
+    conbat_kfs_place_middle_point_table,
+    conbat_kfs_place_middle_point_table,
+    conbat_kfs_place_middle_point_table,
 };
 
 static const std::size_t conbat_kfs_place_middle_point_counts[] = {
-    sizeof(conbat_kfs_place_0_middle_points) / sizeof(conbat_kfs_place_0_middle_points[0]),
-    sizeof(conbat_kfs_place_1_middle_points) / sizeof(conbat_kfs_place_1_middle_points[0]),
-    sizeof(conbat_kfs_place_2_middle_points) / sizeof(conbat_kfs_place_2_middle_points[0]),
+    sizeof(conbat_kfs_place_middle_point_table) / sizeof(conbat_kfs_place_middle_point_table[0]),
+    sizeof(conbat_kfs_place_middle_point_table) / sizeof(conbat_kfs_place_middle_point_table[0]),
+    sizeof(conbat_kfs_place_middle_point_table) / sizeof(conbat_kfs_place_middle_point_table[0]),
 };
 
 CONBAT_TASK conbat_t;
@@ -267,6 +260,7 @@ void CONBAT_TASK::reset(void)
     path_loaded_ = 0U;
     ramp_up_waiting_ = 0U;
     pick_kfs_step_ = PICK_KFS_FIRST_ACTION;
+    place_kfs_step_ = PLACE_KFS_LOWER_ACTION;
     combine_step_ = COMBINE_PRE_LIFT;
     pick_kfs_meiling_active_ = 0U;
     pick_kfs_second_forward_done_ = 0U;
@@ -281,6 +275,7 @@ void CONBAT_TASK::reset(void)
     combine_final_lift_command_seq_ = 0U;
     lift_switch_target_ = 0U;
     lift_linear_speed_target_ = 0.0f;
+    pick_kfs_first_back_start_x_m_ = 0.0f;
     yaw_target_enabled = 0U;
     yaw_target_degree = 0.0f;
     clearPathOutput();
@@ -323,6 +318,12 @@ void CONBAT_TASK::runOnce(void)
         update_state_by_action_result(action_result, CONBAT_IDLE, &state);
         break;
 
+    case CONBAT_PLACE_KFS:
+        /* 放置 KFS 状态：按子状态依次取车内 KFS、跑放置点并放手。 */
+        action_result = runPlaceKfs();
+        update_state_by_action_result(action_result, CONBAT_IDLE, &state);
+        break;
+
     case CONBAT_COMBINE:
         if (falg_wudi == 1)
         {
@@ -341,7 +342,6 @@ void CONBAT_TASK::runOnce(void)
         clearPathOutput();
         break;
 
-    case CONBAT_PLACE_KFS:
     case CONBAT_AVOID:
     default:
         /* 未补具体动作的状态先保持安全停车。 */
@@ -509,6 +509,7 @@ void CONBAT_TASK::handleStateChanged(void)
     {
         pick_kfs_step_ = PICK_KFS_FIRST_ACTION;
     }
+    place_kfs_step_ = PLACE_KFS_LOWER_ACTION;
     combine_step_ = COMBINE_PRE_LIFT;
     pick_kfs_meiling_active_ = 0U;
     pick_kfs_second_forward_done_ = 0U;
@@ -596,7 +597,11 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         {
             return 2U;
         }
-        arm_comm.send();
+        /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
+        for (uint8_t i = 0U; i < 10U; ++i)
+        {
+            arm_comm.send();
+        }
 
         pick_kfs_step_ = PICK_KFS_PATH_TO_AREA;
         pick_kfs_path_stable_count_ = 0U;
@@ -611,7 +616,7 @@ uint8_t CONBAT_TASK::runPickKfs(void)
             clearPathOutput();
             pick_kfs_second_forward_done_ = 0U;
             pick_kfs_path_stable_count_ = 0U;
-            pick_kfs_step_ = PICK_KFS_PATH_TO_SECOND_AREA;
+            pick_kfs_step_ = PICK_KFS_SECOND_ACTION;
             return 0U;
         }
 
@@ -672,7 +677,7 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         {
             pick_kfs_second_forward_done_ = 0U;
             pick_kfs_path_stable_count_ = 0U;
-            pick_kfs_step_ = PICK_KFS_PATH_TO_SECOND_AREA;
+            pick_kfs_step_ = PICK_KFS_SECOND_ACTION;
             return 0U;
         }
 
@@ -688,7 +693,8 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         {
             clearPathOutput();
             pick_kfs_second_forward_done_ = 0U;
-            pick_kfs_step_ = PICK_KFS_PATH_TO_SECOND_AREA;
+            pick_kfs_first_back_start_x_m_ = vision.x_diff;
+            pick_kfs_step_ = PICK_KFS_FIRST_BACKWARD;
             return 0U;
         }
 
@@ -705,9 +711,49 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         }
         return 0U;
 
+    case PICK_KFS_FIRST_BACKWARD:
+    {
+        /* 第一个 KFS 吸取成功后，按视觉 X 坐标确认至少后退 6cm，再发送第二个 KFS 机械臂动作。 */
+        const float x_back_m = pick_kfs_first_back_start_x_m_ - vision.x_diff;
+        if (x_back_m >= CONBAT_PICK_KFS_FIRST_BACK_DISTANCE_M)
+        {
+            clearPathOutput();
+            pick_kfs_path_stable_count_ = 0U;
+            pick_kfs_step_ = PICK_KFS_SECOND_ACTION;
+            return 0U;
+        }
+
+        /* 这里用世界系 X 负方向后退，再转换成底盘车体系速度输出。 */
+        const float yaw_rad = vision.angle_x * CONBAT_DEG_TO_RAD;
+        PathFollower::worldToBody(-CONBAT_PICK_KFS_FIRST_BACK_SPEED_MPS,
+                                  0.0f,
+                                  yaw_rad,
+                                  &path_vx_target_,
+                                  &path_vy_target_);
+        path_wz_target_ = 0.0f;
+        path_active_ = 1U;
+        return 0U;
+    }
+
+    case PICK_KFS_SECOND_ACTION:
+        /* 第五步：发送拾取第二个 KFS 的机械臂指令。 */
+        if (arm_comm.executeAction(ArmComm::ACTION_PICK_SECOND_KFS, 2U) == 0U)
+        {
+            return 2U;
+        }
+        /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
+        for (uint8_t i = 0U; i < 10U; ++i)
+        {
+            arm_comm.send();
+        }
+        pick_kfs_second_forward_done_ = 0U;
+        pick_kfs_path_stable_count_ = 0U;
+        pick_kfs_step_ = PICK_KFS_PATH_TO_SECOND_AREA;
+        return 0U;
+
     case PICK_KFS_PATH_TO_SECOND_AREA:
     {
-        /* 第五步：用梯形速度跑到 KFS 2 拾取区域的粗略点。 */
+        /* 第六步：用梯形速度跑到 KFS 2 拾取区域的粗略点。 */
         pick_kfs_meiling_active_ = 0U;
         path_loaded_ = 0U;
         path_follower_.reset();
@@ -720,7 +766,7 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         {
             clearPathOutput();
             pick_kfs_path_stable_count_ = 0U;
-            pick_kfs_step_ = PICK_KFS_SECOND_ACTION;
+            pick_kfs_step_ = PICK_KFS_SECOND_WAIT_READY;
             return 0U;
         }
 
@@ -755,17 +801,6 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         path_active_ = 1U;
         return 0U;
     }
-
-    case PICK_KFS_SECOND_ACTION:
-        /* 第六步：发送拾取第二个 KFS 的机械臂指令。 */
-        if (arm_comm.executeAction(ArmComm::ACTION_PICK_SECOND_KFS, 2U) == 0U)
-        {
-            return 2U;
-        }
-        arm_comm.send();
-        pick_kfs_second_forward_done_ = 0U;
-        pick_kfs_step_ = PICK_KFS_SECOND_WAIT_READY;
-        return 0U;
 
     case PICK_KFS_SECOND_WAIT_READY:
         /* 第七步：等待 event=5 后，按前向 DT35 距离边走边吸取。 */
@@ -860,7 +895,128 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         return 2U;
     }
 }
-uint16_t flag_heti = 0;
+
+uint8_t CONBAT_TASK::runPlaceKfs(void)
+{
+    switch (place_kfs_step_)
+    {
+    case PLACE_KFS_LOWER_ACTION:
+        /* 第一步：发送机械臂放车内底层 KFS 的动作，随后去取 KFS 的精确点。 */
+
+        clearPathOutput();
+
+        if (arm_comm.executeAction(ArmComm::ACTION_ZONE3_PLACE_LOWER, 0U) == 0U)
+        {
+            return 2U;
+        }
+        arm_comm.send();
+        pick_kfs_path_stable_count_ = 0U;
+        place_kfs_step_ = PLACE_KFS_PATH_TO_PICK;
+        return 0U;
+
+    case PLACE_KFS_PATH_TO_PICK:
+    {
+        /* 第二步：二维 P 闭环跑到 conbat_pick_kfs_goals[2]，作为取 KFS 的精确点。 */
+        const float x_err = conbat_pick_kfs_goals[2].x_m - vision.x_diff;
+        const float y_err = conbat_pick_kfs_goals[2].y_m - vision.y_diff;
+        const uint8_t position_reached = (fabsf(x_err) < CONBAT_PICK_GO_TO_COMBINE_TOL_M &&
+                                          fabsf(y_err) < CONBAT_PICK_GO_TO_COMBINE_TOL_M)
+                                             ? 1U
+                                             : 0U;
+
+        if (conbat_stable_confirm(position_reached,
+                                  &pick_kfs_path_stable_count_,
+                                  10U) != 0U)
+        {
+            clearPathOutput();
+            pick_kfs_path_stable_count_ = 0U;
+            place_kfs_step_ = PLACE_KFS_DT35_FORWARD;
+            return 0U;
+        }
+
+        /* 用上一周期车体系速度换算出的世界系速度作为限加速起点。 */
+        const float yaw_rad = vision.angle_x * CONBAT_DEG_TO_RAD;
+        const float cos_yaw = cosf(yaw_rad);
+        const float sin_yaw = sinf(yaw_rad);
+        const float last_world_vx = cos_yaw * path_vx_target_ - sin_yaw * path_vy_target_;
+        const float last_world_vy = sin_yaw * path_vx_target_ + cos_yaw * path_vy_target_;
+        float world_vx = 0.0f;
+        float world_vy = 0.0f;
+
+        conbat_position_p_speed(x_err,
+                                y_err,
+                                CONBAT_PICK_GO_TO_COMBINE_KP,
+                                CONBAT_PICK_KFS_PATH_MAX_VEL_M_S,
+                                CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2,
+                                0.001f,
+                                last_world_vx,
+                                last_world_vy,
+                                &world_vx,
+                                &world_vy);
+
+        /* 底盘接口使用车体系速度，这里从世界系转回车体系输出。 */
+        PathFollower::worldToBody(world_vx,
+                                  world_vy,
+                                  yaw_rad,
+                                  &path_vx_target_,
+                                  &path_vy_target_);
+        path_wz_target_ = 0.0f;
+        path_active_ = 1U;
+        return 0U;
+    }
+
+    case PLACE_KFS_DT35_FORWARD:
+        /* 第三步：按 DT35 距离边向前走边吸取，机械臂回传 event=1 后进入放置路径。 */
+        if (arm_comm.rx_data_.event == 1U)
+        {
+            clearPathOutput();
+            yaw_target = 90.0f;
+            path_loaded_ = 0U;
+            place_kfs_step_ = PLACE_KFS_PATH_TO_PLACE;
+            return 0U;
+        }
+
+        clearPathOutput();
+        if (CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM > 0.0f && dt35.ch2.valid != 0U)
+        {
+            const float laser_mm = dt35.ch2.distance_filtered;
+            path_active_ = 1U;
+            path_vx_target_ = conbat_trapezoid_speed((laser_mm - CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM) * 0.001f,
+                                                     CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2,
+                                                     CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS);
+            path_vy_target_ = 0.0f;
+            path_wz_target_ = 0.0f;
+        }
+        return 0U;
+
+    case PLACE_KFS_PATH_TO_PLACE:
+    {
+        /* 第四步：跑到当前选择的放 KFS 终点，到位后立刻发送放手持 KFS 动作。 */
+
+        const uint8_t path_result = runSelectKfsPlace();
+        if (path_result == 1U)
+        {
+            clearPathOutput();
+            if (arm_comm.executeAction(ArmComm::ACTION_ZONE3_PLACE_HAND, 0U) == 0U)
+            {
+                return 2U;
+            }
+            arm_comm.send();
+            return 1U;
+        }
+        if (path_result == 2U)
+        {
+            return 2U;
+        }
+        return 0U;
+    }
+
+    default:
+        clearPathOutput();
+        return 2U;
+    }
+}
+uint16_t flag_qu = 0;
 /*
  * 合体状态处理。
  * 预抬、等待 2 档和 2006 爬升阶段底盘不动，最后才按 ch2 车体前向靠近。
@@ -986,12 +1142,12 @@ uint8_t CONBAT_TASK::runCombine(void)
         {
             return 2U;
         }
+        /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
         arm_comm.send();
         STEP_UP_CYLINDER_CLOSE();
         combine_stable_count_ = 0U;
 
         combine_step_ = COMBINE_WAIT_FINAL_LIFT_HEIGHT;
-        flag_heti = 0;
 
         return 0U;
 
@@ -1075,9 +1231,40 @@ uint8_t CONBAT_TASK::runCombine(void)
             {
                 return 0U;
             }
-            arm_comm.send();
+            /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
+            for (uint8_t i = 0U; i < 10U; ++i)
+            {
+                arm_comm.send();
+            }
             resetKfsPlaceLaserFlag();
+            combine_step_ = COMBINE_PLACE_LOWER_KFS;
             return 0U;
+        }
+        return 0U;
+
+    case COMBINE_PLACE_LOWER_KFS:
+        /*
+         * 阶段5-4：等待车内底层 KFS 挡住侧激光后再松开，
+         * 再发送机械臂放车内底层 KFS 命令。
+         */
+        lift_switch_target_ = 1U;
+        lift_linear_speed_target_ = 0.0f;
+        clearPathOutput();
+
+        updateKfsPlaceLaserFlag();
+        if (kfs_place_laser_release_flag != 0U)
+        {
+            if (arm_comm.executeAction(ArmComm::ACTION_ZONE3_PLACE_LOWER, 0U) == 0U)
+            {
+                return 0U;
+            }
+            /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
+            for (uint8_t i = 0U; i < 10U; ++i)
+            {
+                arm_comm.send();
+            }
+            resetKfsPlaceLaserFlag();
+            return 1U;
         }
         return 0U;
 
@@ -1223,6 +1410,7 @@ float CONBAT_TASK::normalizeYawDeg(float yaw_degree)
  * FreeRTOS 任务入口。
  * freertos.c 通过 C 链接名创建该任务；任务内部每 1ms 更新一次 CONBAT_TASK 状态机。
  */
+uint16_t flag_aa = 0;
 extern "C" void conbat_task(void *argument)
 {
     (void)argument;
@@ -1231,6 +1419,7 @@ extern "C" void conbat_task(void *argument)
     {
 
         conbat_t.runOnce();
+
         osDelay(1);
     }
 }
