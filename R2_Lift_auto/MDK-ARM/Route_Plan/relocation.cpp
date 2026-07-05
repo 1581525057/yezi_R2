@@ -16,7 +16,7 @@ namespace
     const float AREA_ONE_ORIGIN_L_MM = 1357.0f;      // 雷达 Y 坐标原点偏移量 L，单位 mm。
     const float FRONT_DT35_TO_CENTER_MM = 308.18f;   // 前方 DT35 到车中心的安装距离，单位 mm。
     const float SIDE_LASER_TO_CENTER_MM = 309.23f;   // 左右激光到车中心的安装距离，单位 mm。
-    const float SIDE_LASER_TO_WALL = 150.0f;         // 墙的距离 单位mm。
+    const float SIDE_LASER_TO_WALL = 125.0f;         // 墙的距离 单位mm。
     const float SIDE_Y_ERROR_LIMIT_MM = 10.0f;       // 左右两侧推算出的 Y 误差阈值，单位 mm。
     const uint16_t RELOCATION_STABLE_COUNT = 100U;   // 误差连续满足要求的周期数。
 
@@ -74,7 +74,7 @@ uint8_t AreaOneRelocation::update(uint8_t sensor_mask, uint8_t chassis_speed_zer
     {
         const float left_mm = static_cast<float>(laser_left.data.distance_mm);
         const float right_mm = static_cast<float>(laser_right.data.distance_mm);
-        const float y_left_mm = AREA_ONE_ORIGIN_L_MM - (left_mm + SIDE_LASER_TO_CENTER_MM) + 100;
+        const float y_left_mm = AREA_ONE_ORIGIN_L_MM - (left_mm + SIDE_LASER_TO_CENTER_MM);
         const float left_from_right_mm = AREA_ONE_Y_FIELD_MM - (right_mm + SIDE_LASER_TO_CENTER_MM);
         const float y_right_mm = AREA_ONE_ORIGIN_L_MM - left_from_right_mm;
 
@@ -84,13 +84,13 @@ uint8_t AreaOneRelocation::update(uint8_t sensor_mask, uint8_t chassis_speed_zer
     else if (use_left != 0U)
     {
         const float left_mm = static_cast<float>(laser_left.data.distance_mm);
-        y_mm = AREA_ONE_ORIGIN_L_MM - (left_mm + SIDE_LASER_TO_CENTER_MM) + 100;
+        y_mm = AREA_ONE_ORIGIN_L_MM - (left_mm + SIDE_LASER_TO_CENTER_MM + SIDE_LASER_TO_WALL);
     }
     else
     {
         const float right_mm = static_cast<float>(laser_right.data.distance_mm);
         const float left_from_right_mm = AREA_ONE_Y_FIELD_MM - (right_mm + SIDE_LASER_TO_CENTER_MM);
-        y_mm = AREA_ONE_ORIGIN_L_MM - left_from_right_mm + 100;
+        y_mm = AREA_ONE_ORIGIN_L_MM - left_from_right_mm;
     }
 
     // 上位机接口使用米，这里保存最近一次算出的雷达坐标。

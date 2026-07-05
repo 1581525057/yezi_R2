@@ -23,6 +23,14 @@ float ROUTE_FIND_KFS_GENERATE_PATH_MAX_VEL_M_S = 4.0f;  // 寻找 KFS 自动生�
 float ROUTE_FIND_KFS_GENERATE_PATH_MAX_ACC_M_S2 = 1.2f; // 寻找 KFS 自动生成路径的最大加速度，单位 m/s2。
 float ROUTE_FIND_KFS_GENERATE_PATH_GAP_M = 0.04f;       // 寻找 KFS 自动生成路径点的间距，单位 m。
 
+float ROUTE_FIND_KFS_POSITION_KP = 1.6f;           // B 样条结束后 KFS 终点精定位的二维位置 P 闭环系数。
+float ROUTE_FIND_KFS_POSITION_MAX_VEL_M_S = 0.6f;  // KFS 终点精定位的最大线速度，单位 m/s。
+float ROUTE_FIND_KFS_POSITION_MAX_ACC_M_S2 = 1.2f; // KFS 终点精定位的最大加速度，单位 m/s2。
+
+float ROUTE_FIND_KFS_POSITION_X_TOL_M = 0.10f;                    // KFS 终点精定位 X 允许误差，单位 m。
+float ROUTE_FIND_KFS_POSITION_Y_TOL_M = 0.05f;                    // KFS 终点精定位 Y 允许误差，单位 m。
+static const uint16_t ROUTE_FIND_KFS_POSITION_STABLE_COUNT = 10U; // KFS 终点精定位连续到位次数。
+
 float ROUTE_RELOCATION_STOP_SPEED_LIMIT = 0.01f;                 // 一区重定位累计前，底盘解算速度需接近 0。
 static const uint16_t ROUTE_RELOCATION_STOP_STABLE_COUNT = 100U; // 底盘速度连续达标次数。
 
@@ -227,6 +235,8 @@ void ROUTE_TASK::route_reset()
 
     // 清空 1 区跑点底盘接管输出。
     path_loaded_ = 0U;
+    find_kfs_positioning_ = 0U;
+    find_kfs_position_stable_count_ = 0U;
     clear_path_output();
 
     // 清空 KFS 数量和机械臂取 KFS 子状态。
@@ -324,6 +334,173 @@ uint8_t ROUTE_TASK::loadGeneratedPathToGoal(const BRPathPose &goal,
     }
 
     return load_follow_plan();
+}
+
+/*
+ * 二维位置 P 闭环速度规划。
+ * 输入世界系 x/y 坐标误差，输出世界系目标速度，并限制最大速度和单周期速度变化量。
+ */
+void ROUTE_TASK::route_position_p_speed(float x_err,
+                                        float y_err,
+                                        float kp,
+                                        float max_vel,
+                                        float max_acc,
+                                        float dt_s,
+                                        float last_vx,
+                                        float last_vy,
+                                        float *vx,
+                                        float *vy)
+{
+    if (vx == 0 || vy == 0)
+    {
+        return;
+    }
+
+    *vx = 0.0f;
+    *vy = 0.0f;
+
+    if (kp <= 0.0f || max_vel <= 0.0f)
+    {
+        return;
+    }
+
+    const float dist = sqrtf(x_err * x_err + y_err * y_err);
+    if (dist <= 0.0f)
+    {
+        return;
+    }
+
+    float speed = kp * dist;
+    if (speed > max_vel)
+    {
+        speed = max_vel;
+    }
+
+    const float target_vx = x_err / dist * speed;
+    const float target_vy = y_err / dist * speed;
+
+    if (max_acc <= 0.0f || dt_s <= 0.0f)
+    {
+        *vx = target_vx;
+        *vy = target_vy;
+        return;
+    }
+
+    // 用二维速度变化量统一限加速度，避免斜向运动时合速度突变。
+    const float dvx = target_vx - last_vx;
+    const float dvy = target_vy - last_vy;
+    const float dv = sqrtf(dvx * dvx + dvy * dvy);
+    const float max_dv = max_acc * dt_s;
+
+    if (dv > max_dv && max_dv > 0.0f)
+    {
+        const float scale = max_dv / dv;
+        *vx = last_vx + dvx * scale;
+        *vy = last_vy + dvy * scale;
+    }
+    else
+    {
+        *vx = target_vx;
+        *vy = target_vy;
+    }
+}
+
+uint8_t ROUTE_TASK::runFindKfsPositionCloseLoop(const BRPathPose &goal)
+{
+    const float x_err = goal.x_m - vision.x_diff;
+    const float y_err = goal.y_m - vision.y_diff;
+
+    // x/y 都进入允许误差后，连续稳定一段时间才认为真正到位。
+    const uint8_t arrived =
+        (fabsf(x_err) < ROUTE_FIND_KFS_POSITION_X_TOL_M &&
+         fabsf(y_err) < ROUTE_FIND_KFS_POSITION_Y_TOL_M)
+            ? 1U
+            : 0U;
+
+    if (arrived != 0U)
+    {
+        if (find_kfs_position_stable_count_ < ROUTE_FIND_KFS_POSITION_STABLE_COUNT)
+        {
+            find_kfs_position_stable_count_++;
+        }
+
+        if (find_kfs_position_stable_count_ >= ROUTE_FIND_KFS_POSITION_STABLE_COUNT)
+        {
+            find_kfs_positioning_ = 0U;
+            find_kfs_position_stable_count_ = 0U;
+            clear_path_output();
+            return 1U;
+        }
+    }
+    else
+    {
+        find_kfs_position_stable_count_ = 0U;
+    }
+
+    // 限加速度需要以上一周期世界系速度为起点，因此先把底盘速度转回世界系。
+    const float yaw_rad = vision.angle_x * 3.1415926f / 180.0f;
+    const float cos_yaw = cosf(yaw_rad);
+    const float sin_yaw = sinf(yaw_rad);
+    const float last_world_vx = cos_yaw * path_vx_target_ - sin_yaw * path_vy_target_;
+    const float last_world_vy = sin_yaw * path_vx_target_ + cos_yaw * path_vy_target_;
+    float world_vx = 0.0f;
+    float world_vy = 0.0f;
+
+    route_position_p_speed(x_err,
+                           y_err,
+                           ROUTE_FIND_KFS_POSITION_KP,
+                           ROUTE_FIND_KFS_POSITION_MAX_VEL_M_S,
+                           ROUTE_FIND_KFS_POSITION_MAX_ACC_M_S2,
+                           0.001f,
+                           last_world_vx,
+                           last_world_vy,
+                           &world_vx,
+                           &world_vy);
+
+    // 底盘接管接口使用车体系速度，P 闭环算完后再转回车体系输出。
+    PathFollower::worldToBody(world_vx,
+                              world_vy,
+                              yaw_rad,
+                              &path_vx_target_,
+                              &path_vy_target_);
+    path_wz_target_ = 0.0f;
+    path_active_ = 1U;
+    return 0U;
+}
+
+uint8_t ROUTE_TASK::runFindKfsToGoal(uint8_t index)
+{
+    if (index > 2U)
+    {
+        return 2U;
+    }
+
+    if (find_kfs_positioning_ == 0U)
+    {
+        // 第一步先跑 B 样条到 KFS 粗略终点。
+        const uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[index],
+                                                            route_find_kfs_middle_points[index],
+                                                            route_find_kfs_middle_point_counts[index]);
+        if (path_result == 0U)
+        {
+            return 0U;
+        }
+
+        path_loaded_ = 0U;
+        find_kfs_position_stable_count_ = 0U;
+
+        if (path_result != 1U)
+        {
+            clear_path_output();
+            return path_result;
+        }
+
+        // B 样条完成后，同一个状态里立刻接 KFS 终点 P 闭环精定位。
+        find_kfs_positioning_ = 1U;
+    }
+
+    // 第二步持续做终点精定位，到位后返回 1，让外层切回视觉阶段。
+    return runFindKfsPositionCloseLoop(route_find_kfs_goals[index]);
 }
 
 void ROUTE_TASK::vision_choice()
@@ -490,23 +667,14 @@ void ROUTE_TASK::meiling_route()
         return;
 
     if (state == PHASE_IDLE)
-        state = PHASE_VISION;
+        state = FIRST_RELOCATION;
 
     switch (state)
     {
 
     case FIRST_RELOCATION:
     {
-        // 根据入口 KFS 选择侧向激光：0 用右激光，1 用左右激光，2 用左激光。
-        uint8_t relocation_sensor_mask = SENSOR_FRONT | SENSOR_LEFT;
-        if (entrence_KFS == 0)
-        {
-            relocation_sensor_mask = SENSOR_FRONT | SENSOR_RIGHT;
-        }
-        else if (entrence_KFS == 1)
-        {
-            relocation_sensor_mask = SENSOR_ALL;
-        }
+        const uint8_t relocation_sensor_mask = SENSOR_FRONT | SENSOR_LEFT;
 
         if (relocation_number == 0U)
         {
@@ -550,50 +718,9 @@ void ROUTE_TASK::meiling_route()
     }
 
     case PHASE_FIND_KFS: // 寻找对应的KFS的位置
-        switch (entrence_KFS)
+        if (runFindKfsToGoal((uint8_t)entrence_KFS) == 1U)
         {
-        case 0:
-        {
-            uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[0],
-                                                          route_find_kfs_middle_points[0],
-                                                          route_find_kfs_middle_point_counts[0]);
-            // 跑到 KFS1 的位置去。
-            if (path_result == 1U)
-            {
-                path_loaded_ = 0U;
-                // 只在第一次到达 KFS 后进入重定位，之后直接回视觉阶段。
-                state = (relocation_position_sent_ == 0U) ? FIRST_RELOCATION : PHASE_VISION;
-            }
-            break;
-        }
-        case 1:
-        {
-            uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[1],
-                                                          route_find_kfs_middle_points[1],
-                                                          route_find_kfs_middle_point_counts[1]);
-            // 跑到 KFS2 的位置去。
-            if (path_result == 1U)
-            {
-                path_loaded_ = 0U;
-                // 只在第一次到达 KFS 后进入重定位，之后直接回视觉阶段。
-                state = (relocation_position_sent_ == 0U) ? FIRST_RELOCATION : PHASE_VISION;
-            }
-            break;
-        }
-        case 2:
-        {
-            uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[2],
-                                                          route_find_kfs_middle_points[2],
-                                                          route_find_kfs_middle_point_counts[2]);
-            // 跑到 KFS3 的位置去。
-            if (path_result == 1U)
-            {
-                path_loaded_ = 0U;
-                // 只在第一次到达 KFS 后进入重定位，之后直接回视觉阶段。
-                state = (relocation_position_sent_ == 0U) ? FIRST_RELOCATION : PHASE_VISION;
-            }
-            break;
-        }
+            state = PHASE_VISION;
         }
         break;
 

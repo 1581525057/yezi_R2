@@ -58,6 +58,8 @@ private:
     float path_vx_target_;           // 1 区跑点底盘 X 速度目标，单位 m/s。
     float path_vy_target_;           // 1 区跑点底盘 Y 速度目标，单位 m/s。
     float path_wz_target_;           // 1 区跑点底盘旋转速度目标，单位 rad/s。
+    uint8_t find_kfs_positioning_;   // B 样条结束后是否正在做 KFS 终点精定位。
+    uint16_t find_kfs_position_stable_count_; // KFS 终点精定位连续到位计数。
     uint16_t entrence_KFS;           // KFS的入口对应的KFS位置
     BRPathPoint generated_path_[ROUTE_GENERATE_PATH_MAX_POINTS];
     PathFollower::PathPoint generated_follow_path_[ROUTE_GENERATE_PATH_MAX_POINTS];
@@ -70,6 +72,18 @@ private:
     uint8_t loadGeneratedPathToGoal(const BRPathPose &goal,
                                     const BRPathControlPoint *middle_points,
                                     std::size_t middle_point_count);
+    uint8_t runFindKfsToGoal(uint8_t index); // 寻找 KFS：先跑 B 样条，结束后接终点精定位。
+    uint8_t runFindKfsPositionCloseLoop(const BRPathPose &goal); // 对 KFS 终点做二维位置 P 闭环。
+    static void route_position_p_speed(float x_err,
+                                       float y_err,
+                                       float kp,
+                                       float max_vel,
+                                       float max_acc,
+                                       float dt_s,
+                                       float last_vx,
+                                       float last_vy,
+                                       float *vx,
+                                       float *vy);
 
 public:
     Route_state state;
