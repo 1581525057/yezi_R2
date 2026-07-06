@@ -210,7 +210,7 @@ extern "C" void chassis_task(void *argument)
             break;
         }
 
-        if (FTM_GetMainState() == 4U)
+        if (FTM_GetMainState() == 4U && auto_source != CHASSIS_AUTO_CONBAT)
         {
             target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
         }
@@ -242,8 +242,11 @@ extern "C" void chassis_task(void *argument)
         target_vx = lift_auto.getChassisVxTarget(target_vx);
         target_vy = lift_step_down.getChassisVyTarget(target_vy);
         target_vx = lift_step_down.getChassisVxTarget(target_vx);
-        target_vy = arm_comm.getChassisVyTarget(target_vy);
-        target_vx = arm_comm.getChassisVxTarget(target_vx);
+        if (auto_source != CHASSIS_AUTO_CONBAT)
+        {
+            target_vy = arm_comm.getChassisVyTarget(target_vy);
+            target_vx = arm_comm.getChassisVxTarget(target_vx);
+        }
 
         // 自转输出统一走 target_vz：默认遥控器 Vz，FTM_MAIN_DONE 锁角和自动任务可覆盖。
         omni_chassis.setRemote(target_vx, target_vy, target_vz);

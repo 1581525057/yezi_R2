@@ -14,6 +14,7 @@
 #include "path_follow.h"
 #include "path.h"
 #include "FTMTask.h"
+#include "conbat_task.h"
 
 ROUTE_TASK route_t;
 extern float yaw_target;
@@ -30,8 +31,8 @@ float ROUTE_FIND_KFS_POSITION_X_TOL_M = 0.10f;                    // KFS 终点�
 float ROUTE_FIND_KFS_POSITION_Y_TOL_M = 0.05f;                    // KFS 终点精定位 Y 允许误差，单位 m。
 static const uint16_t ROUTE_FIND_KFS_POSITION_STABLE_COUNT = 10U; // KFS 终点精定位连续到位次数。
 
-float ROUTE_RELOCATION_STOP_SPEED_LIMIT = 0.01f;                 // 一区重定位累计前，底盘解算速度需接近 0。
-static const uint16_t ROUTE_RELOCATION_STOP_STABLE_COUNT = 100U; // 底盘速度连续达标次数。
+float ROUTE_RELOCATION_STOP_SPEED_LIMIT = 0.01f;                  // 一区重定位累计前，底盘解算速度需接近 0。
+static const uint16_t ROUTE_RELOCATION_STOP_STABLE_COUNT = 1500U; // 底盘速度连续达标次数。
 
 // 寻找 KFS 的终点表，单位：x/y 为 m，yaw 为 rad；按 entrence_KFS 0/1/2 选择。
 static BRPathPose route_find_kfs_goals[] = {
@@ -1049,13 +1050,13 @@ extern "C" void plan_route(void *argument)
             arm_comm.send();
         }
 
-        if ((FTM_GetMainState() == 4U) &&
-            (route_t.state == PHASE_IDLE) &&
-            (ftm_done_route_started == 0U))
-        {
-            route_t.flag_start = 1U;
-            ftm_done_route_started = 1U;
-        }
+        // if ((FTM_GetMainState() == 4U) &&
+        //     (route_t.state == PHASE_IDLE) &&
+        //     (ftm_done_route_started == 0U) && (conbat_t.state == CONBAT_IDLE))
+        // {
+        //     route_t.flag_start = 1U;
+        //     ftm_done_route_started = 1U;
+        // }
 
         if (flag_step == 1)
         {
