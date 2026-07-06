@@ -4,9 +4,9 @@
 
 static const float WUQIQU_PI = 3.14159265358979323846f;  // 圆周率，用于角度转弧度
 static const float kDegToRad = WUQIQU_PI / 180.0f;       // 角度转弧度系数
-static const float kApproachVMaxMps = 4.00f;             // 接近阶段最大平移速度，单位 m/s
-static const float kSlowVMaxMps = 2.80f;                 // 减速阶段最大平移速度，单位 m/s
-static const float kContactVMaxMps = 0.90f;              // 接触/贴近阶段最大平移速度，单位 m/s
+static const float kApproachVMaxMps = 4.80f;             // 接近阶段最大平移速度，单位 m/s
+static const float kSlowVMaxMps = 3.60f;                 // 减速阶段最大平移速度，单位 m/s
+static const float kContactVMaxMps = 1.20f;              // 接触/贴近阶段最大平移速度，单位 m/s
 static const float kPlannerMaxAngularSpeedRadps = 2.80f; // 规划器输出角速度上限，单位 rad/s
 static const float kMinYawCommandFloorRadps = 0.18f;     // yaw 修正硬下限，避免比例缩小后转速过低
 
@@ -19,7 +19,7 @@ static const uint32_t kFastLinkContactTimeoutMs = 80U; // 快速衔接点接触�
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 // 参数顺序：x y yaw xy_tolerance yaw_tolerance
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {0.04f, 0.91f, -90.0f, 0.015f, 1.5f},
+    {0.04f, 0.91f, -90.0f, 0.015f, 2.0f},
     {0.08f, 0.48f, -90.0f, 0.035f, 3.0f},
     {0.08f, 0.48f, 90.0f, 0.035f, 2.0f},
     {0.96f, -1.64f, 0.0f, 0.030f, 1.5f},
@@ -38,12 +38,12 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     contact_dist_ = 0.020f; // 距目标小于该值后进入接触/贴近段，单位 m
     finish_dist_ = 0.010f;  // XY 到点判定距离，单位 m
 
-    kp_approach_ = 7.0f; // 接近阶段位置比例增益
-    kd_approach_ = 0.8f; // 接近阶段位置微分增益
-    kp_slow_ = 6.0f;     // 减速阶段位置比例增益
-    kd_slow_ = 0.75f;    // 减速阶段位置微分增益
-    kp_contact_ = 3.5f;  // 接触/贴近阶段位置比例增益
-    kd_contact_ = 0.8f;  // 接触/贴近阶段位置微分增益
+    kp_approach_ = 9.0f; // 接近阶段位置比例增益
+    kd_approach_ = 1.0f; // 接近阶段位置微分增益
+    kp_slow_ = 6.5f;     // 减速阶段位置比例增益
+    kd_slow_ = 0.8f;    // 减速阶段位置微分增益
+    kp_contact_ = 5.0f;  // 接触/贴近阶段位置比例增益
+    kd_contact_ = 1.2f;  // 接触/贴近阶段位置微分增益
 
     yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
     yaw_kp_ = 2.8f;               // yaw 角度误差比例增益
@@ -53,8 +53,8 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     yaw_tolerance_deg_ = 2.0f;    // yaw 到位判定角度误差，单位 deg
 
     stable_cycles_ = 35U;       // 软接触稳定计数阈值，按 runOnce 调用周期计数
-    contact_hold_ms_ = 120U;    // 接触后最短保持时间，单位 ms
-    contact_timeout_ms_ = 450U; // 接触阶段超时时间，单位 ms
+    contact_hold_ms_ = 80U;    // 接触后最短保持时间，单位 ms
+    contact_timeout_ms_ = 500U; // 接触阶段超时时间，单位 ms
 
     waypoint_count_ = kWaypointCount;
     if (waypoint_count_ > MAX_WAYPOINTS)
