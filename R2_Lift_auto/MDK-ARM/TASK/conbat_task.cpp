@@ -21,6 +21,7 @@ float CONBAT_KFS_PLACE_PATH_MAX_VEL_M_S = 1.5f;  // KFS 放置点路径的最大
 float CONBAT_KFS_PLACE_PATH_MAX_ACC_M_S2 = 0.8f; // KFS 放置点路径的最大加速度，单位 m/s2。
 static const float CONBAT_KFS_PLACE_STOP_SPEED_LIMIT = 0.01f;
 static const uint16_t CONBAT_KFS_PLACE_STOP_STABLE_COUNT = 1000U;
+static const float CONBAT_KFS_PLACE_YAW_TOL_DEG = 3.0f;
 float CONBAT_GENERATE_PATH_GAP_M = 0.03f; // 自动生成路径点的间距，单位 m。
 
 // 合体跑点
@@ -354,7 +355,7 @@ void CONBAT_TASK::runOnce(void)
         if (conbat_start == 2U)
         {
             conbat_start = 0U;
-            state = CONBAT_COMBINE;
+            state = CONBAT_PLACE_KFS;
         }
         clearPathOutput();
         break;
@@ -1014,6 +1015,14 @@ uint8_t CONBAT_TASK::runPlaceKfs(void)
         {
             clearPathOutput();
             yaw_target = 90.0f;
+            g_ftm_main_state = 4;
+
+            setYawTarget(90.0f);
+            if (fabsf(normalizeYawDeg(90.0f - vision.angle_x)) > CONBAT_KFS_PLACE_YAW_TOL_DEG)
+            {
+                return 0U;
+            }
+
             path_loaded_ = 0U;
             kfs_place_stop_stable_count_ = 0U;
             place_kfs_step_ = PLACE_KFS_PATH_TO_PLACE;
