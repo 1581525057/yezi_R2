@@ -21,7 +21,7 @@ enum FTMMainState
     FTM_MAIN_AUTO_TURN_READY = 6, // 武器区调整姿态 再次取武器头流程：张爪、对位、M2006 翻转并让 RS05 回 0。
     FTM_MAIN_DOCKING = 7,         // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
     FTM_MAIN_GO_MEILIN = 8,       // 前往梅林：先回第三点，再修正航向到 0 度，最后跑梅林目标点。
-    FTM_MAIN_AUTO_FULL_FLOW = 9   // 完整自动流程入口：切入 5，之后依次执行 7、8、4。
+    FTM_MAIN_AUTO_FULL_FLOW = 9   // 单武器头完整自动流程入口：切入 5，之后依次执行 7、8、4。
 };
 
 enum FTMActionState
@@ -981,7 +981,20 @@ namespace
             return false;
 
         case 2:
-            return RunWuqiquAndMechanismSequence();
+            if (RunWuqiquAndMechanismSequence() == false)
+            {
+                return false;
+            }
+            ++g_route_action_sequence_step_index;
+            return false;
+
+        case 3:
+            // 单武器头流程：取头和回姿态完成后，先补跑新增第 5 点，再进入对接。
+            if (RunWuqiquRoutePoint(4U) == 0U)
+            {
+                return false;
+            }
+            return true;
 
         default:
             return true;
@@ -1116,7 +1129,7 @@ extern "C" volatile uint8_t wuqiqu_done = 0U;
 extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
 extern "C" volatile float g_ftm_yaw_target_degree = 0.0f;
 extern "C" volatile float g_ftm_lift_up_target_mm = 74.0f;
-extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 214.0f;
+extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 210.0f;
 extern "C" volatile float g_ftm_lift_down_target_mm = 68.0f;
 extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
 extern "C" volatile uint32_t g_ftm_grab_settle_delay_ms = 200U;
@@ -1267,7 +1280,7 @@ extern "C" void ftm_task(void *argument)
             }
             break;
 
-        // 主状态 9：完整自动流程入口；进入 5，之后按 5->7->8->4 自动衔接。
+        // 主状态 9：单武器头完整自动流程入口；进入 5，之后按 5->7->8->4 自动衔接。
         case FTM_MAIN_AUTO_FULL_FLOW:
             g_auto_full_flow_active = 1U;
             EnterMainState(FTM_MAIN_AUTO_PICK_ROUTE);
