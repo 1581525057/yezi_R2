@@ -21,8 +21,7 @@ enum FTMMainState
     FTM_MAIN_AUTO_TURN_READY = 6, // 武器区调整姿态 再次取武器头流程：张爪、对位、M2006 翻转。
     FTM_MAIN_DOCKING = 7,         // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
     FTM_MAIN_GO_MEILIN = 8,       // 前往梅林：先回第三点，再修正航向到 0 度，最后跑梅林目标点。
-    FTM_MAIN_AUTO_FULL_FLOW = 9,  // 完整自动流程入口：切入 5，之后依次执行 7、8、4。
-    FTM_MAIN_PRELIM_AUTO_FULL_FLOW = 10 // 预选赛三武器头流程入口：按 exec=2/3/4 选择当前武器头，依次夹取三次后进梅林。
+    FTM_MAIN_PRELIM_AUTO_FULL_FLOW = 9 // 预选赛三武器头流程入口：按 exec=2/3/4 选择当前武器头，依次夹取三次后进梅林。
 };
 
 enum FTMActionState
@@ -268,8 +267,7 @@ namespace
 
     uint8_t IsAutoFullFlowCarryState(uint8_t main_state)
     {
-        return ((main_state == FTM_MAIN_AUTO_FULL_FLOW) ||
-                (main_state == FTM_MAIN_AUTO_PICK_ROUTE) ||
+        return ((main_state == FTM_MAIN_AUTO_PICK_ROUTE) ||
                 (main_state == FTM_MAIN_DOCKING) ||
                 (main_state == FTM_MAIN_GO_MEILIN) ||
                 (main_state == FTM_MAIN_AUTO_TURN_READY) ||
@@ -1461,12 +1459,6 @@ extern "C" void ftm_task(void *argument)
                 }
                 EnterMainState(FTM_MAIN_DONE);
             }
-            break;
-
-        // 主状态 9：完整自动流程入口；进入 5，之后按 5->7->8->4 自动衔接。
-        case FTM_MAIN_AUTO_FULL_FLOW:
-            g_auto_full_flow_active = 1U;
-            EnterMainState(FTM_MAIN_AUTO_PICK_ROUTE);
             break;
 
         case FTM_MAIN_PRELIM_AUTO_FULL_FLOW:
