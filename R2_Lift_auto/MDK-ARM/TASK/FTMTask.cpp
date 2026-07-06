@@ -124,6 +124,7 @@ namespace
     uint8_t g_wuqiqu_yaw_turn_target_waypoint_index = kWuqiquYawTargetWaypointIndex;
     uint16_t g_wuqiqu_yaw_turn_stable_count = 0U;
     uint8_t g_turn_ready_yaw_turn_finished = 0U;
+    uint8_t g_prelim_turn_ready_step_index = 0U;
 
     const uint8_t kSequenceOpenLiftRs05[] = {
         FTM_ACTION_CLAW_OPEN,
@@ -259,6 +260,7 @@ namespace
     {
         return ((main_state == FTM_MAIN_WUQIQU_ROUTE) ||
                 (main_state == FTM_MAIN_AUTO_PICK_ROUTE) ||
+                (main_state == FTM_MAIN_AUTO_TURN_READY) ||
                 (main_state == FTM_MAIN_GO_MEILIN))
                    ? 1U
                    : 0U;
@@ -311,6 +313,7 @@ namespace
         g_prelim_auto_full_flow_active = 0U;
         g_prelim_weapon_index = 0U;
         g_prelim_docking_release_latched = 0U;
+        g_prelim_turn_ready_step_index = 0U;
     }
 
     void ResetDockingExecEdge(void)
@@ -420,6 +423,11 @@ namespace
         ResetActionRuntime();
         g_main_action_step_index = 0U;
         g_turn_ready_yaw_turn_finished = 0U;
+        if (main_state == FTM_MAIN_AUTO_TURN_READY)
+        {
+            g_prelim_turn_ready_step_index = 0U;
+            g_wuqiqu_parallel_mechanism_finished = 0U;
+        }
 
         if (IsAutoFullFlowCarryState(main_state) == 0U)
         {
@@ -938,32 +946,47 @@ namespace
 
     bool RunPrelimTurnReadyAndYawTurnSequence(void)
     {
-        if (g_wuqiqu_parallel_mechanism_finished == 0U)
+        switch (g_prelim_turn_ready_step_index)
         {
-            if (g_ftm_action_state != FTM_ACTION_SEQUENCE_OPEN_RS05_TURN)
+        case 0:
+            if (RunWuqiquRoutePoint(kWuqiquYawTargetWaypointIndex) == 0U)
             {
-                EnterActionState(FTM_ACTION_SEQUENCE_OPEN_RS05_TURN);
+                return false;
+            }
+            ++g_prelim_turn_ready_step_index;
+            return false;
+
+        case 1:
+            if (g_wuqiqu_parallel_mechanism_finished == 0U)
+            {
+                if (g_ftm_action_state != FTM_ACTION_SEQUENCE_OPEN_RS05_TURN)
+                {
+                    EnterActionState(FTM_ACTION_SEQUENCE_OPEN_RS05_TURN);
+                }
+
+                if (RunMechanismSequence(kSequenceOpenRs05Turn,
+                                         static_cast<uint8_t>(sizeof(kSequenceOpenRs05Turn) / sizeof(kSequenceOpenRs05Turn[0]))) != false)
+                {
+                    g_wuqiqu_parallel_mechanism_finished = 1U;
+                }
             }
 
-            if (RunMechanismSequence(kSequenceOpenRs05Turn,
-                                     static_cast<uint8_t>(sizeof(kSequenceOpenRs05Turn) / sizeof(kSequenceOpenRs05Turn[0]))) != false)
+            if (g_turn_ready_yaw_turn_finished == 0U)
             {
-                g_wuqiqu_parallel_mechanism_finished = 1U;
+                // 预选赛再次取头前，先到第三点，再执行机械准备和底盘转向。
+                SelectWuqiquYawTurnTarget(kWuqiquSecondWaypointIndex);
+                if (RunWuqiquYawTurn180() != 0U)
+                {
+                    g_turn_ready_yaw_turn_finished = 1U;
+                }
             }
+
+            return ((g_wuqiqu_parallel_mechanism_finished != 0U) &&
+                    (g_turn_ready_yaw_turn_finished != 0U));
+
+        default:
+            return true;
         }
-
-        if (g_turn_ready_yaw_turn_finished == 0U)
-        {
-            // 预选赛再次取头前，机械准备和底盘转向并行执行；底盘先完成时锁存，避免重复启动转向。
-            SelectWuqiquYawTurnTarget(kWuqiquSecondWaypointIndex);
-            if (RunWuqiquYawTurn180() != 0U)
-            {
-                g_turn_ready_yaw_turn_finished = 1U;
-            }
-        }
-
-        return ((g_wuqiqu_parallel_mechanism_finished != 0U) &&
-                (g_turn_ready_yaw_turn_finished != 0U));
     }
 
     uint8_t RunGoMeilinYawZero(void)
@@ -1126,7 +1149,19 @@ namespace
             return false;
 
         case 2:
-            return RunWuqiquAndMechanismSequence();
+            if (RunWuqiquAndMechanismSequence() == false)
+            {
+                return false;
+            }
+            ++g_route_action_sequence_step_index;
+            return false;
+
+        case 3:
+            if (RunWuqiquRoutePoint(4U) == 0U)
+            {
+                return false;
+            }
+            return true;
 
         default:
             return true;
@@ -1261,7 +1296,7 @@ extern "C" volatile uint8_t wuqiqu_done = 0U;
 extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
 extern "C" volatile float g_ftm_yaw_target_degree = 0.0f;
 extern "C" volatile float g_ftm_lift_up_target_mm = 74.0f;
-extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 214.0f;
+extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 210.0f;
 extern "C" volatile float g_ftm_lift_down_target_mm = 68.0f;
 extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
 extern "C" volatile uint32_t g_ftm_grab_settle_delay_ms = 200U;
