@@ -113,8 +113,6 @@ uint8_t ArmComm::executeAction(uint8_t action_code, uint8_t num_KFS)
         setFrame(0x00U, 0x00U, 0x00U, 0x00U, 0x00U);
         break;
 
-        break;
-
     default:
         return 0U;
     }
