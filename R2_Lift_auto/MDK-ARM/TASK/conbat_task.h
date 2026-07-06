@@ -13,11 +13,9 @@ typedef enum
 {
     CONBAT_IDLE = 0,         // 空闲状态
     CONBAT_RAMP_UP,          // 上斜坡状态
-    CONBAT_PICK_KFS,         // 吸取 KFS 状态
-    CONBAT_PLACE_KFS,        // 放置 KFS 状态
-    CONBAT_SELECT_KFS_PLACE, // 选择 KFS 放置点位状态
-    CONBAT_COMBINE,          // 合体状态
-    CONBAT_AVOID             // 避让状态
+    CONBAT_PLACE_KFS = 3,        // 放置 KFS 状态
+    CONBAT_COMBINE = 5,          // 合体状态
+    CONBAT_AVOID = 6             // 避让状态
 } ConbatState;
 
 #ifdef __cplusplus
@@ -69,27 +67,10 @@ private:
         COMBINE_PLACE_HAND,              // 阶段5-4：等待手持 KFS 激光松开后发送放置命令。
         COMBINE_PLACE_LOWER_KFS          // 阶段5-5：等待车内 KFS 激光松开后发送放置命令。
     };
-
-    enum PickKfsStep
-    {
-        PICK_KFS_FIRST_ACTION = 0,    // 触发拾取第一个 KFS 的机械臂动作。
-        PICK_KFS_PATH_TO_AREA,        // 跑到拾取 KFS 的粗略点位。
-        PICK_KFS_FIRST_WAIT_READY,    // 等待机械臂允许进入第一个 KFS 吸取阶段。
-        PICK_KFS_FIRST_WAIT_DONE,     // 等待机械臂回传第一个 KFS 吸取成功。
-        PICK_KFS_FIRST_BACKWARD,      // 第一个 KFS 吸取成功后先沿 X 轴后退。
-        PICK_KFS_SECOND_ACTION,       // 触发拾取第二个 KFS 的机械臂动作。
-        PICK_KFS_PATH_TO_SECOND_AREA, // 跑到第二个 KFS 拾取区域的粗略点位。
-        PICK_KFS_SECOND_WAIT_READY,   // 等待机械臂允许进入第二个 KFS 吸取阶段。
-        PICK_GO_TO_COMBINE            // 吸取完成后跑到合体目标点。
-    };
-
     enum PlaceKfsStep
     {
-        PLACE_KFS_LOWER_ACTION = 0, // 发送放车内底层 KFS 的机械臂动作。
-        PLACE_KFS_PATH_TO_PICK,     // 跑到取车内 KFS 的精确点。
-        PLACE_KFS_DT35_FORWARD,     // 按 DT35 边向前走边吸取。
-        PLACE_KFS_BACKWARD,         // 吸取成功后先沿 X 轴后退。
-        PLACE_KFS_PATH_TO_PLACE     // 跑到选择的放 KFS 终点并发送放置动作。
+        PLACE_KFS_MOVE_TO_SELECTED = 0, // 跑到选定 KFS 放置点并精定位。
+        PLACE_KFS_SEND_ACTION           // 发送机械臂放 KFS 命令。
     };
 
     PathFollower path_follower_;
@@ -99,16 +80,11 @@ private:
     uint8_t path_loaded_;
     uint8_t path_active_;
     uint8_t ramp_up_waiting_;
-    PickKfsStep pick_kfs_step_;
     PlaceKfsStep place_kfs_step_;
     CombineStep combine_step_;
-    uint8_t pick_kfs_meiling_active_;
-    uint8_t pick_kfs_second_forward_done_;
-    uint8_t pick_kfs_path_stable_count_;
     uint16_t kfs_place_stop_stable_count_;
     uint8_t kfs_place_index_;
     uint8_t kfs_place_precision_active_;
-    uint8_t place_kfs_pick_precision_active_;
     uint8_t kfs_place_laser_blocked_;
     uint8_t combine_pre_lift_ready_;
     uint8_t combine_crossed_finish_height_;
@@ -118,8 +94,6 @@ private:
     uint32_t combine_final_lift_command_seq_;
     uint8_t lift_switch_target_;
     float lift_linear_speed_target_;
-    float pick_kfs_first_back_start_x_m_;
-    float place_kfs_back_start_x_m_;
     float path_vx_target_;
     float path_vy_target_;
     float path_wz_target_;
@@ -127,7 +101,6 @@ private:
     void handleStateChanged(void);
     void clearPathOutput(void);
     uint8_t runRampUp(void);
-    uint8_t runPickKfs(void);
     uint8_t runPlaceKfs(void);
     uint8_t runCombine(void);
     uint8_t runSelectKfsPlace(void);
