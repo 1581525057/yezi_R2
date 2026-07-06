@@ -12,8 +12,8 @@
 class AreaOneRelocation
 {
 public:
-    static const uint8_t WAITING = 0U; // 还未满足连续稳定上传条件。
-    static const uint8_t SENT = 1U;    // 已经上传过本次重定位坐标。
+    static const uint8_t WAITING = 0U; // 还未满足连续稳定上传条件，或已上传但还在等待小电脑确认。
+    static const uint8_t SENT = 1U;    // 已上传本次重定位坐标，且小电脑确认可以继续。
 
     // 清空一区重定位状态，重新累计稳定周期。
     void reset(void);
