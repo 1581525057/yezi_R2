@@ -44,7 +44,8 @@ void AreaOneRelocation::reset(void)
  * 1. 读取前方 DT35 和 sensor_mask 选中的侧向激光数据；
  * 2. 前方距离换算雷达 X；
  * 3. 单侧模式直接换算雷达 Y，双侧模式先校验两份 Y 的误差；
- * 4. 底盘速度为 0 且条件连续满足 100 个周期后，上传雷达坐标。
+ * 4. 底盘速度为 0 且条件连续满足 100 个周期后，上传雷达坐标；
+ * 5. 等待 MiniPC 回传 if_go=1，再允许路线进入下一阶段。
  */
 uint8_t AreaOneRelocation::update(uint8_t sensor_mask, uint8_t chassis_speed_zero)
 {
@@ -109,10 +110,15 @@ uint8_t AreaOneRelocation::update(uint8_t sensor_mask, uint8_t chassis_speed_zer
             if (position_sent_ == 0U)
             {
                 // 只在首次稳定达标时上传一次，避免每个周期重复校准雷达。
+                vision.if_go = 0;
                 send_position_to_pc(1, 1, last_x_m_, last_y_m_, 0.0f);
                 position_sent_ = 1U;
             }
-            return SENT;
+
+            if (vision.if_go == 1)
+            {
+                return SENT;
+            }
         }
     }
     else
