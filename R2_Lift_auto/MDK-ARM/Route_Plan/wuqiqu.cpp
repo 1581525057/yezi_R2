@@ -4,10 +4,10 @@
 
 static const float WUQIQU_PI = 3.14159265358979323846f;  // 圆周率，用于角度转弧度
 static const float kDegToRad = WUQIQU_PI / 180.0f;       // 角度转弧度系数
-static const float kApproachVMaxMps = 4.80f;             // 接近阶段最大平移速度，单位 m/s
-static const float kSlowVMaxMps = 3.60f;                 // 减速阶段最大平移速度，单位 m/s
-static const float kContactVMaxMps = 1.20f;              // 接触/贴近阶段最大平移速度，单位 m/s
-static const float kPlannerMaxAngularSpeedRadps = 2.80f; // 规划器输出角速度上限，单位 rad/s
+static const float kApproachVMaxMps = 2.00f;             // 接近阶段最大平移速度，单位 m/s
+static const float kSlowVMaxMps = 1.50f;                 // 减速阶段最大平移速度，单位 m/s
+static const float kContactVMaxMps = 0.50f;              // 接触/贴近阶段最大平移速度，单位 m/s
+static const float kPlannerMaxAngularSpeedRadps = 2.00f; // 规划器输出角速度上限，单位 rad/s
 static const float kMinYawCommandFloorRadps = 0.18f;     // yaw 修正硬下限，避免比例缩小后转速过低
 
 // 加快第二个点到第三个点之间的切换，减少到点后等待时间
@@ -47,11 +47,11 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     contact_dist_ = 0.020f; // 距目标小于该值后进入接触/贴近段，单位 m
     finish_dist_ = 0.010f;  // XY 到点判定距离，单位 m
 
-    kp_approach_ = 9.0f; // 接近阶段位置比例增益
+    kp_approach_ = 6.0f; // 接近阶段位置比例增益
     kd_approach_ = 1.0f; // 接近阶段位置微分增益
-    kp_slow_ = 6.5f;     // 减速阶段位置比例增益
+    kp_slow_ = 4.0f;     // 减速阶段位置比例增益
     kd_slow_ = 0.8f;    // 减速阶段位置微分增益
-    kp_contact_ = 5.0f;  // 接触/贴近阶段位置比例增益
+    kp_contact_ = 3.0f;  // 接触/贴近阶段位置比例增益
     kd_contact_ = 1.2f;  // 接触/贴近阶段位置微分增益
 
     yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
