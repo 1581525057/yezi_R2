@@ -18,23 +18,53 @@ constexpr float kDegToRad = kPi / 180.0f;
 /* 下发给底盘的角速度上限。 */
 constexpr float kMaxAngularSpeedRadps = 2.8f;
 
-/* 每个控制周期允许的速度变化量，用于让目标速度平滑变化。 */
-constexpr float kLinearAccStepMps = 0.045f;
-constexpr float kLinearDecStepMps = 0.065f;
-constexpr float kAngularAccStepRadps = 0.014f;
-constexpr float kAngularDecStepRadps = 0.022f;
+/* FAST 阶段平移速度上限，负责快速接近目标*/
+constexpr float kFastLinearMaxMps = 1.80f;
+/* SLOW 阶段平移速度上限，负责近目标稳定收敛*/
+constexpr float kSlowLinearMaxMps = 0.45f;
+
+/* FAST 阶段最大加速度 单位 m/s^2。 */
+constexpr float kFastLinearAccMps2 = 3.0f;
+/* FAST 阶段最大减速度  */
+constexpr float kFastLinearDecMps2 = 4.5f;
+/* SLOW 阶段最大加速度*/
+constexpr float kSlowLinearAccMps2 = 1.2f;
+/* SLOW 阶段最大减速度*/
+constexpr float kSlowLinearDecMps2 = 2.0f;
+
+/* FAST 阶段任务层最低平移速度补偿，用于克服底盘静摩擦*/
+constexpr float kFastMinLinearMps = 0.12f;
+/* SLOW 阶段最低平移速度补偿*/
+constexpr float kSlowMinLinearMps = 0.04f;
+
+/* yaw 指令最大加速度 单位 rad/s^2。 */
+constexpr float kAngularAccRadps2 = 14.0f;
+/* yaw 指令最大减速度*/
+constexpr float kAngularDecRadps2 = 22.0f;
+
+/* 控制周期 dt 下限，防止同一 tick 内重复调用导致斜率限制步长变成 0。 */
+constexpr float kMinControlDtS = 0.001f;
+/* 控制周期 dt 上限，防止任务偶发阻塞后一次性放大速度变化量。 */
+constexpr float kMaxControlDtS = 0.030f;
 
 /* wuqiqu 下发到底盘的最小有效速度，避免给了速度但底盘克服不了摩擦力。*/
 constexpr float kMinLinearCommandMps = 0.07f;
 constexpr float kMinAngularCommandRadps = 0.18f;
 
 /*
- * 当前约定雷达 X/Y 与车体 X/Y 对齐：
- * vision.x_diff -> planner X -> 底盘 Vx，
- * vision.y_diff -> planner Y -> 底盘 Vy。
+ * vision.x_diff / y_diff 是视觉置零后的世界/雷达坐标。
+ * 规划器输出 world_vx / world_vy，任务层再转换成底盘车体系 Vx / Vy。
  */
 constexpr float kVisionXToPlannerX = 1.0f;
 constexpr float kVisionYToPlannerY = 1.0f;
+
+struct LinearShapeParams
+{
+    float max_speed_mps;
+    float max_acc_mps2;
+    float max_dec_mps2;
+    float min_speed_mps;
+};
 
 /* 普通数值限幅。 */
 float limitFloat(float value, float min_value, float max_value)
@@ -50,15 +80,52 @@ float limitFloat(float value, float min_value, float max_value)
     return value;
 }
 
-/* 单轴斜率限制：根据速度绝对值增减判断加速/减速。 */
-float slewRateLimit(float target, float current, float acc_step, float dec_step)
+void limitVectorToMax(float &vx, float &vy, float max_speed)
 {
-    const float err = target - current;
+    if (max_speed <= 0.0f)
+    {
+        return;
+    }
 
-    /* 判断是加速还是减速：
-     * 绝对值增大 → 加速（远离零点），用较小的 acc_step
-     * 绝对值减小 → 减速（靠近零点），用较大的 dec_step */
-    const float step = (fabsf(target) > fabsf(current)) ? acc_step : dec_step;
+    const float speed = sqrtf(vx * vx + vy * vy);
+    if (speed > max_speed)
+    {
+        const float scale = max_speed / speed;
+        vx *= scale;
+        vy *= scale;
+    }
+}
+
+/* 向量整体限斜率，避免分轴限幅改变斜向运动方向。 */
+void limitVectorDelta(float target_vx,
+                      float target_vy,
+                      float current_vx,
+                      float current_vy,
+                      float max_delta,
+                      float *out_vx,
+                      float *out_vy)
+{
+    const float dvx = target_vx - current_vx;
+    const float dvy = target_vy - current_vy;
+    const float dv = sqrtf(dvx * dvx + dvy * dvy);
+
+    if (dv > max_delta && max_delta > 0.0f)
+    {
+        const float scale = max_delta / dv;
+        *out_vx = current_vx + dvx * scale;
+        *out_vy = current_vy + dvy * scale;
+    }
+    else
+    {
+        *out_vx = target_vx;
+        *out_vy = target_vy;
+    }
+}
+
+float slewScalarByDt(float target, float current, float acc_rate, float dec_rate, float dt_s)
+{
+    const float step = ((fabsf(target) > fabsf(current)) ? acc_rate : dec_rate) * dt_s;
+    const float err = target - current;
 
     if (err > step)
     {
@@ -155,7 +222,8 @@ public:
           finished_(0U),
           vx_target_(0.0f),
           vy_target_(0.0f),
-          wz_target_(0.0f)
+          wz_target_(0.0f),
+          last_update_tick_(0U)
     {
     }
 
@@ -170,6 +238,7 @@ public:
         finished_ = 0U;
         wuqiqu.resetRoute();
         clearOutput();
+        last_update_tick_ = HAL_GetTick();
 
         for (uint8_t i = 0U; i < waypoint_index; ++i)
         {
@@ -204,6 +273,7 @@ public:
         active_ = 0U;
         finished_ = 0U;
         clearOutput();
+        last_update_tick_ = 0U;
         wuqiqu.reset();
     }
 
@@ -246,6 +316,7 @@ public:
         active_ = 0U;
         finished_ = 0U;
         clearOutput();
+        last_update_tick_ = HAL_GetTick();
         wuqiqu.advanceToNext();
         if (wuqiqu.isAllFinished())
         {
@@ -290,6 +361,7 @@ private:
     volatile float vx_target_;
     volatile float vy_target_;
     volatile float wz_target_;
+    uint32_t last_update_tick_;
 
     void clearOutput()
     {
@@ -298,12 +370,22 @@ private:
         wz_target_ = 0.0f;
     }
 
+    LinearShapeParams getLinearShape() const
+    {
+        if (wuqiqu.getState() == WuqiquPathPlanner::STATE_FAST)
+        {
+            return {kFastLinearMaxMps, kFastLinearAccMps2, kFastLinearDecMps2, kFastMinLinearMps};
+        }
+
+        return {kSlowLinearMaxMps, kSlowLinearAccMps2, kSlowLinearDecMps2, kSlowMinLinearMps};
+    }
+
     WuqiquPathPlanner::Pose buildPose() const
     {
         WuqiquPathPlanner::Pose pose = {};
 
-        pose.x = kVisionXToPlannerX * vision.x_diff; // m, planner X / chassis Vx
-        pose.y = kVisionYToPlannerY * vision.y_diff; // m, planner Y / chassis Vy
+        pose.x = kVisionXToPlannerX * vision.x_diff; // m，世界/雷达坐标 X
+        pose.y = kVisionYToPlannerY * vision.y_diff; // m，世界/雷达坐标 Y
         pose.yaw = vision.angle_x * kDegToRad;       // rad
         pose.yaw_360 = vision.angle_x;               // deg
 
@@ -312,7 +394,7 @@ private:
         pose.car_speed_y = omni_chassis.now.Vy;
         pose.omega = omni_chassis.now.Vz;
 
-        /* 当前规划坐标已对齐底盘速度轴，用于调试时直接记录底盘速度。 */
+        /* 规划器 PD 使用世界系速度，因此把底盘当前车体系速度转回世界系。 */
         chassisToWorldVelocity(pose.car_speed_x,
                                pose.car_speed_y,
                                pose.yaw,
@@ -324,7 +406,9 @@ private:
 
     void updateOutput(const WuqiquPathPlanner::Output &output)
     {
-        /* 规划器 X/Y 已对齐底盘 Vx/Vy，输出直接作为底盘车体系速度。 */
+        const LinearShapeParams shape = getLinearShape();
+
+        /* 规划器输出 world 速度，底盘接管接口使用车体系速度。 */
         float vx_limited = 0.0f;
         float vy_limited = 0.0f;
         worldToChassisVelocity(output.world_vx_mps,
@@ -332,16 +416,32 @@ private:
                                vision.angle_x * kDegToRad,
                                &vx_limited,
                                &vy_limited);
+        limitVectorToMax(vx_limited, vy_limited, shape.max_speed_mps);
 
         const float wz_limited = limitFloat(output.wz_radps, -kMaxAngularSpeedRadps, kMaxAngularSpeedRadps);
 
-        /* 目标速度再经过斜率限制，降低底盘指令突变。 */
-        const float vx_slewed = slewRateLimit(vx_limited, vx_target_, kLinearAccStepMps, kLinearDecStepMps);
-        const float vy_slewed = slewRateLimit(vy_limited, vy_target_, kLinearAccStepMps, kLinearDecStepMps);
-        const float wz_slewed = slewRateLimit(wz_limited, wz_target_, kAngularAccStepRadps, kAngularDecStepRadps);
+        const uint32_t now_tick = HAL_GetTick();
+        float dt_s = kMinControlDtS;
+        if (last_update_tick_ != 0U)
+        {
+            dt_s = static_cast<float>(now_tick - last_update_tick_) * 0.001f;
+            dt_s = limitFloat(dt_s, kMinControlDtS, kMaxControlDtS);
+        }
+        last_update_tick_ = now_tick;
+
+        const float target_speed = sqrtf(vx_limited * vx_limited + vy_limited * vy_limited);
+        const float current_speed = sqrtf(vx_target_ * vx_target_ + vy_target_ * vy_target_);
+        const float max_delta =
+            ((target_speed > current_speed) ? shape.max_acc_mps2 : shape.max_dec_mps2) * dt_s;
+
+        float vx_slewed = 0.0f;
+        float vy_slewed = 0.0f;
+        limitVectorDelta(vx_limited, vy_limited, vx_target_, vy_target_, max_delta, &vx_slewed, &vy_slewed);
+        const float wz_slewed = slewScalarByDt(wz_limited, wz_target_, kAngularAccRadps2, kAngularDecRadps2, dt_s);
 
         float vx_cmd = vx_slewed;
         float vy_cmd = vy_slewed;
+        applyVectorCommandFloor(vx_cmd, vy_cmd, vx_limited, vy_limited, shape.min_speed_mps);
         applyVectorCommandFloor(vx_cmd, vy_cmd, vx_limited, vy_limited, kMinLinearCommandMps);
 
         vx_target_ = vx_cmd;
