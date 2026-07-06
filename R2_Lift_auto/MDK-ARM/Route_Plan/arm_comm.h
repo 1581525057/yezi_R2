@@ -26,22 +26,22 @@ public:
     // 动作代号：调用 executeAction() 输入这些代号即可生成对应帧。
     enum ActionCode
     {
-        ACTION_POWER_ON_INIT = 1, // 开机初始化
-        ACTION_PICK_HIGH_200,     // 取高 200mm KFS
-        ACTION_PICK_HIGH_400,     // 取高 400mm KFS
-        ACTION_PICK_LOW_200,      // 取矮 200mm KFS
-        ACTION_ZONE3_READY,       // 去九宫格预备位
-        ACTION_ZONE3_PLACE_HAND,  // 放手持 KFS
-        ACTION_ZONE3_FETCH_UPPER, // 取车上层 KFS
-        ACTION_ZONE3_PLACE_UPPER, // 放车上层 KFS
-        ACTION_ZONE3_FETCH_LOWER, // 取车底层 KFS
-        ACTION_ZONE3_RESET,       // 重置状态机，zone3_cmd 回 0
-        ACTION_POWER_OFF,         // 关机
-        ACTION_PICK_FIRST_KFS,    // 拾取第一个 KFS
-        ACTION_PICK_SECOND_KFS,   // 拾取第二个 KFS
-        ACTION_ZONE3_PLACE_LOWER, // 放车底层KFS
-        ACTION_PICK_THIRD_KFS,    // 拾取第三个KFS
-        ACTION_ZONE3_PLACE_FINALL, //放最后一个KFS
+        ACTION_POWER_ON_INIT = 1,  // 开机初始化
+        ACTION_PICK_HIGH_200,      // 取高 200mm KFS
+        ACTION_PICK_HIGH_400,      // 取高 400mm KFS
+        ACTION_PICK_LOW_200,       // 取矮 200mm KFS
+        ACTION_ZONE3_READY,        // 去九宫格预备位
+        ACTION_ZONE3_PLACE_HAND,   // 放手持 KFS
+        ACTION_ZONE3_FETCH_UPPER,  // 取车上层 KFS
+        ACTION_ZONE3_PLACE_UPPER,  // 放车上层 KFS
+        ACTION_ZONE3_FETCH_LOWER,  // 取车底层 KFS
+        ACTION_ZONE3_RESET,        // 重置状态机，zone3_cmd 回 0
+        ACTION_POWER_OFF,          // 关机
+        ACTION_PICK_FIRST_KFS,     // 拾取第一个 KFS
+        ACTION_PICK_SECOND_KFS,    // 拾取第二个 KFS
+        ACTION_ZONE3_PLACE_LOWER,  // 放车底层KFS
+        ACTION_PICK_THIRD_KFS,     // 拾取第三个KFS
+        ACTION_ZONE3_PLACE_FINALL, // 放最后一个KFS
 
     };
 

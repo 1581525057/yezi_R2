@@ -94,7 +94,8 @@ uint8_t ArmComm::executeAction(uint8_t action_code, uint8_t num_KFS)
         setFrame(0x01U, 0x02U, 0x04U, 0x04U, 0x00U);
         break;
     case ACTION_ZONE3_PLACE_FINALL: // 放最后一个KFS
-        setFrame(0x01U, 0x02U, 0x04U, 0x06U, 0x00U);
+        setFrame(0x01U, 0x03U, 0x04U, 0x06U, 0x00U);
+        break;
 
     case ACTION_PICK_FIRST_KFS: // 取第一个KFS
         setFrame(0x01U, 0x01U, 0x04U, 0x00U, 0x00U);

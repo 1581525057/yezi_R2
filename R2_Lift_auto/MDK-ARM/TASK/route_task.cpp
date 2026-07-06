@@ -1050,13 +1050,13 @@ extern "C" void plan_route(void *argument)
             arm_comm.send();
         }
 
-        if ((FTM_GetMainState() == 4U) &&
-            (route_t.state == PHASE_IDLE) &&
-            (ftm_done_route_started == 0U) && (conbat_t.state == CONBAT_IDLE))
-        {
-            route_t.flag_start = 1U;
-            ftm_done_route_started = 1U;
-        }
+        // if ((FTM_GetMainState() == 4U) &&
+        //     (route_t.state == PHASE_IDLE) &&
+        //     (ftm_done_route_started == 0U) && (conbat_t.state == CONBAT_IDLE))
+        // {
+        //     route_t.flag_start = 1U;
+        //     ftm_done_route_started = 1U;
+        // }
 
         if (flag_step == 1)
         {

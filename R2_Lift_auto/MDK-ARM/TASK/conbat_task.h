@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
+#include <cstddef>
 #include "path_follow.h"
 #include "BR_McuBsplinePathGenerator.h"
 #endif
@@ -87,6 +88,7 @@ private:
         PLACE_KFS_LOWER_ACTION = 0, // 发送放车内底层 KFS 的机械臂动作。
         PLACE_KFS_PATH_TO_PICK,     // 跑到取车内 KFS 的精确点。
         PLACE_KFS_DT35_FORWARD,     // 按 DT35 边向前走边吸取。
+        PLACE_KFS_BACKWARD,         // 吸取成功后先沿 X 轴后退。
         PLACE_KFS_PATH_TO_PLACE     // 跑到选择的放 KFS 终点并发送放置动作。
     };
 
@@ -106,6 +108,7 @@ private:
     uint16_t kfs_place_stop_stable_count_;
     uint8_t kfs_place_index_;
     uint8_t kfs_place_precision_active_;
+    uint8_t place_kfs_pick_precision_active_;
     uint8_t kfs_place_laser_blocked_;
     uint8_t combine_pre_lift_ready_;
     uint8_t combine_crossed_finish_height_;
@@ -116,6 +119,7 @@ private:
     uint8_t lift_switch_target_;
     float lift_linear_speed_target_;
     float pick_kfs_first_back_start_x_m_;
+    float place_kfs_back_start_x_m_;
     float path_vx_target_;
     float path_vy_target_;
     float path_wz_target_;
