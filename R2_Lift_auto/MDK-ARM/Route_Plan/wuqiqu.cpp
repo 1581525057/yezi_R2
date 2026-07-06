@@ -4,7 +4,7 @@
 
 static const float WUQIQU_PI = 3.14159265358979323846f;  // 圆周率，用于角度转弧度
 static const float kDegToRad = WUQIQU_PI / 180.0f;       // 角度转弧度系数
-static const float kApproachVMaxMps = 4.80f;             // 接近阶段最大平移速度，单位 m/s
+static const float kApproachVMaxMps = 4.00f;             // 接近阶段最大平移速度，单位 m/s
 static const float kSlowVMaxMps = 2.80f;                 // 减速阶段最大平移速度，单位 m/s
 static const float kContactVMaxMps = 0.90f;              // 接触/贴近阶段最大平移速度，单位 m/s
 static const float kPlannerMaxAngularSpeedRadps = 2.80f; // 规划器输出角速度上限，单位 rad/s

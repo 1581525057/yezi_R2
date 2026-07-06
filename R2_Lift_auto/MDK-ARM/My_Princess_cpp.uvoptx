@@ -220,6 +220,16 @@
           <WinNumber>1</WinNumber>
           <ItemText>lift_class,0x0A</ItemText>
         </Ww>
+        <Ww>
+          <count>13</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>ROUTE_RELOCATION_STOP_STABLE_COUNT</ItemText>
+        </Ww>
+        <Ww>
+          <count>14</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>flag_step,0x0A</ItemText>
+        </Ww>
       </WatchWindow1>
       <WatchWindow2>
         <Ww>
@@ -286,6 +296,11 @@
           <count>12</count>
           <WinNumber>2</WinNumber>
           <ItemText>g_ftm_action_state,0x0A</ItemText>
+        </Ww>
+        <Ww>
+          <count>13</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>PICK_KFS_AFTER_STEP_ADVANCE_CM</ItemText>
         </Ww>
       </WatchWindow2>
       <Tracepoint>
