@@ -17,9 +17,9 @@ typedef struct
     float y_diff;           /* Y 坐标 */
     float angle_x;          /* 航向角 */
     int B;                  /* 当前梅花林动作，保留现有路线接口 */
-    int release_flag;       /* 是否松手标定位 */
-    int claw_vertical_flag; /* 夹爪上下标定位 */
-    int unused_flag;        /* 无用标定位 */
+    int release_flag;                /* 是否松手标定位 */
+    int claw_vertical_flag;          /* 夹爪上下标定位 */
+    int claw_vertical_adjust_count;  /* 夹爪上下调整接收次数 */
     int if_go;              /* 重定位完成后是否允许继续 */
     int16_t can_up;         /* CAN 上升标定位 */
 } VisionData_t;
@@ -42,7 +42,7 @@ extern Block_Vision block_vision[10];
 extern Block_Vision block_vision_middle[16];
 /*
  * 解析视觉帧，提取坐标、角度和标定位，并把不定长动作及格子编号压入队列。
- * 帧格式：S,<exec>,<x>,<y>,<yaw>,C,<action...>,B,<block...>,A,<release>,<claw_vertical>,<unused>,P,<if_go>,<can_up>,E
+ * 帧格式：S,<exec>,<x>,<y>,<yaw>,C,<action...>,B,<block...>,A,<release>,<claw_vertical>,<claw_vertical_adjust_count>,P,<if_go>,<can_up>,E
  * 返回 1 成功，0 失败。
  */
 int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out);
