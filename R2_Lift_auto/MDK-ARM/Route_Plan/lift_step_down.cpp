@@ -29,9 +29,9 @@ static void step_down_world_error_to_body_error(float x_world, float y_world, fl
 }
 
 // 第 1、3 阶段底盘移动时允许输出的最大速度，单位为 m/s。
-float STEP_DOWN_AUTO_CHASSIS_SPEED_MPS = 1.5f;
+float STEP_DOWN_AUTO_CHASSIS_SPEED_MPS = 1.8f;
 // 底盘速度计算使用的制动包络参数。数值越大，距离目标较远时允许的速度越高。
-float STEP_DOWN_CHASSIS_ACC_SPEED = 0.7f;
+float STEP_DOWN_CHASSIS_ACC_SPEED = 0.9f;
 
 // 第 2 阶段升降轮带动车辆离开台阶时允许输出的最大线速度，单位为 m/s。
 float STEP_DOWN_AUTO_LIFT_SPEED_MPS = 1.35f;
@@ -46,7 +46,7 @@ float STEP_DOWN_LIFT_HEIGHT_TOLERANCE_MM = 40.0f;
 // 下台阶前准备阶段离方块中心点的距离，单位为 m。
 float STEP_DOWN_PREPARE_DISTANCE_L = 0.34f;
 // 下台阶下降阶段离开当前坐标的距离，单位为 m。
-float STEP_DOWN_DESCEND_DISTANCE_D = 0.58f;
+float STEP_DOWN_DESCEND_DISTANCE_D = 0.55f;
 
 // 全局实例由任务层调用，调用方式与现有上台阶自动流程保持一致。
 LiftStepDown lift_step_down;
