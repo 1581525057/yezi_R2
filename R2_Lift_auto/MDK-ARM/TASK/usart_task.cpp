@@ -498,7 +498,7 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
     ++p;
     if (p >= e)
         return 0;
-    parsed.unused_flag = static_cast<int>(fast_atof(&p, e));
+    parsed.claw_vertical_adjust_count = static_cast<int>(fast_atof(&p, e));
 
     if (p >= e || *p != ',')
         return 0;
@@ -535,7 +535,7 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
 
     g_ftm_minipc_claw_release_cmd = clamp_uint8_field(parsed.release_flag);
     g_ftm_minipc_lift_dock_adjust_cmd = clamp_uint8_field(parsed.claw_vertical_flag);
-    g_ftm_minipc_unused_mark = static_cast<int16_t>(parsed.unused_flag);
+    g_ftm_minipc_claw_vertical_adjust_count = static_cast<int16_t>(parsed.claw_vertical_adjust_count);
     ++g_ftm_minipc_control_seq;
 
     *out = parsed;
