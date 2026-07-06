@@ -40,6 +40,7 @@ uint8_t CONBAT_COMBINE_STABLE_COUNT = 10U;             // 合体到位判定需�
 
 // 上坡状态的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_ramp_up_goals[] = {
+    // {3.43f, 1.6f, 0.0f},
     {2.93f, 1.6f, 0.0f}};
 
 // 上坡状态的中间点表，单位：x/y 为 m；按顺序依次经过。
