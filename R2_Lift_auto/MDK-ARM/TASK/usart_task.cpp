@@ -47,6 +47,7 @@ static uint8_t vision_last_block_count = 0U;
 
 // 每个方块的中心坐标
 Block_Vision block_vision_middle[16];
+//第二个方块的中心坐标
 float block_middle_x = 3.45f;
 float block_middle_y = -1.5f;
 
@@ -332,13 +333,13 @@ void vision_plan_mark_consumed_if_empty(void)
 /**
  * @brief  解析视觉帧
  *
- * 帧格式：S,<exec>,<x>,<y>,<yaw>,C,<action...>,B,<block...>,A,<release>,<claw_vertical>,<unused>,P,<can_up>,E
+ * 帧格式：S,<exec>,<x>,<y>,<yaw>,C,<action...>,B,<block...>,A,<release>,<claw_vertical>,<unused>,P,<if_go>,<can_up>,E
  * - exec：是否前往第二区标志（整数）
  * - x、y、yaw：坐标和角度（浮点数）
  * - C：后接不定长梅花林动作，存入动作队列
  * - B：后接不定长梅花林格子编号，存入方块队列
  * - A：后接是否松手、夹爪上下和无用标定位三个整数
- * - P：后接 CAN 上升标定位
+ * - P：后接 if_go 继续标志和 CAN 上升标定位
  *
  * @param  data  输入字节数组
  * @param  len   数组长度
@@ -505,6 +506,13 @@ int parse_vision_frame_computer(uint8_t *data, uint16_t len, VisionData_t *out)
     if (p >= e || *p != 'P')
         return 0;
     ++p;
+
+    if (p >= e || *p != ',')
+        return 0;
+    ++p;
+    if (p >= e)
+        return 0;
+    parsed.if_go = static_cast<int>(fast_atoi_field(&p, e));
 
     if (p >= e || *p != ',')
         return 0;
