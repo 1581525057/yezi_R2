@@ -106,7 +106,7 @@ namespace
     uint8_t g_main_action_step_index = 0U;
     uint8_t g_auto_full_flow_active = 0U;
     uint32_t g_last_minipc_control_seq = 0U;
-    int16_t g_last_lift_adjust_unused_mark = 0;
+    int16_t g_last_claw_vertical_adjust_count = 0;
     int g_last_docking_exec = 0;
     uint8_t g_docking_exec_changed = 0U;
     uint8_t g_docking_lift_adjust_active = 0U;
@@ -458,7 +458,7 @@ namespace
         if (g_ftm_main_state != FTM_MAIN_DOCKING)
         {
             g_last_minipc_control_seq = g_ftm_minipc_control_seq;
-            g_last_lift_adjust_unused_mark = g_ftm_minipc_unused_mark;
+            g_last_claw_vertical_adjust_count = g_ftm_minipc_claw_vertical_adjust_count;
             g_docking_lift_adjust_active = 0U;
             return;
         }
@@ -469,9 +469,9 @@ namespace
         }
         g_last_minipc_control_seq = g_ftm_minipc_control_seq;
 
-        if (g_ftm_minipc_unused_mark != g_last_lift_adjust_unused_mark)
+        if (g_ftm_minipc_claw_vertical_adjust_count != g_last_claw_vertical_adjust_count)
         {
-            g_last_lift_adjust_unused_mark = g_ftm_minipc_unused_mark;
+            g_last_claw_vertical_adjust_count = g_ftm_minipc_claw_vertical_adjust_count;
 
             const uint8_t lift_adjust_cmd = g_ftm_minipc_lift_dock_adjust_cmd;
             uint8_t lift_adjust_valid = 0U;
@@ -1122,7 +1122,7 @@ extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
 extern "C" volatile uint32_t g_ftm_grab_settle_delay_ms = 200U;
 extern "C" volatile uint8_t g_ftm_minipc_claw_release_cmd = 0U;
 extern "C" volatile uint8_t g_ftm_minipc_lift_dock_adjust_cmd = 0U;
-extern "C" volatile int16_t g_ftm_minipc_unused_mark = 0;
+extern "C" volatile int16_t g_ftm_minipc_claw_vertical_adjust_count = 0;
 extern "C" volatile uint32_t g_ftm_minipc_control_seq = 0U;
 extern "C" uint8_t FTM_GetState(void)
 {
