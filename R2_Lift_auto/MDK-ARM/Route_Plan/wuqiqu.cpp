@@ -19,9 +19,9 @@ static const uint32_t kFastLinkContactTimeoutMs = 80U; // 快速衔接点接触�
 // 目标点为视觉置零后的绝对坐标，当前约定雷达 X/Y 与车体 X/Y 对齐。
 // 参数顺序：x y yaw xy_tolerance yaw_tolerance
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {0.04f, 0.91f, -90.0f, 0.015f, 2.0f},
-    {0.08f, 0.48f, -90.0f, 0.035f, 3.0f},
-    {0.08f, 0.48f, 90.0f, 0.035f, 2.0f},
+    {0.04f, 0.91f, -90.0f, 0.015f, 1.5f},
+    {0.35f, 0.60f, -90.0f, 0.035f, 3.0f},
+    {0.35f, 0.60f, 90.0f, 0.035f, 2.0f},
     {0.96f, -1.64f, 0.0f, 0.030f, 1.5f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
