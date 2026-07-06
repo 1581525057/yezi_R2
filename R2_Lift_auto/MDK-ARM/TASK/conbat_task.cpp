@@ -75,7 +75,7 @@ static BRPathPose conbat_kfs_place_goals[] = {
 
 // 放 KFS 状态共用的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint conbat_kfs_place_middle_point_table[] = {
-    {2.88, 3.86},
+    {2.88, 4.10},
 };
 
 static const BRPathControlPoint *conbat_kfs_place_middle_points[] = {
