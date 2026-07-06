@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
+#include <cstddef>
 #include "path_follow.h"
 #include "BR_McuBsplinePathGenerator.h"
 #endif
@@ -64,8 +65,9 @@ private:
         COMBINE_ZONE3_READY,             // 阶段4：发送九宫格预备机械臂命令。
         COMBINE_WAIT_FINAL_LIFT_HEIGHT,  // 阶段5-1：收气缸后等待升降实际回到 1 档高度。
         COMBINE_FINAL_FORWARD,           // 阶段5-2：1 档到位后，底盘按 ch2 车体前向靠近。
-        COMBINE_PLACE_HAND,              // 阶段5-3：等待手持 KFS 激光松开后发送放置命令。
-        COMBINE_PLACE_LOWER_KFS          // 阶段5-4：等待车内 KFS 激光松开后发送放置命令。
+        COMBINE_WAIT_PLACE_HAND_DT35,    // 阶段5-3：等待前方 DT35 大于 10cm 后进入放手持 KFS。
+        COMBINE_PLACE_HAND,              // 阶段5-4：等待手持 KFS 激光松开后发送放置命令。
+        COMBINE_PLACE_LOWER_KFS          // 阶段5-5：等待车内 KFS 激光松开后发送放置命令。
     };
 
     enum PickKfsStep
@@ -86,6 +88,7 @@ private:
         PLACE_KFS_LOWER_ACTION = 0, // 发送放车内底层 KFS 的机械臂动作。
         PLACE_KFS_PATH_TO_PICK,     // 跑到取车内 KFS 的精确点。
         PLACE_KFS_DT35_FORWARD,     // 按 DT35 边向前走边吸取。
+        PLACE_KFS_BACKWARD,         // 吸取成功后先沿 X 轴后退。
         PLACE_KFS_PATH_TO_PLACE     // 跑到选择的放 KFS 终点并发送放置动作。
     };
 
@@ -102,7 +105,10 @@ private:
     uint8_t pick_kfs_meiling_active_;
     uint8_t pick_kfs_second_forward_done_;
     uint8_t pick_kfs_path_stable_count_;
+    uint16_t kfs_place_stop_stable_count_;
     uint8_t kfs_place_index_;
+    uint8_t kfs_place_precision_active_;
+    uint8_t place_kfs_pick_precision_active_;
     uint8_t kfs_place_laser_blocked_;
     uint8_t combine_pre_lift_ready_;
     uint8_t combine_crossed_finish_height_;
@@ -113,6 +119,7 @@ private:
     uint8_t lift_switch_target_;
     float lift_linear_speed_target_;
     float pick_kfs_first_back_start_x_m_;
+    float place_kfs_back_start_x_m_;
     float path_vx_target_;
     float path_vy_target_;
     float path_wz_target_;
