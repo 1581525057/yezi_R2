@@ -24,7 +24,7 @@ extern volatile float g_ftm_rs05_return_target_degree;
 extern volatile uint32_t g_ftm_grab_settle_delay_ms;
 extern volatile uint8_t g_ftm_minipc_claw_release_cmd;
 extern volatile uint8_t g_ftm_minipc_lift_dock_adjust_cmd;
-extern volatile int16_t g_ftm_minipc_unused_mark;
+extern volatile int16_t g_ftm_minipc_claw_vertical_adjust_count;
 extern volatile uint32_t g_ftm_minipc_control_seq;
 
 void ftm_task(void *argument);
