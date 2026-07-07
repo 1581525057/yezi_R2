@@ -12,44 +12,8 @@
 #include "FTMTask.h"
 extern float yaw_target;
 
-// B样条
-float CONBAT_DEG_TO_RAD = 3.1415926f / 180.0f;  // 角度转弧度系数，用于视觉角度转换。
-float CONBAT_GENERATE_PATH_MAX_VEL_M_S = 2.0f;  // 自动生成路径的最大线速度，单位 m/s。
-float CONBAT_GENERATE_PATH_MAX_ACC_M_S2 = 1.4f; // 自动生成路径的最大加速度，单位 m/s2。
-
-float CONBAT_KFS_PLACE_PATH_MAX_VEL_M_S = 1.5f;  // KFS 放置点路径的最大线速度，单位 m/s。
-float CONBAT_KFS_PLACE_PATH_MAX_ACC_M_S2 = 0.8f; // KFS 放置点路径的最大加速度，单位 m/s2。
-static const float CONBAT_KFS_PLACE_STOP_SPEED_LIMIT = 0.01f;
-static const uint16_t CONBAT_KFS_PLACE_STOP_STABLE_COUNT = 1000U;
-float CONBAT_GENERATE_PATH_GAP_M = 0.03f; // 自动生成路径点的间距，单位 m。
-
-// 合体跑点
-float CONBAT_PICK_KFS_PATH_MAX_VEL_M_S = 1.5f;            // 捡 KFS 跑点的最大线速度，单位 m/s。
-float CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2 = 0.8f;           // 捡 KFS 跑点的最大加速度，单位 m/s2。
-float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2 = 0.9f; // KFS 等待阶段车体前进加速度，单位 m/s2。
-float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS = 1.0f;  // KFS 等待阶段车体前进最大速度，单位 m/s。
-float CONBAT_PICK_KFS_FIRST_BACK_DISTANCE_M = 0.06f;      // 第一个 KFS 吸取成功后沿 X 轴后退距离，单位 m。
-float CONBAT_PICK_KFS_FIRST_BACK_SPEED_MPS = 0.4f;        // 第一个 KFS 吸取成功后沿 X 轴后退速度，单位 m/s。
-float CONBAT_PICK_GO_TO_COMBINE_KP = 1.6f;                // 去合体目标点的二维位置 P 闭环系数。
-float CONBAT_PICK_GO_TO_COMBINE_TOL_M = 0.03f;            // 去合体目标点的到位误差，单位 m。
-
-uint32_t CONBAT_KFS_PLACE_LASER_BLOCK_MM = 100U; // 左/右激光小于该距离时认为被 KFS 挡住，单位 mm。
-
-float CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM = 455.0f;  // 第一个 KFS 边吸边前进的 DT35 目标距离，在这里填写。
-float CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM = 455.0f; // 等机械臂准备第二次拾取前的 DT35 目标距离，在这里填写。
-
-float CONBAT_COMBINE_CLIMB_FINISH_MM = 255.0f;  // 合体爬升结束时 DT35 判定距离，单位 mm。
-float CONBAT_COMBINE_FORWARD_TARGET_MM = 65.0f; // 合体最后车体前向靠近的 DT35 目标距离，0 表示跳过。
-float CONBAT_COMBINE_FORWARD_TOL_MM = 8.0f;     // 合体最后前向靠近的 DT35 到位允许误差，单位 mm。
-
-float CONBAT_COMBINE_FORWARD_ACC_MPS2 = 0.5f; // 合体最后前向靠近的加速度，单位 m/s2。
-float CONBAT_COMBINE_FORWARD_MAX_MPS = 0.9f;  // 合体最后前向靠近的最大速度，单位 m/s。
-
-float CONBAT_COMBINE_LIFT_ACC_MPS2 = 0.4f;             // 合体举升阶段速度规划加速度，单位 m/s2。
-float CONBAT_COMBINE_LIFT_MAX_MPS = 0.5f;              // 合体举升阶段最大速度，单位 m/s。
-float CONBAT_COMBINE_LIFT_MIN_MPS = 0.2f;              // 合体举升阶段最小速度，单位 m/s。
-float CONBAT_COMBINE_LIFT_HEIGHT_TOLERANCE_MM = 40.0f; // 合体举升目标高度允许误差，单位 mm。
-uint8_t CONBAT_COMBINE_STABLE_COUNT = 10U;             // 合体到位判定需要连续稳定的次数。
+// 通用参数
+float CONBAT_DEG_TO_RAD = 3.1415926f / 180.0f; // 角度转弧度系数，用于视觉角度转换。
 
 // 上坡状态的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_ramp_up_goals[] = {
@@ -90,14 +54,14 @@ static BRPathPose conbat_combine_goals[] = {
 
 // 放 KFS 状态的终点表，单位：x/y 为 m，yaw 为 rad；按 kfs_place_index_ 选择。
 static BRPathPose conbat_kfs_place_goals[] = {
-    {0.0f, 4.49f, 1.5708f},
-    {2.94f, 4.49f, 1.5708f},
-    {0.0f, 4.49f, 1.5708f},
+    {2.4f, 4.52f, 1.5708f},
+    {2.94f, 4.52f, 1.5708f},
+    {3.48f, 4.52f, 1.5708f},
 };
 
 // 放 KFS 状态共用的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint conbat_kfs_place_middle_point_table[] = {
-    {2.88, 4.10},
+    {2.88, 4.20},
 };
 
 static const BRPathControlPoint *conbat_kfs_place_middle_points[] = {
@@ -111,6 +75,16 @@ static const std::size_t conbat_kfs_place_middle_point_counts[] = {
     sizeof(conbat_kfs_place_middle_point_table) / sizeof(conbat_kfs_place_middle_point_table[0]),
     sizeof(conbat_kfs_place_middle_point_table) / sizeof(conbat_kfs_place_middle_point_table[0]),
 };
+
+// 放置完成后偏角等待路径的终点，单位：x/y 为 m，yaw 为 rad。
+static BRPathPose conbat_kfs_wait_goal = {3.36f, 0.53f, 1.57f};
+
+// 放置完成后偏角等待路径的中间点，单位：x/y 为 m。
+static BRPathControlPoint conbat_kfs_wait_middle_points[] = {
+    {2.93f, 1.6f},
+};
+static const std::size_t conbat_kfs_wait_middle_point_count =
+    sizeof(conbat_kfs_wait_middle_points) / sizeof(conbat_kfs_wait_middle_points[0]);
 
 CONBAT_TASK conbat_t;
 
@@ -281,6 +255,7 @@ void CONBAT_TASK::reset(void)
     pick_kfs_path_stable_count_ = 0U;
     kfs_place_stop_stable_count_ = 0U;
     kfs_place_index_ = 0U;
+    kfs_place_arrived_ = 0U;
     kfs_place_precision_active_ = 0U;
     place_kfs_pick_precision_active_ = 0U;
     resetKfsPlaceLaserFlag();
@@ -293,13 +268,17 @@ void CONBAT_TASK::reset(void)
     lift_switch_target_ = 0U;
     lift_linear_speed_target_ = 0.0f;
     pick_kfs_first_back_start_x_m_ = 0.0f;
+    pick_kfs_second_back_start_x_m_ = 0.0f;
     place_kfs_back_start_x_m_ = 0.0f;
+    place_kfs_forward_start_x_m_ = 0.0f;
+    place_kfs_forward_start_y_m_ = 0.0f;
+    place_kfs_forward_start_yaw_deg_ = 0.0f;
     yaw_target_enabled = 0U;
     yaw_target_degree = 0.0f;
     clearPathOutput();
 }
 
-uint16_t falg_wudi = 0;
+uint16_t flag = 0;
 /*
  * 战斗任务主循环单次更新函数。
  * conbat_task 线程每 1ms 调用一次，负责检测状态切换，并分发到对应状态处理函数。
@@ -337,24 +316,31 @@ void CONBAT_TASK::runOnce(void)
         break;
 
     case CONBAT_COMBINE: // 合体
-        if (falg_wudi == 1)
+    {
+
+        if (vision.can_up == 1)
+        {
+            flag = 1;
+        }
+        if (flag == 1)
         {
             action_result = runCombine();
             update_state_by_action_result(action_result, CONBAT_IDLE, &state);
         }
         break;
+    }
 
     case CONBAT_IDLE:
         if (conbat_start == 1U)
         {
             conbat_start = 0U;
             state = CONBAT_RAMP_UP;
-            g_ftm_main_state = 4;
         }
         if (conbat_start == 2U)
         {
             conbat_start = 0U;
             state = CONBAT_COMBINE;
+            osDelay(1000);
         }
         clearPathOutput();
         break;
@@ -447,6 +433,8 @@ void CONBAT_TASK::resetKfsPlaceLaserFlag(void)
     kfs_place_laser_blocked_ = 0U;
 }
 
+uint32_t CONBAT_KFS_PLACE_LASER_BLOCK_MM = 100U; // 左/右激光小于该距离时认为被 KFS 挡住，单位 mm。
+
 uint8_t CONBAT_TASK::updateKfsPlaceLaserFlag(void)
 {
     // 左右任意一侧激光有效且距离小于阈值，认为 KFS 正在挡住激光。
@@ -525,6 +513,7 @@ void CONBAT_TASK::handleStateChanged(void)
     pick_kfs_second_forward_done_ = 0U;
     pick_kfs_path_stable_count_ = 0U;
     kfs_place_stop_stable_count_ = 0U;
+    kfs_place_arrived_ = 0U;
     kfs_place_precision_active_ = 0U;
     place_kfs_pick_precision_active_ = 0U;
     combine_pre_lift_ready_ = 0U;
@@ -535,6 +524,7 @@ void CONBAT_TASK::handleStateChanged(void)
     combine_final_lift_command_seq_ = 0U;
     lift_switch_target_ = 0U;
     lift_linear_speed_target_ = 0.0f;
+    pick_kfs_second_back_start_x_m_ = 0.0f;
     clearPathOutput();
 
     if (state == CONBAT_IDLE)
@@ -586,6 +576,18 @@ uint8_t CONBAT_TASK::runRampUp(void)
 
     return result;
 }
+
+// 捡 KFS 流程参数。
+float CONBAT_PICK_KFS_PATH_MAX_VEL_M_S = 1.5f;             // 捡 KFS 跑点的最大线速度，单位 m/s。
+float CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2 = 0.8f;            // 捡 KFS 跑点的最大加速度，单位 m/s2。
+float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2 = 0.9f;  // KFS 等待阶段车体前进加速度，单位 m/s2。
+float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS = 1.0f;   // KFS 等待阶段车体前进最大速度，单位 m/s。
+float CONBAT_PICK_KFS_FIRST_BACK_DISTANCE_M = 0.06f;       // KFS 吸取成功后沿 X 轴后退距离，单位 m。
+float CONBAT_PICK_KFS_FIRST_BACK_SPEED_MPS = 0.4f;         // KFS 吸取成功后沿 X 轴后退速度，单位 m/s。
+float CONBAT_PICK_GO_TO_COMBINE_KP = 1.6f;                 // 去合体目标点的二维位置 P 闭环系数。
+float CONBAT_PICK_GO_TO_COMBINE_TOL_M = 0.03f;             // 去合体目标点的到位误差，单位 m。
+float CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM = 455.0f;  // 第一个 KFS 边吸边前进的 DT35 目标距离。
+float CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM = 440.0f; // 第二个 KFS 边吸边前进的 DT35 目标距离。
 
 uint8_t CONBAT_TASK::runPickKfs(void)
 {
@@ -819,7 +821,8 @@ uint8_t CONBAT_TASK::runPickKfs(void)
             pick_kfs_second_forward_done_ = 0U;
             clearPathOutput();
             pick_kfs_path_stable_count_ = 0U;
-            pick_kfs_step_ = PICK_GO_TO_COMBINE;
+            pick_kfs_second_back_start_x_m_ = vision.x_diff;
+            pick_kfs_step_ = PICK_KFS_SECOND_BACKWARD;
             return 0U;
         }
 
@@ -836,6 +839,30 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         }
         return 0U;
 
+    case PICK_KFS_SECOND_BACKWARD:
+    {
+        /* 第二个 KFS 吸取成功后，按视觉 X 坐标确认至少后退 6cm，再跑向合体目标点。 */
+        const float x_back_m = pick_kfs_second_back_start_x_m_ - vision.x_diff;
+        if (x_back_m >= CONBAT_PICK_KFS_FIRST_BACK_DISTANCE_M)
+        {
+            clearPathOutput();
+            pick_kfs_path_stable_count_ = 0U;
+            pick_kfs_step_ = PICK_GO_TO_COMBINE;
+            return 0U;
+        }
+
+        /* 这里用世界系 X 负方向后退，再转换成底盘车体系速度输出。 */
+        const float yaw_rad = vision.angle_x * CONBAT_DEG_TO_RAD;
+        PathFollower::worldToBody(-CONBAT_PICK_KFS_FIRST_BACK_SPEED_MPS,
+                                  0.0f,
+                                  yaw_rad,
+                                  &path_vx_target_,
+                                  &path_vy_target_);
+        path_wz_target_ = 0.0f;
+        path_active_ = 1U;
+        return 0U;
+    }
+
     case PICK_GO_TO_COMBINE:
     {
         const float x_err = conbat_combine_goals[0].x_m - vision.x_diff;
@@ -847,7 +874,7 @@ uint8_t CONBAT_TASK::runPickKfs(void)
 
         if (position_reached != 0U)
         {
-            yaw_target = 90.0f;
+            setYawTarget(90.0f);
         }
 
         if (conbat_stable_confirm(position_reached,
@@ -896,6 +923,15 @@ uint8_t CONBAT_TASK::runPickKfs(void)
     }
 }
 
+// 放 KFS 流程中的取车内 KFS 参数。
+float CONBAT_PLACE_KFS_PICK_PATH_MAX_VEL_M_S = 1.6f;  // 取最后一个车内 KFS 跑点的最大线速度，单位 m/s。
+float CONBAT_PLACE_KFS_PICK_PATH_MAX_ACC_M_S2 = 1.2f; // 取最后一个车内 KFS 跑点的最大加速度，单位 m/s2。
+static const float CONBAT_KFS_PLACE_STOP_SPEED_LIMIT = 0.01f;
+static const uint16_t CONBAT_KFS_PLACE_STOP_STABLE_COUNT = 100U;
+static const float CONBAT_KFS_PLACE_YAW_TOL_DEG = 3.0f;
+float CONBAT_PLACE_KFS_FORWARD_DISTANCE_M = 0.15f; // 放置 KFS 后沿车头方向前进距离，单位 m。
+float CONBAT_PLACE_KFS_FORWARD_SPEED_MPS = 0.4f;   // 放置 KFS 后沿车头方向前进速度，单位 m/s。
+
 uint8_t CONBAT_TASK::runPlaceKfs(void)
 {
     switch (place_kfs_step_)
@@ -923,8 +959,8 @@ uint8_t CONBAT_TASK::runPlaceKfs(void)
             uint8_t result = loadGeneratedPathToGoal(conbat_pick_kfs_goals[2],
                                                      conbat_pick_kfs_middle_points,
                                                      conbat_pick_kfs_middle_point_count,
-                                                     CONBAT_PICK_KFS_PATH_MAX_VEL_M_S,
-                                                     CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2);
+                                                     CONBAT_PLACE_KFS_PICK_PATH_MAX_VEL_M_S,
+                                                     CONBAT_PLACE_KFS_PICK_PATH_MAX_ACC_M_S2);
             if (result != 1U)
             {
                 return result;
@@ -964,8 +1000,8 @@ uint8_t CONBAT_TASK::runPlaceKfs(void)
         conbat_position_p_speed(x_err,
                                 y_err,
                                 CONBAT_PICK_GO_TO_COMBINE_KP,
-                                CONBAT_PICK_KFS_PATH_MAX_VEL_M_S,
-                                CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2,
+                                CONBAT_PLACE_KFS_PICK_PATH_MAX_VEL_M_S,
+                                CONBAT_PLACE_KFS_PICK_PATH_MAX_ACC_M_S2,
                                 0.001f,
                                 last_world_vx,
                                 last_world_vy,
@@ -1013,8 +1049,13 @@ uint8_t CONBAT_TASK::runPlaceKfs(void)
         if (x_back_m >= CONBAT_PICK_KFS_FIRST_BACK_DISTANCE_M)
         {
             clearPathOutput();
-            yaw_target = 90.0f;
+            setYawTarget(90.0f);
+            if (fabsf(normalizeYawDeg(90.0f - vision.angle_x)) > CONBAT_KFS_PLACE_YAW_TOL_DEG)
+            {
+                return 0U;
+            }
             path_loaded_ = 0U;
+            kfs_place_arrived_ = 0U;
             kfs_place_stop_stable_count_ = 0U;
             place_kfs_step_ = PLACE_KFS_PATH_TO_PLACE;
             return 0U;
@@ -1034,41 +1075,96 @@ uint8_t CONBAT_TASK::runPlaceKfs(void)
 
     case PLACE_KFS_PATH_TO_PLACE:
     {
-        /* 第四步：跑到当前选择的放 KFS 终点，到位后立刻发送放手持 KFS 动作。 */
+        /* 第四步：跑到当前选择的放 KFS 终点，到位并停稳后发送放置动作。 */
 
-        const uint8_t path_result = runSelectKfsPlace();
-        if (path_result == 1U)
+        if (kfs_place_arrived_ == 0U)
         {
-            const uint8_t chassis_stopped =
-                (fabsf(omni_chassis.now.Vx) < CONBAT_KFS_PLACE_STOP_SPEED_LIMIT &&
-                 fabsf(omni_chassis.now.Vy) < CONBAT_KFS_PLACE_STOP_SPEED_LIMIT &&
-                 fabsf(omni_chassis.now.Vz) < CONBAT_KFS_PLACE_STOP_SPEED_LIMIT)
-                    ? 1U
-                    : 0U;
-
-            clearPathOutput();
-            if (chassis_stopped != 0U)
+            const uint8_t path_result = runSelectKfsPlace();
+            if (path_result == 1U)
             {
-                if (kfs_place_stop_stable_count_ < CONBAT_KFS_PLACE_STOP_STABLE_COUNT)
-                {
-                    ++kfs_place_stop_stable_count_;
-                }
+                clearPathOutput();
+                kfs_place_arrived_ = 1U;
             }
-            else
-            {
-                kfs_place_stop_stable_count_ = 0U;
-            }
-
-            if (kfs_place_stop_stable_count_ < CONBAT_KFS_PLACE_STOP_STABLE_COUNT)
-            {
-                return 0U;
-            }
-
-            if (arm_comm.executeAction(ArmComm::ACTION_ZONE3_PLACE_FINALL, 0U) == 0U)
+            else if (path_result == 2U)
             {
                 return 2U;
             }
+            else
+            {
+                return 0U;
+            }
+        }
+
+        const uint8_t chassis_stopped =
+            (fabsf(omni_chassis.now.Vx) < CONBAT_KFS_PLACE_STOP_SPEED_LIMIT &&
+             fabsf(omni_chassis.now.Vy) < CONBAT_KFS_PLACE_STOP_SPEED_LIMIT &&
+             fabsf(omni_chassis.now.Vz) < CONBAT_KFS_PLACE_STOP_SPEED_LIMIT)
+                ? 1U
+                : 0U;
+
+        clearPathOutput();
+        if (chassis_stopped != 0U)
+        {
+            if (kfs_place_stop_stable_count_ < CONBAT_KFS_PLACE_STOP_STABLE_COUNT)
+            {
+                ++kfs_place_stop_stable_count_;
+            }
+        }
+        else
+        {
+            kfs_place_stop_stable_count_ = 0U;
+        }
+
+        if (kfs_place_stop_stable_count_ < CONBAT_KFS_PLACE_STOP_STABLE_COUNT)
+        {
+            return 0U;
+        }
+
+        arm_comm.executeAction(ArmComm::ACTION_ZONE3_PLACE_FINALL, 1U);
+        /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
+        for (uint8_t i = 0U; i < 10U; ++i)
+        {
             arm_comm.send();
+        }
+        kfs_place_arrived_ = 0U;
+        place_kfs_forward_start_x_m_ = vision.x_diff;
+        place_kfs_forward_start_y_m_ = vision.y_diff;
+        place_kfs_forward_start_yaw_deg_ = vision.angle_x;
+        place_kfs_step_ = PLACE_KFS_FORWARD_AFTER_PLACE;
+        return 0U;
+    }
+
+    case PLACE_KFS_FORWARD_AFTER_PLACE:
+    {
+        /* 放置完成后沿车头方向前进，超过 15cm 即认为结束。 */
+        const float yaw_rad = place_kfs_forward_start_yaw_deg_ * CONBAT_DEG_TO_RAD;
+        const float dx = vision.x_diff - place_kfs_forward_start_x_m_;
+        const float dy = vision.y_diff - place_kfs_forward_start_y_m_;
+        const float forward_m = cosf(yaw_rad) * dx + sinf(yaw_rad) * dy;
+        if (forward_m >= CONBAT_PLACE_KFS_FORWARD_DISTANCE_M)
+        {
+            clearPathOutput();
+            path_loaded_ = 0U;
+            place_kfs_step_ = PLACE_KFS_WAIT;
+            return 0U;
+        }
+
+        path_vx_target_ = CONBAT_PLACE_KFS_FORWARD_SPEED_MPS;
+        path_vy_target_ = 0.0f;
+        path_wz_target_ = 0.0f;
+        path_active_ = 1U;
+        return 0U;
+    }
+
+    case PLACE_KFS_WAIT:
+    {
+        /* 放置后跑到偏角等待点。 */
+        const uint8_t path_result = loadGeneratedPathToGoal(conbat_kfs_wait_goal,
+                                                            conbat_kfs_wait_middle_points,
+                                                            conbat_kfs_wait_middle_point_count);
+        if (path_result == 1U)
+        {
+            clearPathOutput();
             return 1U;
         }
         if (path_result == 2U)
@@ -1083,6 +1179,18 @@ uint8_t CONBAT_TASK::runPlaceKfs(void)
         return 2U;
     }
 }
+
+// 合体流程参数。
+float CONBAT_COMBINE_CLIMB_FINISH_MM = 255.0f;         // 合体爬升结束时 DT35 判定距离，单位 mm。
+float CONBAT_COMBINE_FORWARD_TARGET_MM = 65.0f;        // 合体最后车体前向靠近的 DT35 目标距离，0 表示跳过。
+float CONBAT_COMBINE_FORWARD_TOL_MM = 8.0f;            // 合体最后前向靠近的 DT35 到位允许误差，单位 mm。
+float CONBAT_COMBINE_FORWARD_ACC_MPS2 = 0.5f;          // 合体最后前向靠近的加速度，单位 m/s2。
+float CONBAT_COMBINE_FORWARD_MAX_MPS = 0.9f;           // 合体最后前向靠近的最大速度，单位 m/s。
+float CONBAT_COMBINE_LIFT_ACC_MPS2 = 0.4f;             // 合体举升阶段速度规划加速度，单位 m/s2。
+float CONBAT_COMBINE_LIFT_MAX_MPS = 0.5f;              // 合体举升阶段最大速度，单位 m/s。
+float CONBAT_COMBINE_LIFT_MIN_MPS = 0.2f;              // 合体举升阶段最小速度，单位 m/s。
+float CONBAT_COMBINE_LIFT_HEIGHT_TOLERANCE_MM = 10.0f; // 合体举升目标高度允许误差，单位 mm。
+uint8_t CONBAT_COMBINE_STABLE_COUNT = 10U;             // 合体到位判定需要连续稳定的次数。
 
 /*
  * 合体状态处理。
@@ -1355,6 +1463,9 @@ uint8_t CONBAT_TASK::runCombine(void)
     }
 }
 
+float CONBAT_KFS_PLACE_PATH_MAX_VEL_M_S = 1.5f;  // KFS 放置点路径的最大线速度，单位 m/s。
+float CONBAT_KFS_PLACE_PATH_MAX_ACC_M_S2 = 0.8f; // KFS 放置点路径的最大加速度，单位 m/s2。
+
 /*
  * 选择 KFS 放置点位状态处理。
  * 根据 kfs_place_index_ 选择对应路径，并把路径跟随速度交给底盘。
@@ -1442,6 +1553,10 @@ uint8_t CONBAT_TASK::runSelectKfsPlace(void)
     path_active_ = 1U;
     return 0U;
 }
+
+float CONBAT_GENERATE_PATH_MAX_VEL_M_S = 2.0f;  // 自动生成路径的最大线速度，单位 m/s。
+float CONBAT_GENERATE_PATH_MAX_ACC_M_S2 = 1.4f; // 自动生成路径的最大加速度，单位 m/s2。
+float CONBAT_GENERATE_PATH_GAP_M = 0.03f;       // 自动生成路径点的间距，单位 m。
 
 /*
  * 加载并执行当前状态对应的路径。
