@@ -69,8 +69,10 @@ private:
     };
     enum PlaceKfsStep
     {
-        PLACE_KFS_MOVE_TO_SELECTED = 0, // 跑到选定 KFS 放置点并精定位。
-        PLACE_KFS_SEND_ACTION           // 发送机械臂放 KFS 命令。
+        PLACE_KFS_MOVE_TO_SELECTED = 0,     // 跑到选定 KFS 放置点并精定位。
+        PLACE_KFS_SEND_ACTION,              // 发送机械臂放 KFS 命令。
+        PLACE_KFS_FORWARD_AFTER_ACTION,     // 放置后沿车头方向前进一小段。
+        PLACE_KFS_MOVE_TO_COMBINE_GOAL      // 跑到合体终点并精定位。
     };
 
     PathFollower path_follower_;
@@ -79,12 +81,18 @@ private:
     ConbatState last_state_;
     uint8_t path_loaded_;
     uint8_t path_active_;
-    uint8_t ramp_up_waiting_;
+    uint8_t ramp_up_waiting_;           // 上坡阶段2完成后置位，防止重复跑同一段路径。
+    uint8_t ramp_up_yaw_ready_;         // 上坡阶段1完成后的 0 度转向是否已经完成。
+    uint16_t ramp_up_yaw_stable_count_; // 上坡阶段间转向连续到位计数。
+    uint8_t ramp_up_stage_index_;       // 上坡 B 样条阶段索引：0 跑阶段1，1 跑阶段2。
     PlaceKfsStep place_kfs_step_;
     CombineStep combine_step_;
     uint16_t kfs_place_stop_stable_count_;
     uint8_t kfs_place_index_;
     uint8_t kfs_place_precision_active_;
+    uint8_t kfs_place_path_following_;
+    uint8_t kfs_place_forward_started_;
+    uint8_t kfs_place_combine_precision_active_;
     uint8_t kfs_place_laser_blocked_;
     uint8_t combine_pre_lift_ready_;
     uint8_t combine_crossed_finish_height_;
@@ -94,16 +102,21 @@ private:
     uint32_t combine_final_lift_command_seq_;
     uint8_t lift_switch_target_;
     float lift_linear_speed_target_;
+    float kfs_place_forward_start_x_m_;
+    float kfs_place_forward_start_y_m_;
+    float kfs_place_forward_start_yaw_rad_;
     float path_vx_target_;
     float path_vy_target_;
     float path_wz_target_;
 
     void handleStateChanged(void);
     void clearPathOutput(void);
+    uint8_t updateRampUpYawTarget(float yaw_degree); // 上坡阶段间 yaw 锁定和稳定判定。
     uint8_t runRampUp(void);
     uint8_t runPlaceKfs(void);
     uint8_t runCombine(void);
     uint8_t runSelectKfsPlace(void);
+    uint8_t runMoveToCombineGoal(void);
     uint8_t loadGeneratedPathToGoal(const BRPathPose &goal,
                                     const BRPathControlPoint *middle_points,
                                     std::size_t middle_point_count,

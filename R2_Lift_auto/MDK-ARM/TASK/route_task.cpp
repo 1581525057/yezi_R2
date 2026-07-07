@@ -1058,7 +1058,7 @@ extern "C" void plan_route(void *argument)
         //     route_t.flag_start = 1U;
         //     ftm_done_route_started = 1U;
         // }
-
+        // 7.33 -0.67
         if (flag_step == 1)
         {
             area_one_relocation.update(SENSOR_FRONT | SENSOR_LEFT, 1);

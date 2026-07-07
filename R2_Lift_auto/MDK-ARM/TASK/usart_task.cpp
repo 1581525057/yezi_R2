@@ -638,6 +638,12 @@ extern "C" void usart_task(void *argument)
             Flag1 = 0;
         }
 
+        if (Flag1 == 2)
+        {
+            send_position_to_pc(0, 1, 7.33, -0.67, 0.0f);
+            Flag1 = 0;
+        }
+
         osDelay(1);
     }
 }
