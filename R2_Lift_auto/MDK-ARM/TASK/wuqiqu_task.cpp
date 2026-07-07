@@ -1,6 +1,7 @@
 #include "wuqiqu.h"
 #include "wuqiqu_task.h"
 #include "cmsis_os.h"
+#include "laser_distance.h"
 #include "omni_chassis.h"
 #include "usart_task.h"
 #include <math.h>
@@ -57,6 +58,34 @@ constexpr float kMinAngularCommandRadps = 0.18f;
  */
 constexpr float kVisionXToPlannerX = 1.0f;
 constexpr float kVisionYToPlannerY = 1.0f;
+
+/* 预选赛武器头首点的 Y 坐标卡滞判定参数。 */
+constexpr float kPrelimYLockNearTargetM = 0.10f;
+constexpr float kPrelimYLockStableBandM = 0.01f;
+constexpr float kPrelimYLockMovingSpeedMps = 0.03f;
+constexpr uint32_t kPrelimYLockStableMs = 80U;
+
+/* 预选赛武器头 laser_left 精调参数，单位全部使用 m。 */
+constexpr float kPrelimLaserAlignKp = 1.2f;
+constexpr float kPrelimLaserAlignMaxMps = 0.12f;
+constexpr float kPrelimLaserAlignMinMps = 0.04f;
+constexpr float kPrelimLaserAlignAccMps2 = 0.8f;
+constexpr float kPrelimLaserAlignDecMps2 = 1.2f;
+constexpr uint32_t kPrelimLaserAlignStableMs = 80U;
+
+struct PrelimLaserWindow
+{
+    float min_m;
+    float max_m;
+};
+
+constexpr PrelimLaserWindow kPrelimLaserWindows[] = {
+    {1.13f, 1.15f},
+    {0.93f, 0.95f},
+    {0.73f, 0.75f},
+};
+constexpr uint8_t kPrelimLaserWindowCount =
+    static_cast<uint8_t>(sizeof(kPrelimLaserWindows) / sizeof(kPrelimLaserWindows[0]));
 
 struct LinearShapeParams
 {
@@ -220,6 +249,14 @@ public:
     WuqiquTask()
         : active_(0U),
           finished_(0U),
+          prelim_active_(0U),
+          prelim_weapon_index_(0U),
+          prelim_y_locked_(0U),
+          prelim_y_tracking_(0U),
+          prelim_y_ref_m_(0.0f),
+          prelim_y_stable_start_tick_(0U),
+          prelim_laser_aligning_(0U),
+          prelim_laser_stable_start_tick_(0U),
           vx_target_(0.0f),
           vy_target_(0.0f),
           wz_target_(0.0f),
@@ -236,6 +273,7 @@ public:
     {
         active_ = 0U;
         finished_ = 0U;
+        resetPrelimRuntime();
         wuqiqu.resetRoute();
         clearOutput();
         last_update_tick_ = HAL_GetTick();
@@ -264,6 +302,12 @@ public:
                 active_ = 0U;
                 finished_ = 1U;
                 clearOutput();
+                resetPrelimRuntime();
+            }
+            else
+            {
+                prelim_active_ = 1U;
+                prelim_weapon_index_ = weapon_index;
             }
         }
     }
@@ -272,6 +316,7 @@ public:
     {
         active_ = 0U;
         finished_ = 0U;
+        resetPrelimRuntime();
         clearOutput();
         last_update_tick_ = 0U;
         wuqiqu.reset();
@@ -285,16 +330,37 @@ public:
             return 0U;
         }
 
+        if (prelim_laser_aligning_ != 0U)
+        {
+            return runPrelimLaserAlign();
+        }
+
         /* 每周期读取当前位姿，运行规划器，并更新底盘速度目标。 */
-        const WuqiquPathPlanner::Pose pose = buildPose();
+        WuqiquPathPlanner::Pose pose = buildPose();
+        updatePrelimYLock(pose);
+        if (prelim_y_locked_ != 0U)
+        {
+            pose.y = wuqiqu.target_.y_m;
+        }
+
         const int finished = wuqiqu.follow(pose);
         updateOutput(wuqiqu.getOutput());
 
         if (finished != 0)
         {
+            if (prelim_active_ != 0U && prelim_weapon_index_ < kPrelimLaserWindowCount)
+            {
+                prelim_laser_aligning_ = 1U;
+                prelim_laser_stable_start_tick_ = 0U;
+                clearOutput();
+                last_update_tick_ = HAL_GetTick();
+                return 0U;
+            }
+
             active_ = 0U;
             finished_ = 1U;
             clearOutput();
+            resetPrelimRuntime();
             return 1U;
         }
 
@@ -315,6 +381,7 @@ public:
     {
         active_ = 0U;
         finished_ = 0U;
+        resetPrelimRuntime();
         clearOutput();
         last_update_tick_ = HAL_GetTick();
         wuqiqu.advanceToNext();
@@ -356,6 +423,14 @@ private:
     /* active_ 为 1 表示当前任务接管底盘速度目标。 */
     volatile uint8_t active_;
     volatile uint8_t finished_;
+    volatile uint8_t prelim_active_;
+    uint8_t prelim_weapon_index_;
+    uint8_t prelim_y_locked_;
+    uint8_t prelim_y_tracking_;
+    float prelim_y_ref_m_;
+    uint32_t prelim_y_stable_start_tick_;
+    uint8_t prelim_laser_aligning_;
+    uint32_t prelim_laser_stable_start_tick_;
 
     /* 下发到底盘的车体系目标速度，单位 m/s、rad/s。 */
     volatile float vx_target_;
@@ -368,6 +443,18 @@ private:
         vx_target_ = 0.0f;
         vy_target_ = 0.0f;
         wz_target_ = 0.0f;
+    }
+
+    void resetPrelimRuntime()
+    {
+        prelim_active_ = 0U;
+        prelim_weapon_index_ = 0U;
+        prelim_y_locked_ = 0U;
+        prelim_y_tracking_ = 0U;
+        prelim_y_ref_m_ = 0.0f;
+        prelim_y_stable_start_tick_ = 0U;
+        prelim_laser_aligning_ = 0U;
+        prelim_laser_stable_start_tick_ = 0U;
     }
 
     LinearShapeParams getLinearShape() const
@@ -402,6 +489,148 @@ private:
                                &pose.world_speed_y);
 
         return pose;
+    }
+
+    void updatePrelimYLock(const WuqiquPathPlanner::Pose &pose)
+    {
+        if (prelim_active_ == 0U || prelim_y_locked_ != 0U || wuqiqu.getCurrentIndex() != 0U)
+        {
+            return;
+        }
+
+        const float err_x_m = wuqiqu.target_.x_m - pose.x;
+        const float err_y_m = wuqiqu.target_.y_m - pose.y;
+        const float distance_m = sqrtf(err_x_m * err_x_m + err_y_m * err_y_m);
+        const float chassis_speed_mps = sqrtf(pose.car_speed_x * pose.car_speed_x +
+                                              pose.car_speed_y * pose.car_speed_y);
+        const uint8_t lock_candidate =
+            (distance_m <= kPrelimYLockNearTargetM &&
+             chassis_speed_mps >= kPrelimYLockMovingSpeedMps)
+                ? 1U
+                : 0U;
+
+        if (lock_candidate == 0U)
+        {
+            prelim_y_tracking_ = 0U;
+            prelim_y_stable_start_tick_ = 0U;
+            prelim_y_ref_m_ = pose.y;
+            return;
+        }
+
+        const uint32_t now_tick = HAL_GetTick();
+        if (prelim_y_tracking_ == 0U ||
+            fabsf(pose.y - prelim_y_ref_m_) > kPrelimYLockStableBandM)
+        {
+            prelim_y_tracking_ = 1U;
+            prelim_y_ref_m_ = pose.y;
+            prelim_y_stable_start_tick_ = now_tick;
+            return;
+        }
+
+        if ((now_tick - prelim_y_stable_start_tick_) >= kPrelimYLockStableMs)
+        {
+            // 只锁传给规划器的实时 y 值，不改目标点表，避免影响后续路线。
+            prelim_y_locked_ = 1U;
+        }
+    }
+
+    uint8_t runPrelimLaserAlign()
+    {
+        if (prelim_weapon_index_ >= kPrelimLaserWindowCount)
+        {
+            active_ = 0U;
+            finished_ = 1U;
+            clearOutput();
+            resetPrelimRuntime();
+            return 1U;
+        }
+
+        const PrelimLaserWindow &window = kPrelimLaserWindows[prelim_weapon_index_];
+        const uint32_t now_tick = HAL_GetTick();
+        uint8_t laser_in_window = 0U;
+
+        if (laser_left.data.valid != 0U)
+        {
+            const float laser_m = laser_left.data.distance_m;
+            laser_in_window = (laser_m >= window.min_m && laser_m <= window.max_m) ? 1U : 0U;
+
+            if (laser_in_window == 0U)
+            {
+                const float target_m = 0.5f * (window.min_m + window.max_m);
+                const float err_m = target_m - laser_m;
+                float world_vx_mps = kPrelimLaserAlignKp * err_m;
+                world_vx_mps = limitFloat(world_vx_mps, -kPrelimLaserAlignMaxMps, kPrelimLaserAlignMaxMps);
+                if (fabsf(world_vx_mps) < kPrelimLaserAlignMinMps)
+                {
+                    world_vx_mps = (err_m >= 0.0f) ? kPrelimLaserAlignMinMps : -kPrelimLaserAlignMinMps;
+                }
+
+                prelim_laser_stable_start_tick_ = 0U;
+                updateLaserAlignOutput(world_vx_mps);
+                return 0U;
+            }
+        }
+
+        if (laser_in_window != 0U)
+        {
+            clearOutput();
+            if (prelim_laser_stable_start_tick_ == 0U)
+            {
+                prelim_laser_stable_start_tick_ = now_tick;
+                return 0U;
+            }
+
+            if ((now_tick - prelim_laser_stable_start_tick_) >= kPrelimLaserAlignStableMs)
+            {
+                active_ = 0U;
+                finished_ = 1U;
+                clearOutput();
+                resetPrelimRuntime();
+                return 1U;
+            }
+        }
+        else
+        {
+            // 激光无效时保持底盘不动，避免盲目微调。
+            prelim_laser_stable_start_tick_ = 0U;
+            clearOutput();
+        }
+
+        return 0U;
+    }
+
+    void updateLaserAlignOutput(float world_vx_mps)
+    {
+        float vx_limited = 0.0f;
+        float vy_limited = 0.0f;
+        worldToChassisVelocity(world_vx_mps,
+                               0.0f,
+                               vision.angle_x * kDegToRad,
+                               &vx_limited,
+                               &vy_limited);
+        limitVectorToMax(vx_limited, vy_limited, kPrelimLaserAlignMaxMps);
+
+        const uint32_t now_tick = HAL_GetTick();
+        float dt_s = kMinControlDtS;
+        if (last_update_tick_ != 0U)
+        {
+            dt_s = static_cast<float>(now_tick - last_update_tick_) * 0.001f;
+            dt_s = limitFloat(dt_s, kMinControlDtS, kMaxControlDtS);
+        }
+        last_update_tick_ = now_tick;
+
+        const float target_speed = sqrtf(vx_limited * vx_limited + vy_limited * vy_limited);
+        const float current_speed = sqrtf(vx_target_ * vx_target_ + vy_target_ * vy_target_);
+        const float max_delta =
+            ((target_speed > current_speed) ? kPrelimLaserAlignAccMps2 : kPrelimLaserAlignDecMps2) * dt_s;
+
+        float vx_slewed = 0.0f;
+        float vy_slewed = 0.0f;
+        limitVectorDelta(vx_limited, vy_limited, vx_target_, vy_target_, max_delta, &vx_slewed, &vy_slewed);
+
+        vx_target_ = vx_slewed;
+        vy_target_ = vy_slewed;
+        wz_target_ = 0.0f;
     }
 
     void updateOutput(const WuqiquPathPlanner::Output &output)
