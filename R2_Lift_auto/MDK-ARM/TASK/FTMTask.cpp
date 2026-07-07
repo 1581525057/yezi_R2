@@ -15,7 +15,7 @@ enum FTMMainState
     FTM_MAIN_INIT = 0,            // 初始化各功能模块，完成后进入空闲。
     FTM_MAIN_IDLE = 1,            // 空闲/手动调试状态，等待 Watch 写入动作状态。
     FTM_MAIN_WUQIQU_ROUTE = 2,    // 独立执行武器区第 1 个跑点。
-    FTM_MAIN_WUQIQU_ZERO = 3,     // 向视觉发送置零命令。 0 0 -90
+    FTM_MAIN_WUQIQU_ZERO = 3,     // 向视觉发送置零命令。 0 0 90
     FTM_MAIN_DONE = 4,            // 全流程完成保持状态。
     FTM_MAIN_AUTO_PICK_ROUTE = 5, // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
     FTM_MAIN_AUTO_TURN_READY = 6, // 武器区调整姿态 再次取武器头流程：张爪、对位、M2006 翻转。
@@ -69,7 +69,7 @@ namespace
     constexpr uint32_t kWuqiquZeroSettleMs = 200U;
     constexpr float kWuqiquZeroRelocalizeX = 0.0f;
     constexpr float kWuqiquZeroRelocalizeY = 0.0f;
-    constexpr float kWuqiquZeroRelocalizeYawDeg = -90.0f;
+    constexpr float kWuqiquZeroRelocalizeYawDeg = 90.0f;
     constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;
     constexpr uint16_t kWuqiquYawTurnStableCycles = 200U;
     constexpr uint8_t kWuqiquSecondWaypointIndex = 1U;
