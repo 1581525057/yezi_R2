@@ -36,16 +36,16 @@ static void step_up_world_error_to_body_error(float x_world, float y_world, floa
 }
 
 // 靠近阶段最大底盘速度 (m/s)
-float STEP_UP_AUTO_APPROACH_MPS = 1.5f;
+float STEP_UP_AUTO_APPROACH_MPS = 1.7f;
 // 底盘靠近阶段升降最大加速度 (m/s)
-float STEP_UP_CHASSIS_ACC_SPEED = 0.7f;
+float STEP_UP_CHASSIS_ACC_SPEED = 0.9f;
 // 爬升阶段未到完成区时的最小线速度，避免小误差下卡在静摩擦附近。
 float STEP_UP_AUTO_CLIMB_MIN_SPEED_MPS = 0.25f;
 
 // 爬升阶段升降最大线速度 (m/s)
-float STEP_UP_AUTO_CLIMB_SPEED_MPS = 1.35f;
+float STEP_UP_AUTO_CLIMB_SPEED_MPS = 2.00f;
 // 爬升阶段升降最大加速度 (m/s)
-float STEP_UP_LIFT_ACC_SPEED = 1.0f;
+float STEP_UP_LIFT_ACC_SPEED = 1.5f;
 
 // 配置雷达爬升阶段的前进距离 L，单位为 m。
 float STEP_UP_RADAR_CLIMB_DISTANCE_M = 0.82f;
@@ -62,7 +62,7 @@ uint32_t STEP_UP_AUTO_LASER_MAX_MM = 1700U;
 // 高度稳定所需连续确认次数，防抖用
 uint8_t STEP_UP_AUTO_STABLE_COUNT = 10U;
 // 2 档等待时按实际电机角度换算出的左右高度判定到位，避免只看轨迹 finished 提前跳转。
-float STEP_UP_LIFT_HEIGHT_TOLERANCE_MM = 40.0f;
+float STEP_UP_LIFT_HEIGHT_TOLERANCE_MM = 80.0f;
 
 LiftAuto lift_auto;
 

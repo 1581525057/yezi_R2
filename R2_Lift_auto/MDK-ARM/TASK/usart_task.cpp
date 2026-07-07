@@ -13,7 +13,7 @@
 #include "route_task.h"
 #include <string.h>
 #include <stdio.h>
-
+#include "conbat_task.h"
 /* ========================== 全局变量 ========================== */
 
 /* USB 串口接收缓冲区 */
@@ -47,9 +47,9 @@ static uint8_t vision_last_block_count = 0U;
 
 // 每个方块的中心坐标
 Block_Vision block_vision_middle[16];
-//第二个方块的中心坐标
+// 第二个方块的中心坐标
 float block_middle_x = 3.45f;
-float block_middle_y = -1.59f;
+float block_middle_y = -1.57f;
 
 // 通过第2个方块来计算得到其他8个的坐标位置
 
@@ -582,30 +582,28 @@ extern "C" void usart_task(void *argument)
     {
         if (Yellow == 1)
         {
-            flag_bottom = 1;
+            conbat_t.conbat_start = 1;
         }
         if (Blue == 1)
         {
-            flag_bottom = 1;
         }
         if (Green == 1)
         {
-            g_ftm_main_state = 3; // 先执行视觉置零
-            flag_bottom = 1;
+            // g_ftm_main_state = 3; // 先执行视觉置零
+            // flag_bottom = 1;
         }
         if (Orange == 1)
         {
-            flag_bottom = 1;
         }
 
         if (Red == 1)
         {
-            static uint8_t red_step = 1; // 1=待触发9, 2=已完成
-            if (red_step == 1)
-            {
-                g_ftm_main_state = 9; // 再执行完整自动流程
-                red_step = 2;         // 不再触发
-            }
+            // static uint8_t red_step = 1; // 1=待触发9, 2=已完成
+            // if (red_step == 1)
+            // {
+            //     g_ftm_main_state = 10; // 再执行完整自动流程
+            //     red_step = 2;          // 不再触发
+            // }
         }
 
         if (Whihe == 1)

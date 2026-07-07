@@ -22,7 +22,7 @@ uint8_t g_rs05_zero_lock_enabled = 0U;
 
 RobStride_Motor g_rs05_motor(&hfdcan3, RS05_CANID, false);
 float Angle = -94.0f;  // Keil Watch 可调目标角度，单位：degree
-float Speed = 20.0f;
+float Speed = 30.0f;
 
 namespace
 {

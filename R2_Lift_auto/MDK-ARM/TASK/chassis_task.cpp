@@ -214,7 +214,7 @@ extern "C" void chassis_task(void *argument)
         {
             target_vz = -pid_yaw.PID_Calculate_Angle(vision.angle_x, yaw_target);
         }
-        else if (FTM_IsYawTargetCorrectionEnabled() != 0U)
+        else if (FTM_IsYawTargetCorrectionEnabled() != 0U && auto_source != CHASSIS_AUTO_CONBAT)
         {
             if (FTM_IsYawTargetTurnActive() != 0U)
             {
