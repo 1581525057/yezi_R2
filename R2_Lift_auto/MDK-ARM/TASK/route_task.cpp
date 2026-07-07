@@ -20,9 +20,9 @@ ROUTE_TASK route_t;
 extern float yaw_target;
 extern Block_Vision block_vision_middle[16];
 
-float ROUTE_FIND_KFS_GENERATE_PATH_MAX_VEL_M_S = 4.0f;  // 寻找 KFS 自动生成路径的最大线速度，单位 m/s。
-float ROUTE_FIND_KFS_GENERATE_PATH_MAX_ACC_M_S2 = 1.2f; // 寻找 KFS 自动生成路径的最大加速度，单位 m/s2。
-float ROUTE_FIND_KFS_GENERATE_PATH_GAP_M = 0.04f;       // 寻找 KFS 自动生成路径点的间距，单位 m。
+float ROUTE_FIND_KFS_GENERATE_PATH_MAX_VEL_M_S = 3.0f;  // 寻找 KFS 自动生成路径的最大线速度，单位 m/s。
+float ROUTE_FIND_KFS_GENERATE_PATH_MAX_ACC_M_S2 = 1.5f; // 寻找 KFS 自动生成路径的最大加速度，单位 m/s2。
+float ROUTE_FIND_KFS_GENERATE_PATH_GAP_M = 0.05f;       // 寻找 KFS 自动生成路径点的间距，单位 m。
 
 float ROUTE_FIND_KFS_POSITION_KP = 1.6f;                          // B 样条结束后 KFS 终点精定位的二维位置 P 闭环系数。
 float ROUTE_FIND_KFS_POSITION_MAX_VEL_M_S = 0.6f;                 // KFS 终点精定位的最大线速度，单位 m/s。
@@ -773,7 +773,7 @@ void ROUTE_TASK::meiling_route()
             start_turn_target(90.0f);
         }
 
-        if (fabsf(normalize_yaw_deg(turn_final_yaw_ - vision.angle_x)) < 2.0f)
+        if (fabsf(normalize_yaw_deg(turn_final_yaw_ - vision.angle_x)) < 2.5f)
         {
             yaw_stable_count++;
         }
@@ -783,7 +783,7 @@ void ROUTE_TASK::meiling_route()
         }
 
         // yaw 误差连续稳定 200 个周期后，认为本次左转 90 度完成。
-        if (yaw_stable_count >= 100)
+        if (yaw_stable_count >= 50)
         {
             yaw_stable_count = 0;
             yaw_target_valid_ = 0U;
@@ -802,7 +802,7 @@ void ROUTE_TASK::meiling_route()
             start_turn_target(-90.0f);
         }
 
-        if (fabsf(normalize_yaw_deg(turn_final_yaw_ - vision.angle_x)) < 2.0f)
+        if (fabsf(normalize_yaw_deg(turn_final_yaw_ - vision.angle_x)) < 2.5f)
         {
             yaw_stable_count++;
         }
@@ -812,7 +812,7 @@ void ROUTE_TASK::meiling_route()
         }
 
         // yaw 误差连续稳定 200 个周期后，认为本次右转 90 度完成。
-        if (yaw_stable_count >= 100)
+        if (yaw_stable_count >= 50)
         {
             yaw_stable_count = 0;
             yaw_target_valid_ = 0U;
@@ -831,7 +831,7 @@ void ROUTE_TASK::meiling_route()
             start_turn_target(180.0f);
         }
 
-        if (fabsf(normalize_yaw_deg(turn_final_yaw_ - vision.angle_x)) < 2.0f)
+        if (fabsf(normalize_yaw_deg(turn_final_yaw_ - vision.angle_x)) < 2.5f)
         {
             yaw_stable_count++;
         }
@@ -840,7 +840,7 @@ void ROUTE_TASK::meiling_route()
             yaw_stable_count = 0;
         }
 
-        if (yaw_stable_count >= 100)
+        if (yaw_stable_count >= 50)
         {
             yaw_stable_count = 0;
             yaw_target_valid_ = 0U;
@@ -1050,13 +1050,13 @@ extern "C" void plan_route(void *argument)
             arm_comm.send();
         }
 
-        // if ((FTM_GetMainState() == 4U) &&
-        //     (route_t.state == PHASE_IDLE) &&
-        //     (ftm_done_route_started == 0U) && (conbat_t.state == CONBAT_IDLE))
-        // {
-        //     route_t.flag_start = 1U;
-        //     ftm_done_route_started = 1U;
-        // }
+        if ((FTM_GetMainState() == 4U) &&
+            (route_t.state == PHASE_IDLE) &&
+            (ftm_done_route_started == 0U) && (conbat_t.state == CONBAT_IDLE))
+        {
+            route_t.flag_start = 1U;
+            ftm_done_route_started = 1U;
+        }
 
         if (flag_step == 1)
         {

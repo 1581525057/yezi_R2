@@ -10,7 +10,7 @@ extern "C"
 #include "stdint.h"
 
 // 抬升角度环
-#define OUTPUT_LIFT 3
+#define OUTPUT_LIFT 6
 #define INTERLIMIT_LIFT 0
 #define DEBAND_LIFT 0
 #define KP_LIFT 0.5

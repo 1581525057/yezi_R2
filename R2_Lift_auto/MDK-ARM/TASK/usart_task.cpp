@@ -49,7 +49,7 @@ static uint8_t vision_last_block_count = 0U;
 Block_Vision block_vision_middle[16];
 // 第二个方块的中心坐标
 float block_middle_x = 3.45f;
-float block_middle_y = 1.57f;
+float block_middle_y = 1.62f;
 
 // 通过第2个方块来计算得到其他8个的坐标位置
 

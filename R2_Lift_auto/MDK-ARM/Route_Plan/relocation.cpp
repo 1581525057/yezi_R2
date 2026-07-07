@@ -110,7 +110,7 @@ uint8_t AreaOneRelocation::update(uint8_t sensor_mask, uint8_t chassis_speed_zer
             if (position_sent_ == 0U)
             {
                 // 只在首次稳定达标时上传一次，避免每个周期重复校准雷达。
-                vision.if_go = 0;
+
                 send_position_to_pc(1, 1, last_x_m_, last_y_m_, 0.0f);
                 position_sent_ = 1U;
             }
