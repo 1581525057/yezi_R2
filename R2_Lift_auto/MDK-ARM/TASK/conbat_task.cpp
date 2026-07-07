@@ -18,50 +18,50 @@ float CONBAT_DEG_TO_RAD = 3.1415926f / 180.0f; // 角度转弧度系数，用于
 // 上坡状态的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_ramp_up_goals[] = {
     // {3.43f, 1.6f, 0.0f},
-    {2.93f, 1.6f, 0.0f}};
+    {2.93f, -1.6f, 0.0f}};
 
 // 上坡状态的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint conbat_ramp_up_middle_points[] = {
-    {0.84f, -0.07f},
-    {1.69f, -0.04f},
-    {3.46f, -0.06f},
-    {3.36f, 0.53f},
-    {3.18f, 1.5f},
-    {3.18f, 1.6f},
+    {0.84f, 0.07f},
+    {1.69f, 0.04f},
+    {3.46f, 0.06f},
+    {3.36f, -0.53f},
+    {3.18f, -1.5f},
+    {3.18f, -1.6f},
 };
 static const std::size_t conbat_ramp_up_middle_point_count =
     sizeof(conbat_ramp_up_middle_points) / sizeof(conbat_ramp_up_middle_points[0]);
 
 // 捡 KFS 状态的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_pick_kfs_goals[] = {
-    {3.05f, 1.81f, 0.0f},
-    {3.00f, 2.52f, 0.0f},
-    {3.05f, 3.24f, 0.0f},
+    {3.05f, -1.81f, 0.0f},
+    {3.00f, -2.52f, 0.0f},
+    {3.05f, -3.24f, 0.0f},
 };
 
 // 捡最后一个 KFS 状态的中间点表，单位：x/y 为 m。
 static BRPathControlPoint conbat_pick_kfs_middle_points[] = {
-    {3.59f, 1.11f},
-    {3.14f, 2.09f},
+    {3.59f, -1.11f},
+    {3.14f, -2.09f},
 };
 static const std::size_t conbat_pick_kfs_middle_point_count =
     sizeof(conbat_pick_kfs_middle_points) / sizeof(conbat_pick_kfs_middle_points[0]);
 
 // 合体目标终点表，单位：x/y 为 m，yaw 为 rad；后续直接改这里。
 static BRPathPose conbat_combine_goals[] = {
-    {2.98f, 3.07f, 0.0f},
+    {2.98f, -3.07f, 0.0f},
 };
 
 // 放 KFS 状态的终点表，单位：x/y 为 m，yaw 为 rad；按 kfs_place_index_ 选择。
 static BRPathPose conbat_kfs_place_goals[] = {
-    {2.4f, 4.52f, 1.5708f},
-    {2.94f, 4.52f, 1.5708f},
-    {3.48f, 4.52f, 1.5708f},
+    {2.4f, -4.52f, -1.5708f},
+    {2.94f, -4.52f, -1.5708f},
+    {3.48f, -4.52f, -1.5708f},
 };
 
 // 放 KFS 状态共用的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint conbat_kfs_place_middle_point_table[] = {
-    {2.88, 4.20},
+    {2.88, -4.20},
 };
 
 static const BRPathControlPoint *conbat_kfs_place_middle_points[] = {
@@ -77,11 +77,11 @@ static const std::size_t conbat_kfs_place_middle_point_counts[] = {
 };
 
 // 放置完成后偏角等待路径的终点，单位：x/y 为 m，yaw 为 rad。
-static BRPathPose conbat_kfs_wait_goal = {3.36f, 0.53f, 1.57f};
+static BRPathPose conbat_kfs_wait_goal = {3.36f, -0.53f, -1.57f};
 
 // 放置完成后偏角等待路径的中间点，单位：x/y 为 m。
 static BRPathControlPoint conbat_kfs_wait_middle_points[] = {
-    {2.93f, 1.6f},
+    {2.93f, -1.6f},
 };
 static const std::size_t conbat_kfs_wait_middle_point_count =
     sizeof(conbat_kfs_wait_middle_points) / sizeof(conbat_kfs_wait_middle_points[0]);

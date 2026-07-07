@@ -49,7 +49,7 @@ static uint8_t vision_last_block_count = 0U;
 Block_Vision block_vision_middle[16];
 // 第二个方块的中心坐标
 float block_middle_x = 3.45f;
-float block_middle_y = -1.57f;
+float block_middle_y = 1.57f;
 
 // 通过第2个方块来计算得到其他8个的坐标位置
 
@@ -60,35 +60,35 @@ static void Block_claulate_Middle(void)
     float y = block_middle_y;
     block_vision_middle[0] = {0.0, 0.0};
 
-    block_vision_middle[1] = {x, y - Block_Size};
+    block_vision_middle[1] = {x, y + Block_Size};
 
     block_vision_middle[2] = {x, y};
 
-    block_vision_middle[3] = {x, y + Block_Size};
+    block_vision_middle[3] = {x, y - Block_Size};
 
-    block_vision_middle[4] = {x + Block_Size, y - Block_Size};
+    block_vision_middle[4] = {x + Block_Size, y + Block_Size};
 
     block_vision_middle[5] = {x + Block_Size, y};
 
-    block_vision_middle[6] = {x + Block_Size, y + Block_Size};
+    block_vision_middle[6] = {x + Block_Size, y - Block_Size};
 
-    block_vision_middle[7] = {x + Block_Size * 2.0f, y - Block_Size};
+    block_vision_middle[7] = {x + Block_Size * 2.0f, y + Block_Size};
 
     block_vision_middle[8] = {x + Block_Size * 2.0f, y};
 
-    block_vision_middle[9] = {x + Block_Size * 2.0f, y + Block_Size};
+    block_vision_middle[9] = {x + Block_Size * 2.0f, y - Block_Size};
 
-    block_vision_middle[10] = {x + Block_Size * 3.0f, y - Block_Size};
+    block_vision_middle[10] = {x + Block_Size * 3.0f, y + Block_Size};
 
     block_vision_middle[11] = {x + Block_Size * 3.0f, y};
 
-    block_vision_middle[12] = {x + Block_Size * 3.0f, y + Block_Size};
+    block_vision_middle[12] = {x + Block_Size * 3.0f, y - Block_Size};
 
-    block_vision_middle[13] = {x + Block_Size * 4.0f, y - Block_Size};
+    block_vision_middle[13] = {x + Block_Size * 4.0f, y + Block_Size};
 
     block_vision_middle[14] = {x + Block_Size * 4.0f, y};
 
-    block_vision_middle[15] = {x + Block_Size * 4.0f, y + Block_Size};
+    block_vision_middle[15] = {x + Block_Size * 4.0f, y - Block_Size};
 }
 
 /* ===================== 内部工具函数 ===================== */
