@@ -259,7 +259,6 @@ void CONBAT_TASK::reset(void)
     clearPathOutput();
 }
 
-uint16_t falg_wudi = 0;
 /*
  * 战斗任务主循环单次更新函数。
  * conbat_task 线程每 1ms 调用一次，负责检测状态切换，并分发到对应状态处理函数。
