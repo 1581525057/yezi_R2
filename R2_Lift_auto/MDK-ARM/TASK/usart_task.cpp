@@ -586,29 +586,38 @@ extern "C" void usart_task(void *argument)
         }
         if (Blue == 1)
         {
+            g_ftm_main_state = 3; // 先执行视觉置零
+            flag_bottom = 1;
         }
         if (Green == 1)
         {
-            // g_ftm_main_state = 3; // 先执行视觉置零
-            // flag_bottom = 1;
+            static uint8_t red_step = 1; // 1=待触发9, 2=已完成
+            if (red_step == 1)
+            {
+                g_ftm_main_state = 10; // 再执行完整自动流程
+                red_step = 2;          // 不再触发
+            }
         }
         if (Orange == 1)
         {
+            conbat_t.conbat_start = 2;
         }
 
         if (Red == 1)
         {
-            // static uint8_t red_step = 1; // 1=待触发9, 2=已完成
-            // if (red_step == 1)
-            // {
-            //     g_ftm_main_state = 10; // 再执行完整自动流程
-            //     red_step = 2;          // 不再触发
-            // }
+            kfs_num = 1;
         }
 
         if (Whihe == 1)
         {
-            flag_bottom = 1;
+        }
+
+        if (Red2 == 0)
+        {
+        }
+
+        if (Blue2 == 0)
+        {
         }
 
         /* 更新传感器数据 */

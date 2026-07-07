@@ -339,7 +339,7 @@ void CONBAT_TASK::runOnce(void)
         if (conbat_start == 2U)
         {
             conbat_start = 0U;
-            state = CONBAT_COMBINE;
+            state = CONBAT_PLACE_KFS;
             osDelay(1000);
         }
         clearPathOutput();
@@ -1668,6 +1668,7 @@ float CONBAT_TASK::normalizeYawDeg(float yaw_degree)
  * freertos.c 通过 C 链接名创建该任务；任务内部每 1ms 更新一次 CONBAT_TASK 状态机。
  */
 uint16_t flag_beh = 0;
+uint16_t kfs_num = 0;
 extern "C" void conbat_task(void *argument)
 {
     (void)argument;

@@ -9,19 +9,22 @@
 #define Orange HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_10)
 #define Whihe HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11)
 #define Red HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5)
+
+#define Red2 HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_9)
+#define Blue2 HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_8)
 /* 视觉数据结构体：存储上位机发送的视觉坐标、角度和标定位 */
 typedef struct
 {
-    int exec;               /* 是否前往第二区标志 */
-    float x_diff;           /* X 坐标 */
-    float y_diff;           /* Y 坐标 */
-    float angle_x;          /* 航向角 */
-    int B;                  /* 当前梅花林动作，保留现有路线接口 */
-    int release_flag;                /* 是否松手标定位 */
-    int claw_vertical_flag;          /* 夹爪上下标定位 */
-    int claw_vertical_adjust_count;  /* 夹爪上下调整接收次数 */
-    int if_go;              /* 重定位完成后是否允许继续 */
-    int16_t can_up;         /* CAN 上升标定位 */
+    int exec;                       /* 是否前往第二区标志 */
+    float x_diff;                   /* X 坐标 */
+    float y_diff;                   /* Y 坐标 */
+    float angle_x;                  /* 航向角 */
+    int B;                          /* 当前梅花林动作，保留现有路线接口 */
+    int release_flag;               /* 是否松手标定位 */
+    int claw_vertical_flag;         /* 夹爪上下标定位 */
+    int claw_vertical_adjust_count; /* 夹爪上下调整接收次数 */
+    int if_go;                      /* 重定位完成后是否允许继续 */
+    int16_t can_up;                 /* CAN 上升标定位 */
 } VisionData_t;
 
 typedef struct

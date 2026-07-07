@@ -160,7 +160,7 @@ private:
 };
 
 extern CONBAT_TASK conbat_t;
-
+extern uint16_t kfs_num;
 extern "C"
 {
 #endif
