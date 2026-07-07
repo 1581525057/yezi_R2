@@ -10,16 +10,16 @@
 
 namespace
 {
-    const float AREA_ONE_X_FIELD_MM = 3200.0f;       // 一区 X 方向场地基准长度，单位 mm。
-    const float AREA_ONE_X_FIELD_DELATE_MM = 385.5f; // 一区X方向场地原点减去
-    const float AREA_ONE_Y_FIELD_MM = 6000.0f;       // 左右激光反推时使用的场地宽度，单位 mm。
-    const float AREA_ONE_ORIGIN_L_MM = 1357.0f;      // 雷达 Y 坐标原点偏移量 L，单位 mm。
-    const float FRONT_DT35_TO_CENTER_MM = 308.18f;   // 前方 DT35 到车中心的安装距离，单位 mm。
-    const float SIDE_LASER_TO_CENTER_MM = 309.23f;   // 左右激光到车中心的安装距离，单位 mm。
-    const float SIDE_LASER_TO_WALL = 125.0f;         // 墙的距离 单位mm。
+    const float AREA_ONE_X_FIELD_MM = 3200.0f;        // 一区 X 方向场地基准长度，单位 mm。
+    const float AREA_ONE_X_FIELD_DELATE_MM = 385.5f;  // 一区X方向场地原点减去
+    const float AREA_ONE_Y_FIELD_MM = 6000.0f;        // 左右激光反推时使用的场地宽度，单位 mm。
+    const float AREA_ONE_ORIGIN_L_MM = 1357.0f;       // 雷达 Y 坐标原点偏移量 L，单位 mm。
+    const float FRONT_DT35_TO_CENTER_MM = 308.18f;    // 前方 DT35 到车中心的安装距离，单位 mm。
+    const float SIDE_LASER_TO_CENTER_MM = 309.23f;    // 左右激光到车中心的安装距离，单位 mm。
+    const float SIDE_LASER_TO_WALL = 125.0f;          // 墙的距离 单位mm。
     const float LEFT_LASER_Y_COMPENSATION_MM = 50.0f; // 左侧单激光重定位后 Y 偏 -5cm，补回 50mm。
-    const float SIDE_Y_ERROR_LIMIT_MM = 10.0f;       // 左右两侧推算出的 Y 误差阈值，单位 mm。
-    const uint16_t RELOCATION_STABLE_COUNT = 100U;   // 误差连续满足要求的周期数。
+    const float SIDE_Y_ERROR_LIMIT_MM = 10.0f;        // 左右两侧推算出的 Y 误差阈值，单位 mm。
+    const uint16_t RELOCATION_STABLE_COUNT = 100U;    // 误差连续满足要求的周期数。
 
     // 本文件只需要简单绝对值，避免额外依赖通用数学库。
     float calcAbs(float value)
@@ -91,8 +91,7 @@ uint8_t AreaOneRelocation::update(uint8_t sensor_mask, uint8_t chassis_speed_zer
     else
     {
         const float right_mm = static_cast<float>(laser_right.data.distance_mm);
-        const float left_from_right_mm = AREA_ONE_Y_FIELD_MM - (right_mm + SIDE_LASER_TO_CENTER_MM);
-        y_mm = AREA_ONE_ORIGIN_L_MM - left_from_right_mm;
+        y_mm = (right_mm + SIDE_LASER_TO_WALL + SIDE_LASER_TO_CENTER_MM) - AREA_ONE_ORIGIN_L_MM - LEFT_LASER_Y_COMPENSATION_MM - 12;
     }
 
     // 上位机接口使用米，这里保存最近一次算出的雷达坐标。
@@ -111,7 +110,7 @@ uint8_t AreaOneRelocation::update(uint8_t sensor_mask, uint8_t chassis_speed_zer
             if (position_sent_ == 0U)
             {
                 // 只在首次稳定达标时上传一次，避免每个周期重复校准雷达。
-                vision.if_go = 0;
+
                 send_position_to_pc(1, 1, last_x_m_, last_y_m_, 0.0f);
                 position_sent_ = 1U;
             }

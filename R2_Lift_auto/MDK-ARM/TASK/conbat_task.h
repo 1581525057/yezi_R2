@@ -81,16 +81,19 @@ private:
         PICK_KFS_SECOND_ACTION,       // 触发拾取第二个 KFS 的机械臂动作。
         PICK_KFS_PATH_TO_SECOND_AREA, // 跑到第二个 KFS 拾取区域的粗略点位。
         PICK_KFS_SECOND_WAIT_READY,   // 等待机械臂允许进入第二个 KFS 吸取阶段。
+        PICK_KFS_SECOND_BACKWARD,     // 第二个 KFS 吸取成功后先沿 X 轴后退。
         PICK_GO_TO_COMBINE            // 吸取完成后跑到合体目标点。
     };
 
     enum PlaceKfsStep
     {
-        PLACE_KFS_LOWER_ACTION = 0, // 发送放车内底层 KFS 的机械臂动作。
-        PLACE_KFS_PATH_TO_PICK,     // 跑到取车内 KFS 的精确点。
-        PLACE_KFS_DT35_FORWARD,     // 按 DT35 边向前走边吸取。
-        PLACE_KFS_BACKWARD,         // 吸取成功后先沿 X 轴后退。
-        PLACE_KFS_PATH_TO_PLACE     // 跑到选择的放 KFS 终点并发送放置动作。
+        PLACE_KFS_LOWER_ACTION = 0,    // 发送放车内底层 KFS 的机械臂动作。
+        PLACE_KFS_PATH_TO_PICK,        // 跑到取车内 KFS 的精确点。
+        PLACE_KFS_DT35_FORWARD,        // 按 DT35 边向前走边吸取。
+        PLACE_KFS_BACKWARD,            // 吸取成功后先沿 X 轴后退。
+        PLACE_KFS_PATH_TO_PLACE,       // 跑到选择的放 KFS 终点并发送放置动作。
+        PLACE_KFS_FORWARD_AFTER_PLACE, // 放置动作发送后沿车头方向前进一小段。
+        PLACE_KFS_WAIT                 // 放置完成后跑到偏角等待点。
     };
 
     PathFollower path_follower_;
@@ -108,6 +111,7 @@ private:
     uint8_t pick_kfs_path_stable_count_;
     uint16_t kfs_place_stop_stable_count_;
     uint8_t kfs_place_index_;
+    uint8_t kfs_place_arrived_;
     uint8_t kfs_place_precision_active_;
     uint8_t place_kfs_pick_precision_active_;
     uint8_t kfs_place_laser_blocked_;
@@ -120,7 +124,11 @@ private:
     uint8_t lift_switch_target_;
     float lift_linear_speed_target_;
     float pick_kfs_first_back_start_x_m_;
+    float pick_kfs_second_back_start_x_m_;
     float place_kfs_back_start_x_m_;
+    float place_kfs_forward_start_x_m_;
+    float place_kfs_forward_start_y_m_;
+    float place_kfs_forward_start_yaw_deg_;
     float path_vx_target_;
     float path_vy_target_;
     float path_wz_target_;
