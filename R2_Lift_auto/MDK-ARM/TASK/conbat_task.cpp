@@ -48,13 +48,13 @@ uint8_t CONBAT_COMBINE_STABLE_COUNT = 10U;             // 合体到位判定需�
 
 // 上坡阶段1的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_ramp_up1_goals[] = {
-    {8.62f, 3.74f, 0.0f},
+    {8.62f, -3.74f, 0.0f},
 };
 
 // 上坡阶段1的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint conbat_ramp_up_middle1_points[] = {
-    {8.38, 2.38f},
-    {8.56f, 3.76f},
+    {8.38, -2.38f},
+    {8.56f, -3.76f},
 
 };
 
@@ -63,14 +63,14 @@ static const std::size_t conbat_ramp_up_middle1_point_count =
 
 // 上坡阶段2的终点表，单位：x/y 为 m，yaw 为 rad；必须在阶段1完成后才会加载。
 static BRPathPose conbat_ramp_up2_goals[] = {
-    {10.80f, 4.02f, 0.0f},
+    {10.80f, -4.02f, 0.0f},
 };
 
 // 上坡阶段2的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint conbat_ramp_up_middle2_points[] = {
-    {9.49f, 4.01f},
-    {9.88f, 4.01f},
-    {10.39f, 4.00f},
+    {9.49f, -4.01f},
+    {9.88f, -4.01f},
+    {10.39f, -4.00f},
 };
 
 static const std::size_t conbat_ramp_up_middle2_point_count =
@@ -78,49 +78,49 @@ static const std::size_t conbat_ramp_up_middle2_point_count =
 
 // 放 KFS 状态的终点表，单位：x/y 为 m，yaw 为 rad；按 kfs_place_index_ 选择。
 static BRPathPose conbat_kfs_place_goals[] = {
-    {11.01f, -0.72f, -1.5708f},
-    {10.46f, -0.72f, -1.5708f},
-    {9.92f, -0.72f, -1.5708f},
+    {11.01f, 0.72f, 1.5708f},
+    {10.46f, 0.72f, 1.5708f},
+    {9.92f, 0.72f, 1.5708f},
 };
 
 // 放 KFS 状态第 1 个放置点的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint conbat_kfs_place_middle1_points[] = {
-    {10.94f, 1.26f},
-    {10.95f, 0.98f},
-    {10.96f, 0.75f},
+    {10.94f, -1.26f},
+    {10.95f, -0.98f},
+    {10.96f, -0.75f},
 };
 
 // 放 KFS 状态第 2 个放置点的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint conbat_kfs_place_middle2_points[] = {
-    {11.05f, 2.7f},
-    {10.74f, 2.06f},
-    {10.47f, 1.42f},
-    {10.44f, 1.06f},
-    {10.44f, 0.96f},
-    {10.44f, 0.86f},
-    {10.44f, 0.60f},
-    {10.44f, 0.40f},
-    {10.44f, 0.20f},
-    {10.46f, 0.02f},
+    {11.05f, -2.7f},
+    {10.74f, -2.06f},
+    {10.47f, -1.42f},
+    {10.44f, -1.06f},
+    {10.44f, -0.96f},
+    {10.44f, -0.86f},
+    {10.44f, -0.60f},
+    {10.44f, -0.40f},
+    {10.44f, -0.20f},
+    {10.46f, -0.02f},
 };
 
 // 放 KFS 状态第 3 个放置点的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint conbat_kfs_place_middle3_points[] = {
-    {11.05f, 2.67f},
-    {10.37f, 1.87f},
-    {9.88f, 1.35f},
-    {9.9f, 0.83f},
-    {9.92f, 0.24f},
+    {11.05f, -2.67f},
+    {10.37f, -1.87f},
+    {9.88f, -1.35f},
+    {9.9f, -0.83f},
+    {9.92f, -0.24f},
 };
 
 // 合体终点坐标
 static BRPathPose combine_goal[] = {
-    {10.41f, 1.11f, -1.5708f},
+    {10.41f, -1.11f, 1.5708f},
 };
 
 // 合体中间坐标
 static BRPathControlPoint combine_middle_goal[] = {
-    {10.44f, 1.45f},
+    {10.44f, -1.45f},
 };
 static const std::size_t combine_middle_goal_count =
     sizeof(combine_middle_goal) / sizeof(combine_middle_goal[0]);
