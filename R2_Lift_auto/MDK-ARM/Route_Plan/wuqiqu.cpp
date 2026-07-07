@@ -45,10 +45,10 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     brake_margin_m_ = 0.05f;                // 动态刹车距离安全余量，单位 m
     finish_speed_tolerance_mps_ = 0.08f;    // 到点稳定确认的平移速度阈值，单位 m/s
 
-    kp_fast_ = 5.0f; // 快速阶段位置比例增益
-    kd_fast_ = 0.7f; // 快速阶段位置微分增益
+    kp_fast_ = 5.5f; // 快速阶段位置比例增益
+    kd_fast_ = 0.75f; // 快速阶段位置微分增益
     kp_slow_ = 2.2f; // 减速/稳定确认阶段位置比例增益
-    kd_slow_ = 1.4f; // 减速/稳定确认阶段位置微分增益
+    kd_slow_ = 1.5f; // 减速/稳定确认阶段位置微分增益
 
     yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
     yaw_kp_ = 2.2f;               // yaw 角度误差比例增益
