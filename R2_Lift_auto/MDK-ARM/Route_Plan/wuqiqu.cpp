@@ -41,14 +41,13 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     reset();
 
     finish_dist_ = 0.010f;                  // XY 到点判定距离，单位 m
-    max_decel_mps2_ = 1.20f;                // 用于动态刹车距离估算的最大减速度，单位 m/s^2
-    brake_margin_m_ = 0.05f;                // 动态刹车距离安全余量，单位 m
+    brake_margin_m_ = 0.15f;                // 固定刹车提前距离，单位 m
     finish_speed_tolerance_mps_ = 0.08f;    // 到点稳定确认的平移速度阈值，单位 m/s
 
     kp_fast_ = 5.5f; // 快速阶段位置比例增益
     kd_fast_ = 0.75f; // 快速阶段位置微分增益
-    kp_slow_ = 2.2f; // 减速/稳定确认阶段位置比例增益
-    kd_slow_ = 1.5f; // 减速/稳定确认阶段位置微分增益
+    kp_slow_ = 5.0f; // 减速/稳定确认阶段位置比例增益
+    kd_slow_ = 0.2f; // 减速/稳定确认阶段位置微分增益
 
     yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
     yaw_kp_ = 2.2f;               // yaw 角度误差比例增益
@@ -285,8 +284,8 @@ void WuqiquPathPlanner::updateState(float distance_m, float speed_mps, uint8_t x
         state_ = STATE_FAST;
     }
 
-    const float decel = (max_decel_mps2_ > 0.001f) ? max_decel_mps2_ : 0.001f;
-    const float brake_dist_m = speed_mps * speed_mps / (2.0f * decel) + brake_margin_m_;
+    (void)speed_mps;
+    const float brake_dist_m = brake_margin_m_;
     if (state_ == STATE_FAST && distance_m <= brake_dist_m)
     {
         state_ = STATE_SLOW;
