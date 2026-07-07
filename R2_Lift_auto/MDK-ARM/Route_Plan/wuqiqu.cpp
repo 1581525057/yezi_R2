@@ -18,18 +18,17 @@ static const uint32_t kFastLinkContactTimeoutMs = 80U; // 快速衔接点 SETTLE
 // 目标点为视觉置零后的世界/雷达绝对坐标，任务层会把 world 速度转成底盘车体系速度。
 // 参数顺序：x y yaw xy_tolerance yaw_tolerance
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {1.07f, -0.98f, 90.0f, 0.015f, 1.5f},
-    {0.59f, -0.68f, 90.0f, 0.035f, 3.0f},
-    {0.59f, -0.68f, -90.0f, 0.035f, 2.0f},
+    {1.07f, -0.96f, 90.0f, 0.015f, 1.5f},
+    {0.59f, -0.70f, 90.0f, 0.035f, 3.0f},
+    {0.59f, -0.70f, -90.0f, 0.035f, 2.0f},
     {0.96f, -1.64f, 0.0f, 0.030f, 1.5f},
-    {0.59f, -0.94f, -90.0f, 0.030f, 2.0f},
+    {0.59f, -0.96f, -90.0f, 0.030f, 2.0f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
-
 static const WuqiquPathPlanner::TargetPoint kPrelimWeaponHeadPoints[] = {
-    {1.07f, -0.98f, 90.0f, 0.015f, 1.5f},
-    {0.87f, -0.98f, 90.0f, 0.015f, 1.5f},
-    {0.67f, -0.98f, 90.0f, 0.015f, 1.5f},
+    {1.07f, -0.96f, 90.0f, 0.015f, 1.5f},
+    {0.87f, -0.96f, 90.0f, 0.015f, 1.5f},
+    {0.67f, -0.96f, 90.0f, 0.015f, 1.5f},
 };
 static const uint8_t kPrelimWeaponHeadCount =
     sizeof(kPrelimWeaponHeadPoints) / sizeof(kPrelimWeaponHeadPoints[0]);
@@ -50,8 +49,8 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     kd_slow_ = 0.2f; // 减速/稳定确认阶段位置微分增益
 
     yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
-    yaw_kp_ = 2.4f;               // yaw 角度误差比例增益
-    yaw_kd_ = 0.1f;              // yaw 角速度阻尼增益
+    yaw_kp_ = 2.2f;               // yaw 角度误差比例增益
+    yaw_kd_ = 0.35f;              // yaw 角速度阻尼增益
     min_yaw_wz_ = 0.10f;          // yaw 最小角速度输出，单位 rad/s
     strong_yaw_wz_ = 0.35f;       // 大角度误差时的最小角速度输出，单位 rad/s
     strong_yaw_error_deg_ = 6.0f; // 判定为大角度误差的阈值，单位 deg
