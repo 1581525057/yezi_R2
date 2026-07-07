@@ -12,6 +12,7 @@ void wuqiqu_task(void *argument);
 void WuqiquTask_Start(void);
 void WuqiquTask_StartAt(uint8_t waypoint_index);
 void WuqiquTask_StartAtPrelimWeaponHead(uint8_t weapon_index);
+void WuqiquTask_SetChassisTarget(float vx_mps, float vy_mps, float wz_radps);
 void WuqiquTask_Stop(void);
 uint8_t WuqiquTask_RunOnce(void);
 uint8_t WuqiquTask_IsActive(void);

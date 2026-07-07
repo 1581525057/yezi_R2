@@ -220,6 +220,7 @@ public:
     WuqiquTask()
         : active_(0U),
           finished_(0U),
+          manual_control_(0U),
           vx_target_(0.0f),
           vy_target_(0.0f),
           wz_target_(0.0f),
@@ -236,6 +237,7 @@ public:
     {
         active_ = 0U;
         finished_ = 0U;
+        manual_control_ = 0U;
         wuqiqu.resetRoute();
         clearOutput();
         last_update_tick_ = HAL_GetTick();
@@ -272,15 +274,32 @@ public:
     {
         active_ = 0U;
         finished_ = 0U;
+        manual_control_ = 0U;
         clearOutput();
         last_update_tick_ = 0U;
         wuqiqu.reset();
+    }
+
+    void setChassisTarget(float vx_mps, float vy_mps, float wz_radps)
+    {
+        active_ = 1U;
+        finished_ = 0U;
+        manual_control_ = 1U;
+        vx_target_ = vx_mps;
+        vy_target_ = vy_mps;
+        wz_target_ = wz_radps;
+        last_update_tick_ = HAL_GetTick();
     }
 
     uint8_t runOnce()
     {
         /* 未激活时不参与底盘控制。 */
         if (active_ == 0U)
+        {
+            return 0U;
+        }
+
+        if (manual_control_ != 0U)
         {
             return 0U;
         }
@@ -315,6 +334,7 @@ public:
     {
         active_ = 0U;
         finished_ = 0U;
+        manual_control_ = 0U;
         clearOutput();
         last_update_tick_ = HAL_GetTick();
         wuqiqu.advanceToNext();
@@ -356,6 +376,7 @@ private:
     /* active_ 为 1 表示当前任务接管底盘速度目标。 */
     volatile uint8_t active_;
     volatile uint8_t finished_;
+    volatile uint8_t manual_control_;
 
     /* 下发到底盘的车体系目标速度，单位 m/s、rad/s。 */
     volatile float vx_target_;
@@ -496,6 +517,11 @@ void WuqiquTask_StartAt(uint8_t waypoint_index)
 void WuqiquTask_StartAtPrelimWeaponHead(uint8_t weapon_index)
 {
     g_wuqiqu_task.startAtPrelimWeaponHead(weapon_index);
+}
+
+void WuqiquTask_SetChassisTarget(float vx_mps, float vy_mps, float wz_radps)
+{
+    g_wuqiqu_task.setChassisTarget(vx_mps, vy_mps, wz_radps);
 }
 
 void WuqiquTask_Stop(void)

@@ -5,6 +5,7 @@
 #include "RS05.h"
 #include "GripPush.h"
 #include "usart_task.h"
+#include "laser_distance.h"
 #include "cmsis_os.h"
 #include <math.h>
 
@@ -83,6 +84,15 @@ namespace
     constexpr uint8_t kPrelimWeaponCount = 3U;       // 预选赛连续夹取的武器头数量。
     constexpr uint8_t kPrelimPickWaypointIndex = 0U; // 预选赛每次夹取从第 1 个跑点开始。
 
+    // 激光修正参数
+    static const float kLaserCorrTargetM[3] = {1.14f, 0.94f, 0.74f}; // 各武器头到位后 laser_left 目标值（m）
+    constexpr float kLaserCorrToleranceM = 0.010f;       // 到位容差 ±10mm
+    constexpr float kLaserCorrKp = 1.2f;                 // 激光距离闭环比例增益，误差 0.10m 时目标速度约 0.12m/s。
+    constexpr float kLaserCorrMinSpeedMps = 0.07f;       // 底盘最小有效修正速度，避免小误差时推不动车。
+    constexpr float kLaserCorrMaxSpeedMps = 0.25f;       // 激光闭环最大修正速度，限制贴近阶段速度。
+    constexpr uint32_t kLaserCorrTotalTimeoutMs = 5000U; // 激光修正总超时，超时后跳过直接夹
+    constexpr uint32_t kLaserCorrInvalidTimeoutMs = 1000U; // 激光无效等待超时，超时后跳过直接夹
+
     struct TimedStep
     {
         uint8_t active;
@@ -124,6 +134,10 @@ namespace
     uint16_t g_wuqiqu_yaw_turn_stable_count = 0U;
     uint8_t g_turn_ready_yaw_turn_finished = 0U;
     uint8_t g_prelim_turn_ready_step_index = 0U;
+
+    // 激光修正运行时状态
+    uint8_t g_laser_corr_active = 0U;           // 修正步骤是否已进入
+    uint32_t g_laser_corr_start_tick = 0U;      // 修正步骤起始时间戳
 
     const uint8_t kSequenceOpenLiftRs05[] = {
         FTM_ACTION_CLAW_OPEN,
@@ -237,6 +251,8 @@ namespace
         g_wuqiqu_route_started = 0U;
         g_wuqiqu_parallel_route_finished = 0U;
         g_wuqiqu_parallel_mechanism_finished = 0U;
+        g_laser_corr_active = 0U;
+        g_laser_corr_start_tick = 0U;
     }
 
     uint8_t IsMechanismAction(uint8_t action_state)
@@ -1119,6 +1135,84 @@ namespace
         }
     }
 
+    // 返回当前武器头对应的 laser_left 目标值（m）。
+    // 预选赛流程按 g_prelim_weapon_index 索引，非预选赛流程固定使用第 0 个。
+    float GetCurrentWeaponHeadLaserTargetM(void)
+    {
+        uint8_t idx = 0U;
+        if ((g_prelim_auto_full_flow_active != 0U) && (g_prelim_weapon_index < 3U))
+        {
+            idx = g_prelim_weapon_index;
+        }
+        return kLaserCorrTargetM[idx];
+    }
+
+    float ClampLaserCorrSpeed(float vx_mps)
+    {
+        if (vx_mps > kLaserCorrMaxSpeedMps)
+        {
+            return kLaserCorrMaxSpeedMps;
+        }
+        if (vx_mps < -kLaserCorrMaxSpeedMps)
+        {
+            return -kLaserCorrMaxSpeedMps;
+        }
+
+        if (fabsf(vx_mps) < kLaserCorrMinSpeedMps)
+        {
+            return (vx_mps >= 0.0f) ? kLaserCorrMinSpeedMps : -kLaserCorrMinSpeedMps;
+        }
+
+        return vx_mps;
+    }
+
+    // 到位后用 laser_left 修正底盘 X 方向位置。
+    // 每次 tick 调用一次；返回 true 表示修正完成（含超时跳过情况），返回 false 表示仍在进行。
+    bool RunLaserCorrectionStep(void)
+    {
+        if (g_laser_corr_active == 0U)
+        {
+            g_laser_corr_active = 1U;
+            g_laser_corr_start_tick = HAL_GetTick();
+        }
+
+        // 总超时保护：超时后跳过修正直接进入夹取
+        if (HasElapsed(g_laser_corr_start_tick, kLaserCorrTotalTimeoutMs))
+        {
+            WuqiquTask_Stop();
+            return true;
+        }
+
+        // 激光无效时等待；超时则跳过
+        if (laser_left.data.valid == 0U)
+        {
+            if (HasElapsed(g_laser_corr_start_tick, kLaserCorrInvalidTimeoutMs))
+            {
+                WuqiquTask_Stop();
+                return true;
+            }
+            WuqiquTask_SetChassisTarget(0.0f, 0.0f, 0.0f);
+            return false;
+        }
+
+        const float actual_m = laser_left.data.distance_m;
+        const float target_m = GetCurrentWeaponHeadLaserTargetM();
+        const float delta_m = target_m - actual_m;
+
+        // 已在容差范围内，修正完成
+        if (fabsf(delta_m) <= kLaserCorrToleranceM)
+        {
+            WuqiquTask_Stop();
+            return true;
+        }
+
+        // 到点后不再改路线点，直接用 laser_left 误差闭环下发底盘 X 方向修正速度。
+        const float vx_mps = ClampLaserCorrSpeed(kLaserCorrKp * delta_m);
+        WuqiquTask_SetChassisTarget(vx_mps, 0.0f, 0.0f);
+
+        return false;
+    }
+
     bool RunRouteAndMechanismSequence(void)
     {
         switch (g_route_action_sequence_step_index)
@@ -1136,7 +1230,16 @@ namespace
             ResetMechanismStep();
             return false;
 
+        // case 1：激光修正 —— 到位后根据 laser_left 微调底盘 X，直到进入容差或超时。
         case 1:
+            if (RunLaserCorrectionStep() == false)
+            {
+                return false;
+            }
+            ++g_route_action_sequence_step_index;
+            return false;
+
+        case 2:
             if (RunMechanismSequence(kSequenceGrabClose, static_cast<uint8_t>(sizeof(kSequenceGrabClose) / sizeof(kSequenceGrabClose[0]))) == false)
             {
                 return false;
@@ -1146,7 +1249,7 @@ namespace
             ResetMechanismStep();
             return false;
 
-        case 2:
+        case 3:
             if (RunWuqiquAndMechanismSequence() == false)
             {
                 return false;
@@ -1154,7 +1257,7 @@ namespace
             ++g_route_action_sequence_step_index;
             return false;
 
-        case 3:
+        case 4:
             if (RunWuqiquRoutePoint(4U) == 0U)
             {
                 return false;
