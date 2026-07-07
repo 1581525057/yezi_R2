@@ -16,7 +16,7 @@ constexpr float kPi = 3.14159265358979323846f;
 constexpr float kDegToRad = kPi / 180.0f;
 
 /* 下发给底盘的角速度上限。 */
-constexpr float kMaxAngularSpeedRadps = 2.8f;
+constexpr float kMaxAngularSpeedRadps = 2.0f;
 
 /* FAST 阶段平移速度上限，负责快速接近目标*/
 constexpr float kFastLinearMaxMps = 1.80f;
@@ -24,9 +24,9 @@ constexpr float kFastLinearMaxMps = 1.80f;
 constexpr float kSlowLinearMaxMps = 0.45f;
 
 /* FAST 阶段最大加速度 单位 m/s^2。 */
-constexpr float kFastLinearAccMps2 = 3.0f;
+constexpr float kFastLinearAccMps2 = 3.2f;
 /* FAST 阶段最大减速度  */
-constexpr float kFastLinearDecMps2 = 4.5f;
+constexpr float kFastLinearDecMps2 = 4.8f;
 /* SLOW 阶段最大加速度*/
 constexpr float kSlowLinearAccMps2 = 1.2f;
 /* SLOW 阶段最大减速度*/
@@ -35,7 +35,7 @@ constexpr float kSlowLinearDecMps2 = 2.0f;
 /* FAST 阶段任务层最低平移速度补偿，用于克服底盘静摩擦*/
 constexpr float kFastMinLinearMps = 0.12f;
 /* SLOW 阶段最低平移速度补偿*/
-constexpr float kSlowMinLinearMps = 0.04f;
+constexpr float kSlowMinLinearMps = 0.07f;
 
 /* yaw 指令最大加速度 单位 rad/s^2。 */
 constexpr float kAngularAccRadps2 = 14.0f;

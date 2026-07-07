@@ -18,18 +18,18 @@ static const uint32_t kFastLinkContactTimeoutMs = 80U; // 快速衔接点 SETTLE
 // 目标点为视觉置零后的世界/雷达绝对坐标，任务层会把 world 速度转成底盘车体系速度。
 // 参数顺序：x y yaw xy_tolerance yaw_tolerance
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {0.04f, 0.91f, -90.0f, 0.015f, 1.5f},
-    {0.35f, 0.60f, -90.0f, 0.035f, 3.0f},
-    {0.35f, 0.60f, 90.0f, 0.035f, 2.0f},
+    {1.05f, -1.00f, 90.0f, 0.015f, 1.5f},
+    {0.59f, -0.78f, 90.0f, 0.035f, 3.0f},
+    {0.59f, -0.78f, -90.0f, 0.035f, 2.0f},
     {0.96f, -1.64f, 0.0f, 0.030f, 1.5f},
-    {0.35f, 0.87f, 90.0f, 0.030f, 2.0f},
+    {0.59f, -1.00, -90.0f, 0.030f, 2.0f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
 
 static const WuqiquPathPlanner::TargetPoint kPrelimWeaponHeadPoints[] = {
-    {0.04f, 0.90f, -90.0f, 0.015f, 1.5f},
-    {0.23f, 0.90f, -90.0f, 0.015f, 1.5f},
-    {0.44f, 0.90f, -90.0f, 0.015f, 1.5f},
+    {1.05f, -1.00f, 90.0f, 0.015f, 1.5f},
+    {0.85f, -1.00f, 90.0f, 0.015f, 1.5f},
+    {0.65f, -1.00f, 90.0f, 0.015f, 1.5f},
 };
 static const uint8_t kPrelimWeaponHeadCount =
     sizeof(kPrelimWeaponHeadPoints) / sizeof(kPrelimWeaponHeadPoints[0]);
@@ -41,14 +41,13 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     reset();
 
     finish_dist_ = 0.010f;                  // XY 到点判定距离，单位 m
-    max_decel_mps2_ = 1.20f;                // 用于动态刹车距离估算的最大减速度，单位 m/s^2
-    brake_margin_m_ = 0.05f;                // 动态刹车距离安全余量，单位 m
+    brake_margin_m_ = 0.15f;                // 固定刹车提前距离，单位 m
     finish_speed_tolerance_mps_ = 0.08f;    // 到点稳定确认的平移速度阈值，单位 m/s
 
-    kp_fast_ = 5.0f; // 快速阶段位置比例增益
-    kd_fast_ = 0.7f; // 快速阶段位置微分增益
-    kp_slow_ = 2.2f; // 减速/稳定确认阶段位置比例增益
-    kd_slow_ = 1.4f; // 减速/稳定确认阶段位置微分增益
+    kp_fast_ = 5.5f; // 快速阶段位置比例增益
+    kd_fast_ = 0.75f; // 快速阶段位置微分增益
+    kp_slow_ = 5.0f; // 减速/稳定确认阶段位置比例增益
+    kd_slow_ = 0.2f; // 减速/稳定确认阶段位置微分增益
 
     yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
     yaw_kp_ = 2.2f;               // yaw 角度误差比例增益
@@ -285,8 +284,8 @@ void WuqiquPathPlanner::updateState(float distance_m, float speed_mps, uint8_t x
         state_ = STATE_FAST;
     }
 
-    const float decel = (max_decel_mps2_ > 0.001f) ? max_decel_mps2_ : 0.001f;
-    const float brake_dist_m = speed_mps * speed_mps / (2.0f * decel) + brake_margin_m_;
+    (void)speed_mps;
+    const float brake_dist_m = brake_margin_m_;
     if (state_ == STATE_FAST && distance_m <= brake_dist_m)
     {
         state_ = STATE_SLOW;

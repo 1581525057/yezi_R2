@@ -71,7 +71,6 @@ public:
     PlannerState state_;
 
     float finish_dist_;
-    float max_decel_mps2_;
     float brake_margin_m_;
     float finish_speed_tolerance_mps_;
 

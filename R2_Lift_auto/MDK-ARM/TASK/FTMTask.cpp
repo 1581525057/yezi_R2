@@ -15,14 +15,13 @@ enum FTMMainState
     FTM_MAIN_INIT = 0,            // 初始化各功能模块，完成后进入空闲。
     FTM_MAIN_IDLE = 1,            // 空闲/手动调试状态，等待 Watch 写入动作状态。
     FTM_MAIN_WUQIQU_ROUTE = 2,    // 独立执行武器区第 1 个跑点。
-    FTM_MAIN_WUQIQU_ZERO = 3,     // 向视觉发送置零命令。 0 0 -90
+    FTM_MAIN_WUQIQU_ZERO = 3,     // 向视觉发送置零命令。 0 0 90
     FTM_MAIN_DONE = 4,            // 全流程完成保持状态。
     FTM_MAIN_AUTO_PICK_ROUTE = 5, // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
     FTM_MAIN_AUTO_TURN_READY = 6, // 武器区调整姿态 再次取武器头流程：张爪、对位、M2006 翻转。
     FTM_MAIN_DOCKING = 7,         // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
     FTM_MAIN_GO_MEILIN = 8,       // 前往梅林：先回第三点，再修正航向到 0 度，最后跑梅林目标点。
-    FTM_MAIN_AUTO_FULL_FLOW = 9,  // 完整自动流程入口：切入 5，之后依次执行 7、8、4。
-    FTM_MAIN_PRELIM_AUTO_FULL_FLOW = 10 // 预选赛三武器头流程入口：按 exec=2/3/4 选择当前武器头，依次夹取三次后进梅林。
+    FTM_MAIN_PRELIM_AUTO_FULL_FLOW = 9 // 预选赛三武器头流程入口：按 exec=2/3/4 选择当前武器头，依次夹取三次后进梅林。
 };
 
 enum FTMActionState
@@ -70,7 +69,7 @@ namespace
     constexpr uint32_t kWuqiquZeroSettleMs = 200U;
     constexpr float kWuqiquZeroRelocalizeX = 0.0f;
     constexpr float kWuqiquZeroRelocalizeY = 0.0f;
-    constexpr float kWuqiquZeroRelocalizeYawDeg = -90.0f;
+    constexpr float kWuqiquZeroRelocalizeYawDeg = 90.0f;
     constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;
     constexpr uint16_t kWuqiquYawTurnStableCycles = 200U;
     constexpr uint8_t kWuqiquSecondWaypointIndex = 1U;
@@ -268,8 +267,7 @@ namespace
 
     uint8_t IsAutoFullFlowCarryState(uint8_t main_state)
     {
-        return ((main_state == FTM_MAIN_AUTO_FULL_FLOW) ||
-                (main_state == FTM_MAIN_AUTO_PICK_ROUTE) ||
+        return ((main_state == FTM_MAIN_AUTO_PICK_ROUTE) ||
                 (main_state == FTM_MAIN_DOCKING) ||
                 (main_state == FTM_MAIN_GO_MEILIN) ||
                 (main_state == FTM_MAIN_AUTO_TURN_READY) ||
@@ -1461,12 +1459,6 @@ extern "C" void ftm_task(void *argument)
                 }
                 EnterMainState(FTM_MAIN_DONE);
             }
-            break;
-
-        // 主状态 9：完整自动流程入口；进入 5，之后按 5->7->8->4 自动衔接。
-        case FTM_MAIN_AUTO_FULL_FLOW:
-            g_auto_full_flow_active = 1U;
-            EnterMainState(FTM_MAIN_AUTO_PICK_ROUTE);
             break;
 
         case FTM_MAIN_PRELIM_AUTO_FULL_FLOW:
