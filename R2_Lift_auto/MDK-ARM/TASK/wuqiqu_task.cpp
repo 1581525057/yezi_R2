@@ -65,10 +65,10 @@ constexpr float kPrelimYLockStableBandM = 0.01f;
 constexpr float kPrelimYLockMovingSpeedMps = 0.03f;
 constexpr uint32_t kPrelimYLockStableMs = 80U;
 
-/* 预选赛武器头 laser_left 精调参数，单位全部使用 m。 */
+/* 预选赛武器头 laser_right 精调参数，单位全部使用 m。 */
 constexpr float kPrelimLaserAlignKp = 1.2f;
 constexpr float kPrelimLaserAlignMaxMps = 0.12f;
-constexpr float kPrelimLaserAlignMinMps = 0.04f;
+constexpr float kPrelimLaserAlignMinMps = 0.07f;
 constexpr float kPrelimLaserAlignAccMps2 = 0.8f;
 constexpr float kPrelimLaserAlignDecMps2 = 1.2f;
 constexpr uint32_t kPrelimLaserAlignStableMs = 80U;
@@ -80,9 +80,9 @@ struct PrelimLaserWindow
 };
 
 constexpr PrelimLaserWindow kPrelimLaserWindows[] = {
-    {1.13f, 1.15f},
-    {0.93f, 0.95f},
-    {0.73f, 0.75f},
+    {0.13f, 0.15f},
+    {0.33f, 0.35f},
+    {0.53f, 0.55f},
 };
 constexpr uint8_t kPrelimLaserWindowCount =
     static_cast<uint8_t>(sizeof(kPrelimLaserWindows) / sizeof(kPrelimLaserWindows[0]));
@@ -549,24 +549,24 @@ private:
         const uint32_t now_tick = HAL_GetTick();
         uint8_t laser_in_window = 0U;
 
-        if (laser_left.data.valid != 0U)
+        if (laser_right.data.valid != 0U)
         {
-            const float laser_m = laser_left.data.distance_m;
+            const float laser_m = laser_right.data.distance_m;
             laser_in_window = (laser_m >= window.min_m && laser_m <= window.max_m) ? 1U : 0U;
 
             if (laser_in_window == 0U)
             {
                 const float target_m = 0.5f * (window.min_m + window.max_m);
                 const float err_m = target_m - laser_m;
-                float world_vx_mps = kPrelimLaserAlignKp * err_m;
-                world_vx_mps = limitFloat(world_vx_mps, -kPrelimLaserAlignMaxMps, kPrelimLaserAlignMaxMps);
-                if (fabsf(world_vx_mps) < kPrelimLaserAlignMinMps)
+                float chassis_vy_mps = kPrelimLaserAlignKp * err_m;
+                chassis_vy_mps = limitFloat(chassis_vy_mps, -kPrelimLaserAlignMaxMps, kPrelimLaserAlignMaxMps);
+                if (fabsf(chassis_vy_mps) < kPrelimLaserAlignMinMps)
                 {
-                    world_vx_mps = (err_m >= 0.0f) ? kPrelimLaserAlignMinMps : -kPrelimLaserAlignMinMps;
+                    chassis_vy_mps = (err_m >= 0.0f) ? kPrelimLaserAlignMinMps : -kPrelimLaserAlignMinMps;
                 }
 
                 prelim_laser_stable_start_tick_ = 0U;
-                updateLaserAlignOutput(world_vx_mps);
+                updateLaserAlignOutput(chassis_vy_mps);
                 return 0U;
             }
         }
@@ -599,15 +599,10 @@ private:
         return 0U;
     }
 
-    void updateLaserAlignOutput(float world_vx_mps)
+    void updateLaserAlignOutput(float chassis_vy_mps)
     {
         float vx_limited = 0.0f;
-        float vy_limited = 0.0f;
-        worldToChassisVelocity(world_vx_mps,
-                               0.0f,
-                               vision.angle_x * kDegToRad,
-                               &vx_limited,
-                               &vy_limited);
+        float vy_limited = chassis_vy_mps;
         limitVectorToMax(vx_limited, vy_limited, kPrelimLaserAlignMaxMps);
 
         const uint32_t now_tick = HAL_GetTick();
