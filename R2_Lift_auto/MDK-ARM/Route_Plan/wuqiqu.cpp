@@ -25,6 +25,7 @@ static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
     {0.59f, -0.96f, -90.0f, 0.050f, 2.0f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
+//蓝方三个武器头的坐标 矛头 拳头 巴掌
 static const WuqiquPathPlanner::TargetPoint kPrelimWeaponHeadPoints[] = {
     {1.07f, -0.96f, 90.0f, 0.015f, 1.5f},
     {0.87f, -0.96f, 90.0f, 0.015f, 1.5f},
@@ -68,17 +69,12 @@ WuqiquPathPlanner::WuqiquPathPlanner()
 void WuqiquPathPlanner::reloadDefaultWaypoints(void)
 {
     waypoint_count_ = kWaypointCount;
-    if (waypoint_count_ > MAX_WAYPOINTS)
-    {
-        waypoint_count_ = MAX_WAYPOINTS;
-    }
-
     for (uint8_t i = 0U; i < waypoint_count_; ++i)
     {
         waypoints_[i] = kWaypoints[i];
     }
 }
-
+//加载当前目标点
 void WuqiquPathPlanner::loadCurrentWaypoint(void)
 {
     if (current_index_ < waypoint_count_)
@@ -134,7 +130,6 @@ float WuqiquPathPlanner::getWaypointYawDeg(uint8_t waypoint_index) const
     {
         return waypoints_[waypoint_index].yaw_deg;
     }
-
     return 0.0f;
 }
 
@@ -144,13 +139,11 @@ uint8_t WuqiquPathPlanner::overrideFirstWaypointWithPrelimWeaponHead(uint8_t wea
     {
         return 0U;
     }
-
     waypoints_[0] = kPrelimWeaponHeadPoints[weapon_index];
     if (current_index_ == 0U)
     {
         target_ = waypoints_[0];
     }
-
     return 1U;
 }
 
@@ -276,6 +269,7 @@ void WuqiquPathPlanner::setZeroOutput(void)
     output_.wz_radps = 0.0f;
 }
 
+//更新跑点的状态
 void WuqiquPathPlanner::updateState(float distance_m, float speed_mps, uint8_t xy_in_tolerance, uint32_t now_tick)
 {
     if (state_ == STATE_IDLE)
@@ -298,6 +292,7 @@ void WuqiquPathPlanner::updateState(float distance_m, float speed_mps, uint8_t x
     }
 }
 
+//速度限幅
 void WuqiquPathPlanner::limitVectorToMax(float &vx, float &vy, float max_speed) const
 {
     if (max_speed <= 0.0f)
@@ -346,6 +341,5 @@ float WuqiquPathPlanner::safeSqrt(float value) const
     {
         return 0.0f;
     }
-
     return sqrtf(value);
 }
