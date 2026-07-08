@@ -576,18 +576,22 @@ uint16_t flag_bottom = 0;
 extern "C" void usart_task(void *argument)
 {
     // as5047.init(&hspi1);
+    HAL_Delay(200); // 先给 DT35 / SPI ADC / 电源稳定时间
     dt35.init(&hspi3);
     dt35.init(&hspi3);
     dt35.init(&hspi3);
+
     Block_claulate_Middle();
     for (;;)
     {
         if (Yellow == 1)
         {
+            dt35.init(&hspi3);
             conbat_t.conbat_start = 1;
         }
         if (Blue == 1)
         {
+            conbat_t.conbat_start = 2;
         }
         if (Green == 1)
         {
@@ -612,6 +616,18 @@ extern "C" void usart_task(void *argument)
         if (Whihe == 1)
         {
             flag_bottom = 1;
+        }
+
+        if (Red2 == 0)
+        {
+        }
+
+        if (Blue2 == 0)
+        {
+        }
+
+        if (Yellow2 == 0)
+        {
         }
 
         /* 更新传感器数据 */

@@ -34,9 +34,9 @@ static const std::size_t conbat_ramp_up_middle_point_count =
 
 // 捡 KFS 状态的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_pick_kfs_goals[] = {
-    {3.05f, -1.58f, 0.0f},
-    {3.00f, -2.28f, 0.0f},
-    {3.05f, -2.98f, 0.0f},
+    {3.05f, -1.83f, 0.0f},
+    {3.00f, -2.56f, 0.0f},
+    {3.05f, -3.24f, 0.0f},
 };
 
 // 捡最后一个 KFS 状态的中间点表，单位：x/y 为 m。
@@ -49,14 +49,14 @@ static const std::size_t conbat_pick_kfs_middle_point_count =
 
 // 合体目标终点表，单位：x/y 为 m，yaw 为 rad；后续直接改这里。
 static BRPathPose conbat_combine_goals[] = {
-    {3.24f, -2.89f, 0.0f},
+    {3.12f, -3.05f, 0.0f},
 };
 
 // 放 KFS 状态的终点表，单位：x/y 为 m，yaw 为 rad；按 kfs_place_index_ 选择。
 static BRPathPose conbat_kfs_place_goals[] = {
-    {2.4f, -4.52f, -1.5708f},
-    {2.94f, -4.52f, -1.5708f},
-    {3.48f, -4.52f, -1.5708f},
+    {3.61f, -4.55f, -1.5708f},
+    {3.07f, -4.55f, -1.5708f},
+    {2.5f, -4.55f, -1.5708f},
 };
 
 // 放 KFS 状态共用的中间点表，单位：x/y 为 m；按顺序依次经过。
@@ -77,11 +77,11 @@ static const std::size_t conbat_kfs_place_middle_point_counts[] = {
 };
 
 // 放置完成后偏角等待路径的终点，单位：x/y 为 m，yaw 为 rad。
-static BRPathPose conbat_kfs_wait_goal = {3.36f, -0.53f, -1.57f};
+static BRPathPose conbat_kfs_wait_goal = {3.59f, -3.87f, -1.57f};
 
 // 放置完成后偏角等待路径的中间点，单位：x/y 为 m。
 static BRPathControlPoint conbat_kfs_wait_middle_points[] = {
-    {2.93f, -1.6f},
+    {3.58f, -4.08f},
 };
 static const std::size_t conbat_kfs_wait_middle_point_count =
     sizeof(conbat_kfs_wait_middle_points) / sizeof(conbat_kfs_wait_middle_points[0]);
@@ -340,7 +340,7 @@ void CONBAT_TASK::runOnce(void)
         if (conbat_start == 2U)
         {
             conbat_start = 0U;
-            state = CONBAT_COMBINE;
+            state = CONBAT_PLACE_KFS;
             osDelay(1000);
         }
         clearPathOutput();
@@ -1079,7 +1079,7 @@ uint8_t CONBAT_TASK::runPlaceKfs(void)
         {
             clearPathOutput();
             setYawTarget(-90.0f);
-            if (fabsf(normalizeYawDeg(90.0f - vision.angle_x)) > CONBAT_KFS_PLACE_YAW_TOL_DEG)
+            if (fabsf(normalizeYawDeg(-90.0f - vision.angle_x)) > CONBAT_KFS_PLACE_YAW_TOL_DEG)
             {
                 return 0U;
             }
@@ -1697,6 +1697,7 @@ float CONBAT_TASK::normalizeYawDeg(float yaw_degree)
  * freertos.c 通过 C 链接名创建该任务；任务内部每 1ms 更新一次 CONBAT_TASK 状态机。
  */
 uint16_t flag_beh = 0;
+uint16_t numo = 0;
 extern "C" void conbat_task(void *argument)
 {
     (void)argument;
@@ -1705,7 +1706,7 @@ extern "C" void conbat_task(void *argument)
     {
 
         conbat_t.runOnce();
-        conbat_t.setKfsPlaceIndex(1);
+        conbat_t.setKfsPlaceIndex(numo);
         if (flag_beh == 1)
         {
             arm_comm.executeAction(ArmComm::ACTION_PICK_FIRST_KFS, 1U);
