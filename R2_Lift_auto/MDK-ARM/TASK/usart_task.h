@@ -10,8 +10,7 @@
 #define Whihe HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11)
 #define Red HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5)
 
-#define Red2 HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_9)
-#define Blue2 HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_8)
+
 /* 视觉数据结构体：存储上位机发送的视觉坐标、角度和标定位 */
 typedef struct
 {
