@@ -73,7 +73,8 @@ private:
 
     enum PickKfsStep
     {
-        PICK_KFS_FIRST_ACTION = 0,    // 触发拾取第一个 KFS 的机械臂动作。
+        PICK_KFS_LOCK_ZERO = 0,       // 捡 KFS 前先锁定底盘 yaw 到 0 度。
+        PICK_KFS_FIRST_ACTION,        // 触发拾取第一个 KFS 的机械臂动作。
         PICK_KFS_PATH_TO_AREA,        // 跑到拾取 KFS 的粗略点位。
         PICK_KFS_FIRST_WAIT_READY,    // 等待机械臂允许进入第一个 KFS 吸取阶段。
         PICK_KFS_FIRST_WAIT_DONE,     // 等待机械臂回传第一个 KFS 吸取成功。
@@ -103,6 +104,7 @@ private:
     uint8_t path_loaded_;
     uint8_t path_active_;
     uint8_t ramp_up_waiting_;
+    uint8_t ramp_up_zero_yaw_done_;
     PickKfsStep pick_kfs_step_;
     PlaceKfsStep place_kfs_step_;
     CombineStep combine_step_;

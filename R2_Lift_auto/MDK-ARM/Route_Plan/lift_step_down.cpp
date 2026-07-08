@@ -44,9 +44,11 @@ uint8_t STEP_DOWN_AUTO_STABLE_COUNT = 10U;
 float STEP_DOWN_LIFT_HEIGHT_TOLERANCE_MM = 40.0f;
 
 // 下台阶前准备阶段离方块中心点的距离，单位为 m。
-float STEP_DOWN_PREPARE_DISTANCE_L = 0.33f;
-// 下台阶下降阶段离开当前坐标的距离，单位为 m。
-float STEP_DOWN_DESCEND_DISTANCE_D = 0.57f;
+float STEP_DOWN_PREPARE_DISTANCE_L = 0.30f;
+// 下 200 台阶下降阶段离开当前坐标的距离，单位为 m。
+float STEP_DOWN_DESCEND_DISTANCE_200_D = 0.63f;
+// 下 400 台阶下降阶段离开当前坐标的距离，单位为 m。
+float STEP_DOWN_DESCEND_DISTANCE_400_D = 0.46f;
 
 // 全局实例由任务层调用，调用方式与现有上台阶自动流程保持一致。
 LiftStepDown lift_step_down;
@@ -301,19 +303,21 @@ void LiftStepDown::update(void)
 
         if (step_down_descend_target_valid_ == 0U)
         {
+            const float step_down_descend_distance =
+                (step_down_height_mode_mm_ == 400U) ? STEP_DOWN_DESCEND_DISTANCE_400_D : STEP_DOWN_DESCEND_DISTANCE_200_D;
             step_down_radar_x_ref_descend_ = vision.x_diff;
             step_down_radar_y_ref_descend_ = vision.y_diff;
             if (step_down_turn_180_ != 0U)
             {
-                step_down_radar_x_ref_descend_ = vision.x_diff + STEP_DOWN_DESCEND_DISTANCE_D;
+                step_down_radar_x_ref_descend_ = vision.x_diff + step_down_descend_distance;
             }
             else if (step_down_turn_left_90_ != 0U)
             {
-                step_down_radar_y_ref_descend_ = vision.y_diff - STEP_DOWN_DESCEND_DISTANCE_D;
+                step_down_radar_y_ref_descend_ = vision.y_diff - step_down_descend_distance;
             }
             else
             {
-                step_down_radar_y_ref_descend_ = vision.y_diff + STEP_DOWN_DESCEND_DISTANCE_D;
+                step_down_radar_y_ref_descend_ = vision.y_diff + step_down_descend_distance;
             }
             step_down_descend_target_valid_ = 1U;
         }

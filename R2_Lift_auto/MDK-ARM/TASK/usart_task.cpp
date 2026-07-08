@@ -49,7 +49,7 @@ static uint8_t vision_last_block_count = 0U;
 Block_Vision block_vision_middle[16];
 // 第二个方块的中心坐标
 float block_middle_x = 3.45f;
-float block_middle_y = 1.62f;
+float block_middle_y = 1.61f;
 
 // 通过第2个方块来计算得到其他8个的坐标位置
 
@@ -577,6 +577,8 @@ extern "C" void usart_task(void *argument)
 {
     // as5047.init(&hspi1);
     dt35.init(&hspi3);
+    dt35.init(&hspi3);
+    dt35.init(&hspi3);
     Block_claulate_Middle();
     for (;;)
     {
@@ -604,6 +606,7 @@ extern "C" void usart_task(void *argument)
             //     g_ftm_main_state = 10; // 再执行完整自动流程
             //     red_step = 2;          // 不再触发
             // }
+            g_ftm_main_state = 4;
         }
 
         if (Whihe == 1)

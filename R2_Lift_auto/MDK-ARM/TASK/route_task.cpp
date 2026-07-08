@@ -36,9 +36,9 @@ static const uint16_t ROUTE_RELOCATION_STOP_STABLE_COUNT = 1500U; // 底盘速�
 
 // 寻找 KFS 的终点表，单位：x/y 为 m，yaw 为 rad；按 entrence_KFS 0/1/2 选择。
 static BRPathPose route_find_kfs_goals[] = {
-    {2.36f, 2.78f, 0.0f},
-    {2.36f, 1.56f, 0.0f},
-    {2.33f, 0.39f, 0.0f},
+    {2.36f, 2.82f, 0.0f},
+    {2.36f, 1.60f, 0.0f},
+    {2.33f, 0.44f, 0.0f},
 };
 // 寻找 KFS1 的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint route_find_kfs_0_middle_points[] = {
@@ -495,8 +495,8 @@ uint8_t ROUTE_TASK::runFindKfsToGoal(uint8_t index)
             return path_result;
         }
 
-        // B 样条完成后，同一个状态里立刻接 KFS 终点 P 闭环精定位。
         find_kfs_positioning_ = 1U;
+        return 0U;
     }
 
     // 第二步持续做终点精定位，到位后返回 1，让外层切回视觉阶段。
@@ -726,11 +726,14 @@ void ROUTE_TASK::meiling_route()
     }
 
     case PHASE_FIND_KFS: // 寻找对应的KFS的位置
-        if (runFindKfsToGoal((uint8_t)entrence_KFS) == 1U)
+    {
+        const uint8_t find_kfs_result = runFindKfsToGoal((uint8_t)entrence_KFS);
+        if (find_kfs_result != 0U)
         {
             state = PHASE_VISION;
         }
         break;
+    }
 
     case SECOND_RELOCATION:
     {
