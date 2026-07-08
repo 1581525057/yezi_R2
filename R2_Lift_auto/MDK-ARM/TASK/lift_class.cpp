@@ -142,8 +142,8 @@ extern "C" void lift_task(void *argument)
         lift_class_pid_calculate();
 
         // 左右两侧云深电机按目标角度与 PID 力矩输出控制
-        yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 80, 0.2f, pid_lift_left.pid.Output);
-        yun_j60_motor.SendControl(0x02, -lift_debug.posi, 0, 80, 0.2f, -pid_lift_right.pid.Output);
+        yun_j60_motor.SendControl(0x03, lift_debug.posi, 0, 100, 0.2f, pid_lift_left.pid.Output);
+        yun_j60_motor.SendControl(0x02, -lift_debug.posi, 0, 100, 0.2f, -pid_lift_right.pid.Output);
 
         // 2006 电机电流控制发送口目前保留
         lift_motor.Send_CurrentCommand(&BSP_CAN::FDCAN3_TxFrame,

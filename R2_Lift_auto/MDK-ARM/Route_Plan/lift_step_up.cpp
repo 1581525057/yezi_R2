@@ -245,6 +245,9 @@ void LiftAuto::update(void)
     case STEP_UP_APPROACH_Y:
         // 先靠近台阶，靠近到位后才触发升降，防侧翻
         chassis_vy_override_ = 1U;
+        // 靠近阶段只能单轴直走，默认停住底盘；激光有效时只给前后轴速度。
+        chassis_vx_target_ = 0.0f;
+        chassis_vy_target_ = 0.0f;
         if (step_up_height_mode_mm_ == 400U)
         {
             // 400mm 档需要先把升降机构预抬到最高，再打开气缸。
@@ -281,7 +284,6 @@ void LiftAuto::update(void)
         {
             float err = ((float)laser_mm - (float)STEP_UP_AUTO_PREPARE_MM) * 0.001f;
             chassis_vx_target_ = trapezoid_speed(err, STEP_UP_CHASSIS_ACC_SPEED, STEP_UP_AUTO_APPROACH_MPS);
-            chassis_vy_target_ = 0.0f;
         }
 
         // 到位后需连续N次稳定确认，防误触发
