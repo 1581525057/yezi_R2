@@ -86,12 +86,15 @@ namespace
 
     // 激光修正参数
     static const float kLaserCorrTargetM[3] = {1.14f, 0.94f, 0.74f}; // 各武器头到位后 laser_left 目标值（m）
-    constexpr float kLaserCorrToleranceM = 0.010f;                   // 到位容差 ±10mm
-    constexpr float kLaserCorrKp = 1.2f;                             // 激光距离闭环比例增益，误差 0.10m 时目标速度约 0.12m/s。
-    constexpr float kLaserCorrMinSpeedMps = 0.07f;                   // 底盘最小有效修正速度，避免小误差时推不动车。
-    constexpr float kLaserCorrMaxSpeedMps = 0.25f;                   // 激光闭环最大修正速度，限制贴近阶段速度。
-    constexpr uint32_t kLaserCorrTotalTimeoutMs = 5000U;             // 激光修正总超时，超时后跳过直接夹
-    constexpr uint32_t kLaserCorrInvalidTimeoutMs = 1000U;           // 激光无效等待超时，超时后跳过直接夹
+    constexpr float kLaserCorrToleranceM = 0.010f;       // 到位容差 ±10mm
+    constexpr float kLaserCorrKp = 1.2f;                 // 激光距离闭环比例增益，误差 0.10m 时目标速度约 0.12m/s。
+    constexpr float kLaserCorrMinSpeedMps = 0.07f;       // 底盘最小有效修正速度，避免小误差时推不动车。
+    constexpr float kLaserCorrMaxSpeedMps = 0.25f;       // 激光闭环最大修正速度，限制贴近阶段速度。
+    constexpr float kLaserCorrYHoldToleranceM = 0.010f;  // laser_left 修正时，vision.y_diff 回正容差 ±10mm。
+    constexpr float kLaserCorrYHoldKp = 1.0f;            // vision.y_diff 保持比例增益，误差 0.10m 时目标速度约 0.10m/s。
+    constexpr float kLaserCorrYHoldMaxSpeedMps = 0.20f;  // vision.y_diff 保持最大修正速度。
+    constexpr uint32_t kLaserCorrTotalTimeoutMs = 5000U; // 激光修正总超时，超时后跳过直接夹
+    constexpr uint32_t kLaserCorrInvalidTimeoutMs = 1000U; // 激光无效等待超时，超时后跳过直接夹
 
     struct TimedStep
     {
@@ -136,8 +139,9 @@ namespace
     uint8_t g_prelim_turn_ready_step_index = 0U;
 
     // 激光修正运行时状态
-    uint8_t g_laser_corr_active = 0U;      // 修正步骤是否已进入
-    uint32_t g_laser_corr_start_tick = 0U; // 修正步骤起始时间戳
+    uint8_t g_laser_corr_active = 0U;           // 修正步骤是否已进入
+    uint32_t g_laser_corr_start_tick = 0U;      // 修正步骤起始时间戳
+    float g_laser_corr_y_hold_ref_m = 0.0f;     // 进入修正瞬间锁存的 vision.y_diff 基准值
 
     const uint8_t kSequenceOpenLiftRs05[] = {
         FTM_ACTION_CLAW_OPEN,
@@ -253,6 +257,7 @@ namespace
         g_wuqiqu_parallel_mechanism_finished = 0U;
         g_laser_corr_active = 0U;
         g_laser_corr_start_tick = 0U;
+        g_laser_corr_y_hold_ref_m = 0.0f;
     }
 
     uint8_t IsMechanismAction(uint8_t action_state)
@@ -1166,7 +1171,21 @@ namespace
         return vx_mps;
     }
 
-    // 到位后用 laser_left 修正底盘 X 方向位置。
+    float ClampLaserCorrYHoldSpeed(float vx_mps)
+    {
+        if (vx_mps > kLaserCorrYHoldMaxSpeedMps)
+        {
+            return kLaserCorrYHoldMaxSpeedMps;
+        }
+        if (vx_mps < -kLaserCorrYHoldMaxSpeedMps)
+        {
+            return -kLaserCorrYHoldMaxSpeedMps;
+        }
+
+        return vx_mps;
+    }
+
+    // 到位后用 laser_left 修正贴边距离，同时用 vision.y_diff 保持进入修正时的 Y 基准。
     // 每次 tick 调用一次；返回 true 表示修正完成（含超时跳过情况），返回 false 表示仍在进行。
     bool RunLaserCorrectionStep(void)
     {
@@ -1174,6 +1193,7 @@ namespace
         {
             g_laser_corr_active = 1U;
             g_laser_corr_start_tick = HAL_GetTick();
+            g_laser_corr_y_hold_ref_m = vision.y_diff;
         }
 
         // 总超时保护：超时后跳过修正直接进入夹取
@@ -1197,18 +1217,23 @@ namespace
 
         const float actual_m = laser_left.data.distance_m;
         const float target_m = GetCurrentWeaponHeadLaserTargetM();
-        const float delta_m = target_m - actual_m;
+        const float delta_m = actual_m - target_m;
+        const float y_delta_m = g_laser_corr_y_hold_ref_m - vision.y_diff;
 
         // 已在容差范围内，修正完成
-        if (fabsf(delta_m) <= kLaserCorrToleranceM)
+        if ((fabsf(delta_m) <= kLaserCorrToleranceM) &&
+            (fabsf(y_delta_m) <= kLaserCorrYHoldToleranceM))
         {
             WuqiquTask_Stop();
             return true;
         }
 
-        // 到点后不再改路线点，直接用 laser_left 误差闭环下发底盘 X 方向修正速度。
-        const float vx_mps = ClampLaserCorrSpeed(kLaserCorrKp * delta_m);
-        WuqiquTask_SetChassisTarget(vx_mps, 0.0f, 0.0f);
+        // 到点后不再改路线点，直接下发底盘车体系速度做闭环微调。
+        // laser_left 偏大时向左平移（+Vy），偏小时向右平移（-Vy）。
+        // Vx 用来把 vision.y_diff 拉回进入修正瞬间的基准，抑制贴边修正时车身走歪。
+        const float vx_mps = ClampLaserCorrYHoldSpeed(kLaserCorrYHoldKp * y_delta_m);
+        const float vy_mps = ClampLaserCorrSpeed(kLaserCorrKp * delta_m);
+        WuqiquTask_SetChassisTarget(vx_mps, vy_mps, 0.0f);
 
         return false;
     }
@@ -1230,7 +1255,7 @@ namespace
             ResetMechanismStep();
             return false;
 
-        // case 1：激光修正 —— 到位后根据 laser_left 微调底盘 X，直到进入容差或超时。
+        // case 1：激光修正 —— 到位后根据 laser_left 和 vision.y_diff 微调底盘，直到进入容差或超时。
         case 1:
             if (RunLaserCorrectionStep() == false)
             {
