@@ -247,7 +247,8 @@ void CONBAT_TASK::reset(void)
     path_follower_.reset();
     path_loaded_ = 0U;
     ramp_up_waiting_ = 0U;
-    pick_kfs_step_ = PICK_KFS_FIRST_ACTION;
+    ramp_up_zero_yaw_done_ = 0U;
+    pick_kfs_step_ = PICK_KFS_LOCK_ZERO;
     place_kfs_step_ = PLACE_KFS_LOWER_ACTION;
     combine_step_ = COMBINE_PRE_LIFT;
     pick_kfs_meiling_active_ = 0U;
@@ -506,7 +507,8 @@ void CONBAT_TASK::handleStateChanged(void)
     path_follower_.reset();
     path_loaded_ = 0U;
     ramp_up_waiting_ = 0U;
-    pick_kfs_step_ = PICK_KFS_FIRST_ACTION;
+    ramp_up_zero_yaw_done_ = 0U;
+    pick_kfs_step_ = PICK_KFS_LOCK_ZERO;
     place_kfs_step_ = PLACE_KFS_LOWER_ACTION;
     combine_step_ = COMBINE_PRE_LIFT;
     pick_kfs_meiling_active_ = 0U;
@@ -555,8 +557,22 @@ void CONBAT_TASK::clearPathOutput(void)
 /*
  * 上斜坡状态处理。
  */
+static const float CONBAT_RAMP_UP_ZERO_YAW_TOL_DEG = 3.0f; // 上坡前锁 0 度的角度容差，单位度。
+
 uint8_t CONBAT_TASK::runRampUp(void)
 {
+    if (ramp_up_zero_yaw_done_ == 0U)
+    {
+        clearPathOutput();
+        setYawTarget(0.0f);
+        if (fabsf(normalizeYawDeg(0.0f - vision.angle_x)) > CONBAT_RAMP_UP_ZERO_YAW_TOL_DEG)
+        {
+            return 0U;
+        }
+
+        ramp_up_zero_yaw_done_ = 1U;
+    }
+
     /* 上坡完成后原地等待，避免重复生成路径后回追中间点。 */
     if (ramp_up_waiting_ != 0U)
     {
@@ -578,21 +594,34 @@ uint8_t CONBAT_TASK::runRampUp(void)
 }
 
 // 捡 KFS 流程参数。
-float CONBAT_PICK_KFS_PATH_MAX_VEL_M_S = 1.5f;             // 捡 KFS 跑点的最大线速度，单位 m/s。
-float CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2 = 0.8f;            // 捡 KFS 跑点的最大加速度，单位 m/s2。
-float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2 = 0.9f;  // KFS 等待阶段车体前进加速度，单位 m/s2。
-float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS = 1.0f;   // KFS 等待阶段车体前进最大速度，单位 m/s。
-float CONBAT_PICK_KFS_FIRST_BACK_DISTANCE_M = 0.06f;       // KFS 吸取成功后沿 X 轴后退距离，单位 m。
-float CONBAT_PICK_KFS_FIRST_BACK_SPEED_MPS = 0.4f;         // KFS 吸取成功后沿 X 轴后退速度，单位 m/s。
-float CONBAT_PICK_GO_TO_COMBINE_KP = 1.6f;                 // 去合体目标点的二维位置 P 闭环系数。
-float CONBAT_PICK_GO_TO_COMBINE_TOL_M = 0.03f;             // 去合体目标点的到位误差，单位 m。
-float CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM = 455.0f;  // 第一个 KFS 边吸边前进的 DT35 目标距离。
-float CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM = 440.0f; // 第二个 KFS 边吸边前进的 DT35 目标距离。
+float CONBAT_PICK_KFS_PATH_MAX_VEL_M_S = 1.5f;              // 捡 KFS 跑点的最大线速度，单位 m/s。
+float CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2 = 0.8f;             // 捡 KFS 跑点的最大加速度，单位 m/s2。
+float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2 = 0.9f;   // KFS 等待阶段车体前进加速度，单位 m/s2。
+float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS = 1.0f;    // KFS 等待阶段车体前进最大速度，单位 m/s。
+float CONBAT_PICK_KFS_FIRST_BACK_DISTANCE_M = 0.06f;        // KFS 吸取成功后沿 X 轴后退距离，单位 m。
+float CONBAT_PICK_KFS_FIRST_BACK_SPEED_MPS = 0.4f;          // KFS 吸取成功后沿 X 轴后退速度，单位 m/s。
+float CONBAT_PICK_GO_TO_COMBINE_KP = 1.6f;                  // 去合体目标点的二维位置 P 闭环系数。
+float CONBAT_PICK_GO_TO_COMBINE_TOL_M = 0.03f;              // 去合体目标点的到位误差，单位 m。
+float CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM = 455.0f;   // 第一个 KFS 边吸边前进的 DT35 目标距离。
+float CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM = 440.0f;  // 第二个 KFS 边吸边前进的 DT35 目标距离。
+static const float CONBAT_PICK_KFS_ZERO_YAW_TOL_DEG = 3.0f; // 捡 KFS 前锁 0 度的角度容差，单位度。
 
 uint8_t CONBAT_TASK::runPickKfs(void)
 {
     switch (pick_kfs_step_)
     {
+    case PICK_KFS_LOCK_ZERO:
+        /* 捡 KFS 前先停车锁 0 度，到位后再发送第一个机械臂动作。 */
+        clearPathOutput();
+        setYawTarget(0.0f);
+        if (fabsf(normalizeYawDeg(0.0f - vision.angle_x)) > CONBAT_PICK_KFS_ZERO_YAW_TOL_DEG)
+        {
+            return 0U;
+        }
+
+        pick_kfs_step_ = PICK_KFS_FIRST_ACTION;
+        return 0U;
+
     case PICK_KFS_FIRST_ACTION:
         /* 第一步：发送拾取第一个 KFS 的机械臂指令。 */
         if (arm_comm.executeAction(ArmComm::ACTION_PICK_FIRST_KFS, 1U) == 0U)
@@ -1668,7 +1697,7 @@ float CONBAT_TASK::normalizeYawDeg(float yaw_degree)
  * freertos.c 通过 C 链接名创建该任务；任务内部每 1ms 更新一次 CONBAT_TASK 状态机。
  */
 uint16_t flag_beh = 0;
-uint16_t kfs_num = 0;
+uint16_t numo = 0;
 extern "C" void conbat_task(void *argument)
 {
     (void)argument;
@@ -1677,7 +1706,7 @@ extern "C" void conbat_task(void *argument)
     {
 
         conbat_t.runOnce();
-        conbat_t.setKfsPlaceIndex(1);
+        conbat_t.setKfsPlaceIndex(numo);
         if (flag_beh == 1)
         {
             arm_comm.executeAction(ArmComm::ACTION_PICK_FIRST_KFS, 1U);
