@@ -13,15 +13,15 @@ extern "C" volatile uint32_t g_ftm_grab_settle_delay_ms;
 
 enum FTMMainState
 {
-    FTM_MAIN_INIT = 0,            // 初始化各功能模块，完成后进入空闲。
-    FTM_MAIN_IDLE = 1,            // 空闲/手动调试状态，等待 Watch 写入动作状态。
-    FTM_MAIN_WUQIQU_ROUTE = 2,    // 独立执行武器区第 1 个跑点。
-    FTM_MAIN_WUQIQU_ZERO = 3,     // 向视觉发送置零命令。 0 0 90
-    FTM_MAIN_DONE = 4,            // 全流程完成保持状态。
-    FTM_MAIN_AUTO_PICK_ROUTE = 5, // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
-    FTM_MAIN_AUTO_TURN_READY = 6, // 武器区调整姿态 再次取武器头流程：张爪、对位、M2006 翻转。
-    FTM_MAIN_DOCKING = 7,         // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
-    FTM_MAIN_GO_MEILIN = 8,       // 前往梅林：先回第三点，再修正航向到 0 度，最后跑梅林目标点。
+    FTM_MAIN_INIT = 0,                 // 初始化各功能模块，完成后进入空闲。
+    FTM_MAIN_IDLE = 1,                 // 空闲/手动调试状态，等待 Watch 写入动作状态。
+    FTM_MAIN_WUQIQU_ROUTE = 2,         // 独立执行武器区第 1 个跑点。
+    FTM_MAIN_WUQIQU_ZERO = 3,          // 向视觉发送置零命令。 0 0 90
+    FTM_MAIN_DONE = 4,                 // 全流程完成保持状态。
+    FTM_MAIN_AUTO_PICK_ROUTE = 5,      // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
+    FTM_MAIN_AUTO_TURN_READY = 6,      // 武器区调整姿态 再次取武器头流程：张爪、对位、M2006 翻转。
+    FTM_MAIN_DOCKING = 7,              // 对接调试状态：MiniPC 松手和对接高度微调只在此状态生效。
+    FTM_MAIN_GO_MEILIN = 8,            // 前往梅林：先回第三点，再修正航向到 0 度，最后跑梅林目标点。
     FTM_MAIN_PRELIM_AUTO_FULL_FLOW = 9 // 预选赛三武器头流程入口：按 exec=2/3/4 选择当前武器头，依次夹取三次后进梅林。
 };
 
@@ -86,12 +86,12 @@ namespace
 
     // 激光修正参数
     static const float kLaserCorrTargetM[3] = {1.14f, 0.94f, 0.74f}; // 各武器头到位后 laser_left 目标值（m）
-    constexpr float kLaserCorrToleranceM = 0.010f;       // 到位容差 ±10mm
-    constexpr float kLaserCorrKp = 1.2f;                 // 激光距离闭环比例增益，误差 0.10m 时目标速度约 0.12m/s。
-    constexpr float kLaserCorrMinSpeedMps = 0.07f;       // 底盘最小有效修正速度，避免小误差时推不动车。
-    constexpr float kLaserCorrMaxSpeedMps = 0.25f;       // 激光闭环最大修正速度，限制贴近阶段速度。
-    constexpr uint32_t kLaserCorrTotalTimeoutMs = 5000U; // 激光修正总超时，超时后跳过直接夹
-    constexpr uint32_t kLaserCorrInvalidTimeoutMs = 1000U; // 激光无效等待超时，超时后跳过直接夹
+    constexpr float kLaserCorrToleranceM = 0.010f;                   // 到位容差 ±10mm
+    constexpr float kLaserCorrKp = 1.2f;                             // 激光距离闭环比例增益，误差 0.10m 时目标速度约 0.12m/s。
+    constexpr float kLaserCorrMinSpeedMps = 0.07f;                   // 底盘最小有效修正速度，避免小误差时推不动车。
+    constexpr float kLaserCorrMaxSpeedMps = 0.25f;                   // 激光闭环最大修正速度，限制贴近阶段速度。
+    constexpr uint32_t kLaserCorrTotalTimeoutMs = 5000U;             // 激光修正总超时，超时后跳过直接夹
+    constexpr uint32_t kLaserCorrInvalidTimeoutMs = 1000U;           // 激光无效等待超时，超时后跳过直接夹
 
     struct TimedStep
     {
@@ -136,8 +136,8 @@ namespace
     uint8_t g_prelim_turn_ready_step_index = 0U;
 
     // 激光修正运行时状态
-    uint8_t g_laser_corr_active = 0U;           // 修正步骤是否已进入
-    uint32_t g_laser_corr_start_tick = 0U;      // 修正步骤起始时间戳
+    uint8_t g_laser_corr_active = 0U;      // 修正步骤是否已进入
+    uint32_t g_laser_corr_start_tick = 0U; // 修正步骤起始时间戳
 
     const uint8_t kSequenceOpenLiftRs05[] = {
         FTM_ACTION_CLAW_OPEN,
