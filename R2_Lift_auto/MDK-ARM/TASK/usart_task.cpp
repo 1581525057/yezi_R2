@@ -605,7 +605,6 @@ extern "C" void usart_task(void *argument)
 
         if (Red == 1)
         {
-            kfs_num = 1;
         }
 
         if (Whihe == 1)
@@ -620,6 +619,9 @@ extern "C" void usart_task(void *argument)
         {
         }
 
+        if (Yellow2 == 0)
+        {
+        }
         /* 更新传感器数据 */
         // as5047.updata();
         dt35.update();
