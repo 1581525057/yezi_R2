@@ -573,6 +573,7 @@ int Flag1 = 0;
  *   2. 解析 USB 串口收到的视觉帧
  */
 uint16_t flag_bottom = 0;
+extern uint16_t numo;
 extern "C" void usart_task(void *argument)
 {
     // as5047.init(&hspi1);
@@ -620,14 +621,17 @@ extern "C" void usart_task(void *argument)
 
         if (Red2 == 0)
         {
+            numo = 1;
         }
 
         if (Blue2 == 0)
         {
+            numo = 2;
         }
 
         if (Yellow2 == 0)
         {
+            numo = 0;
         }
 
         /* 更新传感器数据 */

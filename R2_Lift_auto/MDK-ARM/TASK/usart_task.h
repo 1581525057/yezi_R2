@@ -65,5 +65,5 @@ void vision_block_clear(void);
 void vision_plan_mark_consumed_if_empty(void);
 
 void send_position_to_pc(int16_t behaivor, uint8_t p_diff, float X_diff, float Y_diff, float yaw);
-
+extern uint16_t numo;
 #endif
