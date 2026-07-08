@@ -1166,7 +1166,7 @@ namespace
         return vx_mps;
     }
 
-    // 到位后用 laser_left 修正底盘 X 方向位置。
+    // 到位后用 laser_left 修正底盘 Y 方向位置。
     // 每次 tick 调用一次；返回 true 表示修正完成（含超时跳过情况），返回 false 表示仍在进行。
     bool RunLaserCorrectionStep(void)
     {
@@ -1197,7 +1197,7 @@ namespace
 
         const float actual_m = laser_left.data.distance_m;
         const float target_m = GetCurrentWeaponHeadLaserTargetM();
-        const float delta_m = target_m - actual_m;
+        const float delta_m = actual_m - target_m;
 
         // 已在容差范围内，修正完成
         if (fabsf(delta_m) <= kLaserCorrToleranceM)
@@ -1206,9 +1206,10 @@ namespace
             return true;
         }
 
-        // 到点后不再改路线点，直接用 laser_left 误差闭环下发底盘 X 方向修正速度。
-        const float vx_mps = ClampLaserCorrSpeed(kLaserCorrKp * delta_m);
-        WuqiquTask_SetChassisTarget(vx_mps, 0.0f, 0.0f);
+        // 到点后不再改路线点，直接用 laser_left 误差闭环下发底盘 Y 方向修正速度。
+        // laser_left 偏大时向左平移（+Vy），偏小时向右平移（-Vy）。
+        const float vy_mps = ClampLaserCorrSpeed(kLaserCorrKp * delta_m);
+        WuqiquTask_SetChassisTarget(0.0f, vy_mps, 0.0f);
 
         return false;
     }
