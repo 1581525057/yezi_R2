@@ -573,55 +573,67 @@ int Flag1 = 0;
  *   2. 解析 USB 串口收到的视觉帧
  */
 uint16_t flag_bottom = 0;
+extern uint16_t numo;
 extern "C" void usart_task(void *argument)
 {
     // as5047.init(&hspi1);
+    HAL_Delay(200); // 先给 DT35 / SPI ADC / 电源稳定时间
     dt35.init(&hspi3);
+    dt35.init(&hspi3);
+    dt35.init(&hspi3);
+
     Block_claulate_Middle();
     for (;;)
     {
         if (Yellow == 1)
         {
+            dt35.init(&hspi3);
             conbat_t.conbat_start = 1;
         }
         if (Blue == 1)
         {
-            g_ftm_main_state = 3; // 先执行视觉置零
-            flag_bottom = 1;
+            conbat_t.conbat_start = 2;
         }
         if (Green == 1)
         {
-            static uint8_t red_step = 1; // 1=待触发9, 2=已完成
-            if (red_step == 1)
-            {
-                g_ftm_main_state = 10; // 再执行完整自动流程
-                red_step = 2;          // 不再触发
-            }
+            // g_ftm_main_state = 3; // 先执行视觉置零
+            // flag_bottom = 1;
         }
         if (Orange == 1)
         {
-            conbat_t.conbat_start = 2;
         }
 
         if (Red == 1)
         {
+            // static uint8_t red_step = 1; // 1=待触发9, 2=已完成
+            // if (red_step == 1)
+            // {
+            //     g_ftm_main_state = 10; // 再执行完整自动流程
+            //     red_step = 2;          // 不再触发
+            // }
+            g_ftm_main_state = 4;
         }
 
         if (Whihe == 1)
         {
+            flag_bottom = 1;
         }
 
         if (Red2 == 0)
         {
+            numo = 1;
         }
 
         if (Blue2 == 0)
         {
+            numo = 2;
         }
 
         if (Yellow2 == 0)
         {
+            numo = 0;
         }
+
         /* 更新传感器数据 */
         // as5047.updata();
         dt35.update();

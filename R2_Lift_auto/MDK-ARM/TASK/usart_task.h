@@ -12,7 +12,6 @@
 #define Red2 HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_13)
 #define Yellow2 HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_9)
 #define Blue2 HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_2)
-
 /* 视觉数据结构体：存储上位机发送的视觉坐标、角度和标定位 */
 typedef struct
 {
@@ -66,5 +65,5 @@ void vision_block_clear(void);
 void vision_plan_mark_consumed_if_empty(void);
 
 void send_position_to_pc(int16_t behaivor, uint8_t p_diff, float X_diff, float Y_diff, float yaw);
-
+extern uint16_t numo;
 #endif
