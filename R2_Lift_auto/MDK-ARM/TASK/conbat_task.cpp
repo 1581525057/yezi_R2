@@ -34,9 +34,9 @@ static const std::size_t conbat_ramp_up_middle_point_count =
 
 // 捡 KFS 状态的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_pick_kfs_goals[] = {
-    {3.05f, -1.78f, 0.0f},
-    {3.00f, -2.51f, 0.0f},
-    {3.05f, -3.1f, 0.0f},
+    {3.05f, -1.63f, 0.0f},
+    {3.00f, -2.33f, 0.0f},
+    {3.05f, -3.03f, 0.0f},
 };
 
 // 捡最后一个 KFS 状态的中间点表，单位：x/y 为 m。
@@ -54,9 +54,9 @@ static BRPathPose conbat_combine_goals[] = {
 
 // 放 KFS 状态的终点表，单位：x/y 为 m，yaw 为 rad；按 kfs_place_index_ 选择。
 static BRPathPose conbat_kfs_place_goals[] = {
-    {3.61f, -4.55f, -1.5708f},
-    {3.12f, -4.55f, -1.5708f},
-    {2.6f, -4.55f, -1.5708f},
+    {3.84f, -4.43f, -1.5708f},
+    {3.28f, -4.43f, -1.5708f},
+    {2.71f, -4.43f, -1.5708f},
 };
 
 // 放 KFS 状态共用的中间点表，单位：x/y 为 m；按顺序依次经过。
