@@ -596,6 +596,7 @@ extern "C" void usart_task(void *argument)
         }
         if (Green == 1)
         {
+            g_ftm_main_state = 3;
             // g_ftm_main_state = 3; // 先执行视觉置零
             // flag_bottom = 1;
         }
