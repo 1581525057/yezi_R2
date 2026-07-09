@@ -20,9 +20,9 @@ ROUTE_TASK route_t;
 extern float yaw_target;
 extern Block_Vision block_vision_middle[16];
 
-float ROUTE_FIND_KFS_GENERATE_PATH_MAX_VEL_M_S = 4.0f;  // 寻找 KFS 自动生成路径的最大线速度，单位 m/s。
-float ROUTE_FIND_KFS_GENERATE_PATH_MAX_ACC_M_S2 = 1.2f; // 寻找 KFS 自动生成路径的最大加速度，单位 m/s2。
-float ROUTE_FIND_KFS_GENERATE_PATH_GAP_M = 0.04f;       // 寻找 KFS 自动生成路径点的间距，单位 m。
+float ROUTE_FIND_KFS_GENERATE_PATH_MAX_VEL_M_S = 3.0f;  // 寻找 KFS 自动生成路径的最大线速度，单位 m/s。
+float ROUTE_FIND_KFS_GENERATE_PATH_MAX_ACC_M_S2 = 1.5f; // 寻找 KFS 自动生成路径的最大加速度，单位 m/s2。
+float ROUTE_FIND_KFS_GENERATE_PATH_GAP_M = 0.05f;       // 寻找 KFS 自动生成路径点的间距，单位 m。
 
 float ROUTE_FIND_KFS_POSITION_KP = 1.6f;                          // B 样条结束后 KFS 终点精定位的二维位置 P 闭环系数。
 float ROUTE_FIND_KFS_POSITION_MAX_VEL_M_S = 0.6f;                 // KFS 终点精定位的最大线速度，单位 m/s。
@@ -36,21 +36,21 @@ static const uint16_t ROUTE_RELOCATION_STOP_STABLE_COUNT = 1500U; // 底盘速�
 
 // 寻找 KFS 的终点表，单位：x/y 为 m，yaw 为 rad；按 entrence_KFS 0/1/2 选择。
 static BRPathPose route_find_kfs_goals[] = {
-    {2.36f, -2.78f, 0.0f},
-    {2.36f, -1.56f, 0.0f},
-    {2.33f, -0.39f, 0.0f},
+    {2.36f, 2.82f, 0.0f},
+    {2.36f, 1.60f, 0.0f},
+    {2.33f, 0.44f, 0.0f},
 };
 // 寻找 KFS1 的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint route_find_kfs_0_middle_points[] = {
-    {1.69f, -2.135f}};
+    {1.69f, 2.135f}};
 
 // 寻找 KFS2 的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint route_find_kfs_1_middle_points[] = {
-    {1.615f, -1.545f}};
+    {1.615f, 1.545f}};
 
 // 寻找 KFS3 的中间点表，单位：x/y 为 m；按顺序依次经过。
 static BRPathControlPoint route_find_kfs_2_middle_points[] = {
-    {1.60f, -0.935f}};
+    {1.60f, 0.935f}};
 
 static const BRPathControlPoint *route_find_kfs_middle_points[] = {
     route_find_kfs_0_middle_points,
@@ -1060,7 +1060,6 @@ extern "C" void plan_route(void *argument)
             arm_comm.send();
         }
 
-        
         // if ((FTM_GetMainState() == 4U) &&
         //     (route_t.state == PHASE_IDLE) &&
         //     (ftm_done_route_started == 0U) && (conbat_t.state == CONBAT_IDLE))
