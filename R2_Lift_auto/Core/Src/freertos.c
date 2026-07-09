@@ -132,6 +132,18 @@ const osThreadAttr_t CONBAT_TASK_attributes = {
   .stack_size = sizeof(CONBAT_TASKBuffer),
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for LEDTask */
+osThreadId_t LEDTaskHandle;
+uint32_t LEDTaskBuffer[ 256 ];
+osStaticThreadDef_t LEDTaskControlBlock;
+const osThreadAttr_t LEDTask_attributes = {
+  .name = "LEDTask",
+  .cb_mem = &LEDTaskControlBlock,
+  .cb_size = sizeof(LEDTaskControlBlock),
+  .stack_mem = &LEDTaskBuffer[0],
+  .stack_size = sizeof(LEDTaskBuffer),
+  .priority = (osPriority_t) osPriorityNormal,
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -145,6 +157,7 @@ void plan_route(void *argument);
 void ftm_task(void *argument);
 void wuqiqu_task(void *argument);
 void conbat_task(void *argument);
+void led_task(void *argument);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -196,6 +209,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of CONBAT_TASK */
   CONBAT_TASKHandle = osThreadNew(conbat_task, NULL, &CONBAT_TASK_attributes);
+
+  /* creation of LEDTask */
+  LEDTaskHandle = osThreadNew(led_task, NULL, &LEDTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -333,6 +349,24 @@ __weak void conbat_task(void *argument)
     osDelay(1);
   }
   /* USER CODE END conbat_task */
+}
+
+/* USER CODE BEGIN Header_led_task */
+/**
+* @brief Function implementing the LEDTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_led_task */
+__weak void led_task(void *argument)
+{
+  /* USER CODE BEGIN led_task */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END led_task */
 }
 
 /* Private application code --------------------------------------------------*/

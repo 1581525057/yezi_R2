@@ -596,7 +596,7 @@ extern "C" void usart_task(void *argument)
         }
         if (Green == 1)
         {
-            // g_ftm_main_state = 3; // 先执行视觉置零
+            g_ftm_main_state = 3; // 先执行视觉置零
             // flag_bottom = 1;
         }
         if (Orange == 1)
@@ -605,13 +605,13 @@ extern "C" void usart_task(void *argument)
 
         if (Red == 1)
         {
-            // static uint8_t red_step = 1; // 1=待触发9, 2=已完成
-            // if (red_step == 1)
-            // {
-            //     g_ftm_main_state = 10; // 再执行完整自动流程
-            //     red_step = 2;          // 不再触发
-            // }
-            g_ftm_main_state = 4;
+            static uint8_t red_step = 1; // 1=待触发9, 2=已完成
+            if (red_step == 1)
+            {
+                g_ftm_main_state = 10; // 再执行完整自动流程
+                red_step = 2;          // 不再触发
+            }
+            //g_ftm_main_state = 4;
         }
 
         if (Whihe == 1)
