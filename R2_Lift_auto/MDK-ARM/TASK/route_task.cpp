@@ -207,6 +207,8 @@ void ROUTE_TASK::route_reset()
     flag_start = 0;
     flag_relocation = 0;
     flag_vision = 0;
+    flag_action_finished = 0U;
+    last_step_down_is_final_action_ = 0U;
     relocation_number = 0;
     relocation_position_sent_ = 0U;
     relocation_stop_stable_count_ = 0U;
@@ -529,6 +531,9 @@ void ROUTE_TASK::vision_choice()
 
     vision.B = cmd;
     flag_vision = vision_command_has_pending();
+    flag_action_finished = 0U;
+    last_step_down_is_final_action_ =
+        ((cmd == 5 || cmd == 6) && flag_vision == 0U) ? 1U : 0U;
 
     switch (cmd)
     {
@@ -762,6 +767,11 @@ void ROUTE_TASK::meiling_route()
         if (lift_step_down.isStepDownFinished())
         {
             lift_step_down.stopStepDown();
+            if (last_step_down_is_final_action_ != 0U)
+            {
+                flag_action_finished = 1U;
+            }
+            last_step_down_is_final_action_ = 0U;
             state = PHASE_VISION;
         }
         break;

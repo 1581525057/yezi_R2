@@ -49,6 +49,7 @@ private:
     float last_step_center_y_;       // 接线层记录的最近一次台阶中心 Y 坐标。
     uint8_t last_step_center_valid_; // 最近一次台阶中心是否有效。
     uint8_t already_step_up_;        // 是否已经完成过一次上台阶，用于取 KFS 前是否预走 Xcm。
+    uint8_t last_step_down_is_final_action_; // 当前下台阶动作是否为动作列表最后一项。
     float pick_kfs_center_x_;        // 取 KFS 所在方块中心 X 坐标。
     float pick_kfs_center_y_;        // 取 KFS 所在方块中心 Y 坐标。
     uint8_t pick_kfs_center_valid_;  // 取 KFS 方块中心是否有效。
@@ -105,6 +106,7 @@ public:
 
     uint8_t flag_start;
     uint8_t flag_vision; // 等待视觉数据。
+    uint8_t flag_action_finished; // 动作列表最后一个下台阶动作已完成。
     uint8_t number_KFS;  // 机械臂手上和车内的 KFS 总数量。
 };
 
