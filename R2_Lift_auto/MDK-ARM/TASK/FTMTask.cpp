@@ -86,7 +86,7 @@ namespace
 
     // 激光修正参数
     static const float kLaserCorrTargetM[3] = {1.14f, 0.94f, 0.74f}; // 各武器头到位后 laser_left 目标值（m）
-    constexpr float kLaserCorrToleranceM = 0.010f;       // 到位容差 ±10mm
+    constexpr float kLaserCorrToleranceM = 0.0250f;       // 到位容差 ±10mm
     constexpr float kLaserCorrKp = 1.2f;                 // 激光距离闭环比例增益，误差 0.10m 时目标速度约 0.12m/s。
     constexpr float kLaserCorrMinSpeedMps = 0.07f;       // 底盘最小有效修正速度，避免小误差时推不动车。
     constexpr float kLaserCorrMaxSpeedMps = 0.25f;       // 激光闭环最大修正速度，限制贴近阶段速度。
@@ -1422,7 +1422,7 @@ extern "C" volatile uint8_t wuqiqu_done = 0U;
 extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
 extern "C" volatile float g_ftm_yaw_target_degree = 0.0f;
 extern "C" volatile float g_ftm_lift_up_target_mm = 74.0f;
-extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 210.0f;
+extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 214.0f;
 extern "C" volatile float g_ftm_lift_down_target_mm = 68.0f;
 extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
 extern "C" volatile uint32_t g_ftm_grab_settle_delay_ms = 200U;

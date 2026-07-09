@@ -48,7 +48,7 @@ float STEP_DOWN_PREPARE_DISTANCE_L = 0.30f;
 // 下 200 台阶下降阶段离开当前坐标的距离，单位为 m。
 float STEP_DOWN_DESCEND_DISTANCE_200_D = 0.63f;
 // 下 400 台阶下降阶段离开当前坐标的距离，单位为 m。
-float STEP_DOWN_DESCEND_DISTANCE_400_D = 0.46f;
+float STEP_DOWN_DESCEND_DISTANCE_400_D = 0.54f;
 
 // 全局实例由任务层调用，调用方式与现有上台阶自动流程保持一致。
 LiftStepDown lift_step_down;
