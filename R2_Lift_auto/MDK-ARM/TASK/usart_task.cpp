@@ -605,12 +605,12 @@ extern "C" void usart_task(void *argument)
 
         if (Red == 1)
         {
-              dt35.init(&hspi3);
+            dt35.init(&hspi3);
             static uint8_t red_step = 1; // 1=待触发9, 2=已完成
             if (red_step == 1)
             {
                 g_ftm_main_state = 9; // 再执行完整自动流程
-                red_step = 2;          // 不再触发
+                red_step = 2;         // 不再触发
             }
         }
 
