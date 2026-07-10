@@ -22,6 +22,7 @@
 #include "dma.h"
 #include "fdcan.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "usb_device.h"
 #include "gpio.h"
@@ -110,6 +111,7 @@ int main(void)
   MX_USART10_UART_Init();
   MX_SPI3_Init();
   MX_UART9_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   MX_USB_DEVICE_Init(); // 初始化usb

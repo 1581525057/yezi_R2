@@ -18,18 +18,18 @@ static const uint32_t kFastLinkContactTimeoutMs = 80U; // 快速衔接点 SETTLE
 // 目标点为视觉置零后的世界/雷达绝对坐标，任务层会把 world 速度转成底盘车体系速度。
 // 参数顺序：x y yaw xy_tolerance yaw_tolerance
 static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {1.07f, -0.96f, 90.0f, 0.015f, 1.5f},
+    {1.07f, -0.97f, 90.0f, 0.015f, 1.5f},
     {0.59f, -0.70f, 90.0f, 0.035f, 3.0f},
     {0.59f, -0.70f, -90.0f, 0.035f, 2.0f},
     {0.93f, 1.60f, 0.0f, 0.030f, 1.5f},
     {0.59f, -0.96f, -90.0f, 0.050f, 2.0f},
 };
 static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
-//蓝方三个武器头的坐标 矛头 拳头 巴掌
+//蓝方三个武器头的坐标 矛头 拳头 巴掌1
 static const WuqiquPathPlanner::TargetPoint kPrelimWeaponHeadPoints[] = {
-    {1.07f, -0.96f, 90.0f, 0.015f, 1.5f},
-    {0.87f, -0.96f, 90.0f, 0.015f, 1.5f},
-    {0.67f, -0.96f, 90.0f, 0.015f, 1.5f},
+    {1.07f, -0.97f, 90.0f, 0.020f, 1.5f},
+    {0.87f, -0.97f, 90.0f, 0.020f, 1.5f},
+    {0.67f, -0.97f, 90.0f, 0.020f, 1.5f},
 };
 static const uint8_t kPrelimWeaponHeadCount =
     sizeof(kPrelimWeaponHeadPoints) / sizeof(kPrelimWeaponHeadPoints[0]);

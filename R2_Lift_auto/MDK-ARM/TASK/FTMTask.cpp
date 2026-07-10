@@ -5,6 +5,7 @@
 #include "RS05.h"
 #include "GripPush.h"
 #include "usart_task.h"
+#include "led_task.h"
 #include "laser_distance.h"
 #include "cmsis_os.h"
 #include <math.h>
@@ -86,7 +87,7 @@ namespace
 
     // 激光修正参数
     static const float kLaserCorrTargetM[3] = {1.14f, 0.94f, 0.74f}; // 各武器头到位后 laser_left 目标值（m）
-    constexpr float kLaserCorrToleranceM = 0.010f;       // 到位容差 ±10mm
+    constexpr float kLaserCorrToleranceM = 0.030f;       // 到位容差 ±30mm
     constexpr float kLaserCorrKp = 1.2f;                 // 激光距离闭环比例增益，误差 0.10m 时目标速度约 0.12m/s。
     constexpr float kLaserCorrMinSpeedMps = 0.07f;       // 底盘最小有效修正速度，避免小误差时推不动车。
     constexpr float kLaserCorrMaxSpeedMps = 0.25f;       // 激光闭环最大修正速度，限制贴近阶段速度。
@@ -132,6 +133,10 @@ namespace
     int g_last_docking_exec = 0;
     uint8_t g_docking_exec_changed = 0U;
     uint8_t g_docking_lift_adjust_active = 0U;
+    uint8_t g_led_prelim_green_hold_active = 0U;
+    LedTask_Segment g_led_prelim_green_hold_segment = LED_TASK_SEG_ALL;
+    uint8_t g_led_go_meilin_if_go_latched = 0U;
+    uint8_t g_led_go_meilin_rainbow_latched = 0U;
     uint8_t g_wuqiqu_yaw_turn_active = 0U;
     uint8_t g_wuqiqu_yaw_turn_target_waypoint_index = kWuqiquYawTargetWaypointIndex;
     uint16_t g_wuqiqu_yaw_turn_stable_count = 0U;
@@ -327,12 +332,157 @@ namespace
                    : 0U;
     }
 
+    LedTask_Segment GetCurrentLedSegment(void)
+    {
+        switch (g_prelim_weapon_index)
+        {
+        case 1U:
+            return LED_TASK_SEG_MIDDLE;
+        case 2U:
+            return LED_TASK_SEG_BACK;
+        case 0U:
+        default:
+            return LED_TASK_SEG_FRONT;
+        }
+    }
+
+    LedTask_Segment GetLedSegmentFromExec(int exec)
+    {
+        switch (exec)
+        {
+        case kPrelimExecFirstWeapon:
+            return LED_TASK_SEG_FRONT;
+        case kPrelimExecSecondWeapon:
+            return LED_TASK_SEG_MIDDLE;
+        case kPrelimExecThirdWeapon:
+            return LED_TASK_SEG_BACK;
+        default:
+            return LED_TASK_SEG_ALL;
+        }
+    }
+
+    LedTask_Segment GetActiveWeaponLedSegment(void)
+    {
+        const LedTask_Segment exec_segment = GetLedSegmentFromExec(vision.exec);
+        if (exec_segment != LED_TASK_SEG_ALL)
+        {
+            return exec_segment;
+        }
+
+        return GetCurrentLedSegment();
+    }
+
+    uint8_t GetRedOnLedState(LedTask_Segment segment)
+    {
+        switch (segment)
+        {
+        case LED_TASK_SEG_MIDDLE:
+            return 3U;
+        case LED_TASK_SEG_BACK:
+            return 4U;
+        case LED_TASK_SEG_FRONT:
+        default:
+            return 2U;
+        }
+    }
+
+    uint8_t GetRedFlashLedState(LedTask_Segment segment)
+    {
+        switch (segment)
+        {
+        case LED_TASK_SEG_MIDDLE:
+            return 6U;
+        case LED_TASK_SEG_BACK:
+            return 7U;
+        case LED_TASK_SEG_FRONT:
+        default:
+            return 5U;
+        }
+    }
+
+    uint8_t GetGreenOnLedState(LedTask_Segment segment)
+    {
+        switch (segment)
+        {
+        case LED_TASK_SEG_MIDDLE:
+            return 9U;
+        case LED_TASK_SEG_BACK:
+            return 10U;
+        case LED_TASK_SEG_FRONT:
+        default:
+            return 8U;
+        }
+    }
+
+    void UpdateLedForMainState(uint8_t main_state)
+    {
+        const LedTask_Segment segment = GetActiveWeaponLedSegment();
+
+        switch (main_state)
+        {
+        case FTM_MAIN_INIT:
+            LED_state = 16U;
+            break;
+        case FTM_MAIN_IDLE:
+            if (vision.exec == 0)
+            {
+                LED_state = 15U;
+            }
+            else
+            {
+                LED_state = 1U;
+            }
+            break;
+        case FTM_MAIN_AUTO_PICK_ROUTE:
+            if (g_led_prelim_green_hold_active != 0U)
+            {
+                g_led_prelim_green_hold_active = 0U;
+            }
+            LED_state = GetRedOnLedState(segment);
+            break;
+        case FTM_MAIN_AUTO_TURN_READY:
+            if (g_led_prelim_green_hold_active != 0U)
+            {
+                LED_state = GetGreenOnLedState(g_led_prelim_green_hold_segment);
+            }
+            else
+            {
+                LED_state = GetRedOnLedState(segment);
+            }
+            break;
+        case FTM_MAIN_DOCKING:
+            LED_state = GetRedFlashLedState(segment);
+            break;
+        case FTM_MAIN_GO_MEILIN:
+            if (vision.if_go == 1)
+            {
+                g_led_go_meilin_if_go_latched = 1U;
+                LED_state = 12U;
+            }
+            else
+            {
+                LED_state = 11U;
+            }
+            break;
+        case FTM_MAIN_WUQIQU_ZERO:
+            LED_state = 16U;
+            break;
+        case FTM_MAIN_DONE:
+            LED_state = (g_led_go_meilin_rainbow_latched != 0U) ? 14U : 12U;
+            break;
+        default:
+            break;
+        }
+    }
+
     void ResetPrelimAutoFullFlow(void)
     {
         g_prelim_auto_full_flow_active = 0U;
         g_prelim_weapon_index = 0U;
         g_prelim_docking_release_latched = 0U;
         g_prelim_turn_ready_step_index = 0U;
+        g_led_prelim_green_hold_active = 0U;
+        g_led_prelim_green_hold_segment = LED_TASK_SEG_ALL;
     }
 
     void ResetDockingExecEdge(void)
@@ -439,6 +589,7 @@ namespace
     void PrepareMainState(uint8_t main_state)
     {
         UpdateYawTargetCorrectionState(main_state);
+        UpdateLedForMainState(main_state);
         ResetActionRuntime();
         g_main_action_step_index = 0U;
         g_turn_ready_yaw_turn_finished = 0U;
@@ -1066,6 +1217,10 @@ namespace
             {
                 return 0U;
             }
+            if ((g_led_go_meilin_if_go_latched != 0U) || (vision.if_go == 1))
+            {
+                g_led_go_meilin_rainbow_latched = 1U;
+            }
             ++g_go_meilin_step_index;
             return 1U;
 
@@ -1091,6 +1246,8 @@ namespace
             const int next_exec = kPrelimExecFirstWeapon + static_cast<int>(g_prelim_weapon_index) + 1;
             if (IsDockingExecChangedTo(next_exec) != 0U)
             {
+                g_led_prelim_green_hold_active = 1U;
+                g_led_prelim_green_hold_segment = GetCurrentLedSegment();
                 ++g_prelim_weapon_index;
                 g_prelim_docking_release_latched = 0U;
                 EnterMainState(FTM_MAIN_AUTO_TURN_READY);
@@ -1100,6 +1257,8 @@ namespace
         else if (IsDockingExecChangedTo(kPrelimExecGoMeilin) != 0U)
         {
             g_prelim_docking_release_latched = 0U;
+            g_led_go_meilin_if_go_latched = 0U;
+            g_led_go_meilin_rainbow_latched = 0U;
             EnterMainState(FTM_MAIN_GO_MEILIN);
             return 1U;
         }
@@ -1422,7 +1581,7 @@ extern "C" volatile uint8_t wuqiqu_done = 0U;
 extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
 extern "C" volatile float g_ftm_yaw_target_degree = 0.0f;
 extern "C" volatile float g_ftm_lift_up_target_mm = 74.0f;
-extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 210.0f;
+extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 214.0f;
 extern "C" volatile float g_ftm_lift_down_target_mm = 68.0f;
 extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
 extern "C" volatile uint32_t g_ftm_grab_settle_delay_ms = 200U;
@@ -1598,6 +1757,10 @@ extern "C" void ftm_task(void *argument)
                 g_prelim_auto_full_flow_active = 1U;
                 g_prelim_weapon_index = weapon_index;
                 g_prelim_docking_release_latched = 0U;
+                g_led_prelim_green_hold_active = 0U;
+                g_led_prelim_green_hold_segment = LED_TASK_SEG_ALL;
+                g_led_go_meilin_if_go_latched = 0U;
+                g_led_go_meilin_rainbow_latched = 0U;
                 EnterMainState(FTM_MAIN_AUTO_PICK_ROUTE);
             }
             break;
@@ -1610,6 +1773,7 @@ extern "C" void ftm_task(void *argument)
         }
 
         ServiceM2006AngleLock(g_ftm_action_state);
+        UpdateLedForMainState(g_ftm_main_state);
         osDelay(1);
     }
 }
