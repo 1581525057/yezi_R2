@@ -2,6 +2,7 @@
 
 LaserDistance laser_left;
 LaserDistance laser_right;
+LaserDistance laser_yaw;
 
 LaserDistance::LaserDistance()
 {

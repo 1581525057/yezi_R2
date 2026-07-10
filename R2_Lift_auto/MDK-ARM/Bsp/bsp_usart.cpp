@@ -17,6 +17,7 @@ UART_DMA_Channel uart2_dma;
 UART_DMA_Channel uart5_dma;
 UART_DMA_Channel uart8_dma;
 UART_DMA_Channel uart9_dma;
+UART_DMA_Channel uart10_dma;
 
 static uint8_t uart7_arm_rx_buf[ArmComm::RX_FRAME_LENGTH];
 static uint8_t uart7_arm_rx_byte;
@@ -101,6 +102,14 @@ static void USART9_RxCallback(uint8_t *buf, uint16_t len)
     if (len > 9)
     {
         laser_left.laser_parse_dma_data(buf, len);
+    }
+}
+
+static void USART10_RxCallback(uint8_t *buf, uint16_t len)
+{
+    if (len > 9)
+    {
+        laser_yaw.laser_parse_dma_data(buf, len);
     }
 }
 
@@ -345,6 +354,8 @@ void BSP_USART::Init(void)
     uart8_dma.Init(&huart8, laser_right.rx_buf[0], laser_right.rx_buf[1], LASER_RX_LEN, USART8_RxCallback);
 
     uart9_dma.Init(&huart9, laser_left.rx_buf[0], laser_left.rx_buf[1], LASER_RX_LEN, USART9_RxCallback);
+
+    uart10_dma.Init(&huart10, laser_yaw.rx_buf[0], laser_yaw.rx_buf[1], LASER_RX_LEN, USART10_RxCallback);
 }
 
 //============================================================
@@ -374,6 +385,12 @@ void BSP_USART::RxEventDispatch(UART_HandleTypeDef *huart, uint16_t Size)
     if (uart9_dma.IsThisUart(huart))
     {
         uart9_dma.RxEventCallback(Size);
+        return;
+    }
+
+    if (uart10_dma.IsThisUart(huart))
+    {
+        uart10_dma.RxEventCallback(Size);
         return;
     }
 }
@@ -412,6 +429,12 @@ void BSP_USART::ErrorDispatch(UART_HandleTypeDef *huart)
     if (uart9_dma.IsThisUart(huart))
     {
         uart9_dma.RecoverFromError();
+        return;
+    }
+
+    if (uart10_dma.IsThisUart(huart))
+    {
+        uart10_dma.RecoverFromError();
         return;
     }
 }

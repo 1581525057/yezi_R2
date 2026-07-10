@@ -602,6 +602,7 @@ extern "C" void usart_task(void *argument)
         }
         if (Orange == 1)
         {
+            conbat_t.conbat_start = 3;
         }
 
         if (Red == 1)
