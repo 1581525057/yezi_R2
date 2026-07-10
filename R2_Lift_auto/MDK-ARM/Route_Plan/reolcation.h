@@ -30,7 +30,23 @@ public:
 
 class AreaThreeRelocation
 {
-    // 三区重定位暂时留空，后续有规则后再补实现。
+public:
+    static const uint8_t WAITING = 0U; // 还未满足连续稳定上传条件。
+    static const uint8_t SENT = 1U;    // 已上传本次重定位坐标，可以继续后续流程。
+
+    // 清空三区重定位状态，重新累计稳定周期。
+    void reset(void);
+
+    // 执行三区重定位计算，使用右侧两个平行激光计算 Y 和 yaw，X 保持当前视觉值不校准。
+    uint8_t update(uint8_t chassis_speed_zero);
+
+    // 嵌入式调试时直接查看这些状态量，不再额外包 getter。
+    uint16_t stable_count_ = 0U;
+    uint8_t position_sent_ = 0U;
+    float last_x_m_ = 0.0f;
+    float last_y_m_ = 0.0f;
+    float last_yaw_rad_ = 0.0f;
+    float last_yaw_deg_ = 0.0f;
 };
 
 extern AreaOneRelocation area_one_relocation;

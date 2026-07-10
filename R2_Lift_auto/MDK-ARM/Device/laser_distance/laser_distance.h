@@ -25,3 +25,4 @@ public:
 
 extern LaserDistance laser_left;
 extern LaserDistance laser_right;
+extern LaserDistance laser_yaw;

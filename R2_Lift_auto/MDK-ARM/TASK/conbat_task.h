@@ -16,8 +16,10 @@ typedef enum
     CONBAT_PICK_KFS,         // 吸取 KFS 状态
     CONBAT_PLACE_KFS,        // 放置 KFS 状态
     CONBAT_SELECT_KFS_PLACE, // 选择 KFS 放置点位状态
+    CONBAT_RELOAD_COMBINE,   // 合体重试状态
     CONBAT_COMBINE,          // 合体状态
-    CONBAT_AVOID             // 避让状态
+    CONBAT_AVOID,            // 避让状态
+    CONBAT_PLACE_KFS_NEW     // 新版放置 KFS 状态
 } ConbatState;
 
 #ifdef __cplusplus
@@ -97,6 +99,13 @@ private:
         PLACE_KFS_WAIT                 // 放置完成后跑到偏角等待点。
     };
 
+    enum PlaceKfsNewStep
+    {
+        PLACE_KFS_NEW_PATH_TO_PLACE = 0,    // 跑到选择的放 KFS 终点并发送放置动作。
+        PLACE_KFS_NEW_FORWARD_AFTER_PLACE,  // 放置动作发送后沿车头方向前进 6cm。
+        PLACE_KFS_NEW_WAIT                  // 放置完成后跑到偏角等待点。
+    };
+
     PathFollower path_follower_;
     BRPathPoint generated_path_[CONBAT_GENERATE_PATH_MAX_POINTS];
     PathFollower::PathPoint generated_follow_path_[CONBAT_GENERATE_PATH_MAX_POINTS];
@@ -104,9 +113,11 @@ private:
     uint8_t path_loaded_;
     uint8_t path_active_;
     uint8_t ramp_up_waiting_;
+    uint8_t ramp_up_relocation_done_;
     uint8_t ramp_up_zero_yaw_done_;
     PickKfsStep pick_kfs_step_;
     PlaceKfsStep place_kfs_step_;
+    PlaceKfsNewStep place_kfs_new_step_;
     CombineStep combine_step_;
     uint8_t pick_kfs_meiling_active_;
     uint8_t pick_kfs_second_forward_done_;
@@ -115,6 +126,7 @@ private:
     uint8_t kfs_place_index_;
     uint8_t kfs_place_arrived_;
     uint8_t kfs_place_precision_active_;
+    uint8_t reload_combine_precision_active_;
     uint8_t place_kfs_pick_precision_active_;
     uint8_t kfs_place_laser_blocked_;
     uint8_t combine_pre_lift_ready_;
@@ -140,6 +152,8 @@ private:
     uint8_t runRampUp(void);
     uint8_t runPickKfs(void);
     uint8_t runPlaceKfs(void);
+    uint8_t runPlaceKfsNew(void);
+    uint8_t runReloadCombine(void);
     uint8_t runCombine(void);
     uint8_t runSelectKfsPlace(void);
     uint8_t loadGeneratedPathToGoal(const BRPathPose &goal,
