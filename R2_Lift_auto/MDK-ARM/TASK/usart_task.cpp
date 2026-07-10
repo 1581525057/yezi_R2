@@ -17,6 +17,9 @@
 #include "conbat_task.h"
 /* ========================== 全局变量 ========================== */
 
+// 改这个，红蓝方坐标切换
+static volatile FieldSide current_field_side = FIELD_SIDE_BLUE;
+
 /* USB 串口接收缓冲区 */
 uint8_t data_usb[USB_RX_BUFFER_SIZE];
 uint16_t usb_rx_idx = 0;
@@ -46,50 +49,117 @@ uint8_t vision_block_tail = 0U;
 static int vision_last_block_plan[VISION_BLOCK_QUEUE_SIZE];
 static uint8_t vision_last_block_count = 0U;
 
-// 每个方块的中心坐标
+// 当前场地每个方块的中心坐标
 Block_Vision block_vision_middle[16];
-// 第二个方块的中心坐标
-float block_middle_x = 3.45f;
-float block_middle_y = 1.61f;
 
-// 通过第2个方块来计算得到其他8个的坐标位置
+// 蓝方第 2 个方块的中心坐标，暂时留空，后续直接填写这里。
+float block_middle_blue_x = 0.0f;
+float block_middle_blue_y = 0.0f;
+
+// 红方第 2 个方块的中心坐标，单独标定，不从蓝方中心坐标计算。
+float block_middle_red_x = 0.0f;
+float block_middle_red_y = 0.0f;
+
+// 根据蓝方第 2 个方块中心，计算蓝方全部方块中心坐标。
+static void Block_calculate_blue_middle(void)
+{
+    const float block_size = 1.2f;
+    const float x = block_middle_blue_x;
+    const float y = block_middle_blue_y;
+
+    block_vision_middle[0] = {0.0f, 0.0f};
+
+    block_vision_middle[1] = {x, y + block_size};
+    block_vision_middle[2] = {x, y};
+    block_vision_middle[3] = {x, y - block_size};
+
+    block_vision_middle[4] = {x + block_size, y + block_size};
+    block_vision_middle[5] = {x + block_size, y};
+    block_vision_middle[6] = {x + block_size, y - block_size};
+
+    block_vision_middle[7] = {x + block_size * 2.0f, y + block_size};
+    block_vision_middle[8] = {x + block_size * 2.0f, y};
+    block_vision_middle[9] = {x + block_size * 2.0f, y - block_size};
+
+    block_vision_middle[10] = {x + block_size * 3.0f, y + block_size};
+    block_vision_middle[11] = {x + block_size * 3.0f, y};
+    block_vision_middle[12] = {x + block_size * 3.0f, y - block_size};
+
+    block_vision_middle[13] = {x + block_size * 4.0f, y + block_size};
+    block_vision_middle[14] = {x + block_size * 4.0f, y};
+    block_vision_middle[15] = {x + block_size * 4.0f, y - block_size};
+}
+
+// 根据红方第 2 个方块中心，计算红方全部方块中心坐标。
+static void Block_calculate_red_middle(void)
+{
+    const float block_size = 1.2f;
+    const float x = block_middle_red_x;
+    const float y = block_middle_red_y;
+
+    block_vision_middle[0] = {0.0f, 0.0f};
+
+    block_vision_middle[1] = {x, y - block_size};
+    block_vision_middle[2] = {x, y};
+    block_vision_middle[3] = {x, y + block_size};
+
+    block_vision_middle[4] = {x + block_size, y - block_size};
+    block_vision_middle[5] = {x + block_size, y};
+    block_vision_middle[6] = {x + block_size, y + block_size};
+
+    block_vision_middle[7] = {x + block_size * 2.0f, y - block_size};
+    block_vision_middle[8] = {x + block_size * 2.0f, y};
+    block_vision_middle[9] = {x + block_size * 2.0f, y + block_size};
+
+    block_vision_middle[10] = {x + block_size * 3.0f, y - block_size};
+    block_vision_middle[11] = {x + block_size * 3.0f, y};
+    block_vision_middle[12] = {x + block_size * 3.0f, y + block_size};
+
+    block_vision_middle[13] = {x + block_size * 4.0f, y - block_size};
+    block_vision_middle[14] = {x + block_size * 4.0f, y};
+    block_vision_middle[15] = {x + block_size * 4.0f, y + block_size};
+}
 
 static void Block_claulate_Middle(void)
 {
-    float Block_Size = 1.2f;
-    float x = block_middle_x;
-    float y = block_middle_y;
-    block_vision_middle[0] = {0.0, 0.0};
+    if (current_field_side == FIELD_SIDE_RED)
+    {
+        Block_calculate_red_middle();
+    }
+    else
+    {
+        Block_calculate_blue_middle();
+    }
+}
 
-    block_vision_middle[1] = {x, y + Block_Size};
+void field_side_set(FieldSide side)
+{
+    if (side == FIELD_SIDE_RED)
+    {
+        current_field_side = FIELD_SIDE_RED;
+    }
+    else
+    {
+        current_field_side = FIELD_SIDE_BLUE;
+    }
+    Block_claulate_Middle();
+}
 
-    block_vision_middle[2] = {x, y};
+void field_side_toggle(void)
+{
+    if (current_field_side == FIELD_SIDE_BLUE)
+    {
+        field_side_set(FIELD_SIDE_RED);
+    }
+    else
+    {
+        field_side_set(FIELD_SIDE_BLUE);
+    }
+}
 
-    block_vision_middle[3] = {x, y - Block_Size};
-
-    block_vision_middle[4] = {x + Block_Size, y + Block_Size};
-
-    block_vision_middle[5] = {x + Block_Size, y};
-
-    block_vision_middle[6] = {x + Block_Size, y - Block_Size};
-
-    block_vision_middle[7] = {x + Block_Size * 2.0f, y + Block_Size};
-
-    block_vision_middle[8] = {x + Block_Size * 2.0f, y};
-
-    block_vision_middle[9] = {x + Block_Size * 2.0f, y - Block_Size};
-
-    block_vision_middle[10] = {x + Block_Size * 3.0f, y + Block_Size};
-
-    block_vision_middle[11] = {x + Block_Size * 3.0f, y};
-
-    block_vision_middle[12] = {x + Block_Size * 3.0f, y - Block_Size};
-
-    block_vision_middle[13] = {x + Block_Size * 4.0f, y + Block_Size};
-
-    block_vision_middle[14] = {x + Block_Size * 4.0f, y};
-
-    block_vision_middle[15] = {x + Block_Size * 4.0f, y - Block_Size};
+FieldSide field_side_get(void)
+{
+    return current_field_side;
 }
 
 /* ===================== 内部工具函数 ===================== */
@@ -650,7 +720,7 @@ extern "C" void usart_task(void *argument)
 
         if (Yellow2 == 0)
         {
-            numo = 0;
+            conbat_t.conbat_start = 3;
         }
 
         if (ftm_state_green_hold_active != 0U)

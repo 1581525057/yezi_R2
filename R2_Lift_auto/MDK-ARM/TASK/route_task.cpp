@@ -35,35 +35,40 @@ float ROUTE_RELOCATION_STOP_SPEED_LIMIT = 0.01f;                  // 一区重�
 static const uint16_t ROUTE_RELOCATION_STOP_STABLE_COUNT = 1500U; // 底盘速度连续达标次数。
 static const uint8_t ROUTE_MAX_CONSECUTIVE_STEP_UP_COUNT = 2U;    // 每连续上两次台阶后必须回一次中心。
 
-// 寻找 KFS 的终点表，单位：x/y 为 m，yaw 为 rad；按 entrence_KFS 0/1/2 选择。
-static BRPathPose route_find_kfs_goals[] = {
-    {2.36f, 2.82f, 0.0f},
-    {2.36f, 1.60f, 0.0f},
-    {2.33f, 0.44f, 0.0f},
+// 寻找 KFS 的终点表，单位：x/y 为 m，yaw 为 rad；第一组蓝方，第二组红方。
+static const BRPathPose route_find_kfs_goals[2][3] = {
+    // 蓝方坐标
+    {{2.36f, 2.82f, 0.0f},
+     {2.36f, 1.60f, 0.0f},
+     {2.33f, 0.44f, 0.0f}},
+    // 红方坐标
+    {{2.36f, -2.82f, 0.0f},
+     {2.36f, -1.60f, 0.0f},
+     {2.33f, -0.44f, 0.0f}},
 };
-// 寻找 KFS1 的中间点表，单位：x/y 为 m；按顺序依次经过。
-static BRPathControlPoint route_find_kfs_0_middle_points[] = {
-    {1.69f, 2.135f}};
 
-// 寻找 KFS2 的中间点表，单位：x/y 为 m；按顺序依次经过。
-static BRPathControlPoint route_find_kfs_1_middle_points[] = {
-    {1.615f, 1.545f}};
-
-// 寻找 KFS3 的中间点表，单位：x/y 为 m；按顺序依次经过。
-static BRPathControlPoint route_find_kfs_2_middle_points[] = {
-    {1.60f, 0.935f}};
-
-static const BRPathControlPoint *route_find_kfs_middle_points[] = {
-    route_find_kfs_0_middle_points,
-    route_find_kfs_1_middle_points,
-    route_find_kfs_2_middle_points,
+// 寻找三个 KFS 的中间点表，单位：x/y 为 m；第一组蓝方，第二组红方。
+static const BRPathControlPoint route_find_kfs_middle_points[2][3][1] = {
+    // 蓝方坐标
+    {{{1.690f, 2.135f}},
+     {{1.615f, 1.545f}},
+     {{1.600f, 0.935f}}},
+    // 红方坐标
+    {{{1.690f, -2.135f}},
+     {{1.615f, -1.545f}},
+     {{1.600f, -0.935f}}},
 };
 
 static const std::size_t route_find_kfs_middle_point_counts[] = {
-    sizeof(route_find_kfs_0_middle_points) / sizeof(route_find_kfs_0_middle_points[0]),
-    sizeof(route_find_kfs_1_middle_points) / sizeof(route_find_kfs_1_middle_points[0]),
-    sizeof(route_find_kfs_2_middle_points) / sizeof(route_find_kfs_2_middle_points[0]),
+    sizeof(route_find_kfs_middle_points[0][0]) / sizeof(route_find_kfs_middle_points[0][0][0]),
+    sizeof(route_find_kfs_middle_points[0][1]) / sizeof(route_find_kfs_middle_points[0][1][0]),
+    sizeof(route_find_kfs_middle_points[0][2]) / sizeof(route_find_kfs_middle_points[0][2][0]),
 };
+
+static uint8_t route_field_side_index(void)
+{
+    return (field_side_get() == FIELD_SIDE_RED) ? 1U : 0U;
+}
 
 #ifndef ROUTE_DEBUG_MANUAL_STEP_CMD
 #define ROUTE_DEBUG_MANUAL_STEP_CMD 0
@@ -495,11 +500,14 @@ uint8_t ROUTE_TASK::runFindKfsToGoal(uint8_t index)
         return 2U;
     }
 
+    const uint8_t field_side_index = route_field_side_index();
+    const BRPathPose &goal = route_find_kfs_goals[field_side_index][index];
+
     if (find_kfs_positioning_ == 0U)
     {
         // 第一步先跑 B 样条到 KFS 粗略终点。
-        const uint8_t path_result = loadGeneratedPathToGoal(route_find_kfs_goals[index],
-                                                            route_find_kfs_middle_points[index],
+        const uint8_t path_result = loadGeneratedPathToGoal(goal,
+                                                            route_find_kfs_middle_points[field_side_index][index],
                                                             route_find_kfs_middle_point_counts[index]);
         if (path_result == 0U)
         {
@@ -520,7 +528,7 @@ uint8_t ROUTE_TASK::runFindKfsToGoal(uint8_t index)
     }
 
     // 第二步持续做终点精定位，到位后返回 1，让外层切回视觉阶段。
-    return runFindKfsPositionCloseLoop(route_find_kfs_goals[index]);
+    return runFindKfsPositionCloseLoop(goal);
 }
 
 void ROUTE_TASK::vision_choice()

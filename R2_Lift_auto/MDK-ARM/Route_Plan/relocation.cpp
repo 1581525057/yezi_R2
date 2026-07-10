@@ -24,9 +24,9 @@ namespace
     const uint16_t AREA_THREE_RELOCATION_STABLE_COUNT = 1500U; // 三区重定位连续稳定的周期数。
 
     // 本文件只需要简单绝对值，避免额外依赖通用数学库。
-    const float LASER_YAW_BASE_MM = 125.69f;            // 右侧前后两只平行激光的 X 向间距，待实测填写，单位 mm。
-    const float AREA_THREE_ORIGIN_Y_OFFSET_MM = 385.5f; // 三区原点到右侧墙的 Y 向偏移量，待按场地原点填写，单位 mm。
-    const float RAD_TO_DEG = 57.29577951308232f;        // 弧度转角度系数。
+    const float LASER_YAW_BASE_MM = 125.69f;             // 右侧前后两只平行激光的 X 向间距，待实测填写，单位 mm。
+    const float AREA_THREE_ORIGIN_Y_OFFSET_MM = 360.50f; // 三区原点到右侧墙的 Y 向偏移量，待按场地原点填写，单位 mm。
+    const float RAD_TO_DEG = 57.29577951308232f;         // 弧度转角度系数。
 
     float calcAbs(float value)
     {
@@ -160,7 +160,7 @@ uint8_t AreaThreeRelocation::update(uint8_t chassis_speed_zero)
     }
 
     const float right_mm = static_cast<float>(laser_right.data.distance_mm);
-    const float yaw_mm = static_cast<float>(laser_yaw.data.distance_mm);
+    const float yaw_mm = static_cast<float>(laser_yaw.data.distance_mm) + 14.0f;
 
     // laser_yaw 在车头侧，前侧距离更大时车头向左，按逆时针为正。
     const float yaw_rad = atan2f(yaw_mm - right_mm, LASER_YAW_BASE_MM);

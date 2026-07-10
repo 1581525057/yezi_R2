@@ -12,6 +12,26 @@
 #define Red2 HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_13)
 #define Yellow2 HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_9)
 #define Blue2 HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_2)
+
+/* 场地方向：现有坐标为蓝方，红方关于 X 轴镜像，即 x 不变、y 和 yaw 取反。 */
+typedef enum
+{
+    FIELD_SIDE_BLUE = 0,
+    FIELD_SIDE_RED = 1
+} FieldSide;
+
+/* 必须在自动流程启动前切换；按键按下沿可直接调用 field_side_toggle()。 */
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+void field_side_set(FieldSide side);
+void field_side_toggle(void);
+FieldSide field_side_get(void);
+#ifdef __cplusplus
+}
+#endif
+
 /* 视觉数据结构体：存储上位机发送的视觉坐标、角度和标定位 */
 typedef struct
 {
