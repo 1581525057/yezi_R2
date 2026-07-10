@@ -48,6 +48,7 @@ private:
     float last_step_center_x_;       // 接线层记录的最近一次台阶中心 X 坐标。
     float last_step_center_y_;       // 接线层记录的最近一次台阶中心 Y 坐标。
     uint8_t last_step_center_valid_; // 最近一次台阶中心是否有效。
+    uint8_t consecutive_step_up_count_; // 自上次回中心后连续执行的上台阶次数。
     uint8_t already_step_up_;        // 是否已经完成过一次上台阶，用于取 KFS 前是否预走 Xcm。
     float pick_kfs_center_x_;        // 取 KFS 所在方块中心 X 坐标。
     float pick_kfs_center_y_;        // 取 KFS 所在方块中心 Y 坐标。
@@ -65,6 +66,7 @@ private:
     PathFollower::PathPoint generated_follow_path_[ROUTE_GENERATE_PATH_MAX_POINTS];
     void start_turn_target(float yaw_delta_deg);
     void clear_path_output(void);
+    uint8_t shouldStepUpReturnMiddle(void);
     uint8_t load_follow_plan(void);
     uint8_t find_KFS1(void);
     uint8_t find_KFS2(void);

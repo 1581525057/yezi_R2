@@ -33,6 +33,7 @@ static const uint16_t ROUTE_FIND_KFS_POSITION_STABLE_COUNT = 10U; // KFS 终点�
 
 float ROUTE_RELOCATION_STOP_SPEED_LIMIT = 0.01f;                  // 一区重定位累计前，底盘解算速度需接近 0。
 static const uint16_t ROUTE_RELOCATION_STOP_STABLE_COUNT = 1500U; // 底盘速度连续达标次数。
+static const uint8_t ROUTE_MAX_CONSECUTIVE_STEP_UP_COUNT = 2U;    // 每连续上两次台阶后必须回一次中心。
 
 // 寻找 KFS 的终点表，单位：x/y 为 m，yaw 为 rad；按 entrence_KFS 0/1/2 选择。
 static BRPathPose route_find_kfs_goals[] = {
@@ -198,6 +199,24 @@ void ROUTE_TASK::start_turn_target(float yaw_delta_deg)
     yaw_target_valid_ = 1U;
 }
 
+uint8_t ROUTE_TASK::shouldStepUpReturnMiddle(void)
+{
+    if (consecutive_step_up_count_ < ROUTE_MAX_CONSECUTIVE_STEP_UP_COUNT)
+    {
+        consecutive_step_up_count_++;
+    }
+
+    const uint8_t next_is_step_up = next_command_skips_step_up_middle();
+    if (next_is_step_up != 0U &&
+        consecutive_step_up_count_ < ROUTE_MAX_CONSECUTIVE_STEP_UP_COUNT)
+    {
+        return 0U;
+    }
+
+    consecutive_step_up_count_ = 0U;
+    return 1U;
+}
+
 void ROUTE_TASK::route_reset()
 {
     // 主流程回到空闲，等待外部重新启动路线。
@@ -223,6 +242,7 @@ void ROUTE_TASK::route_reset()
     last_step_center_x_ = 0.0f;
     last_step_center_y_ = 0.0f;
     last_step_center_valid_ = 0U;
+    consecutive_step_up_count_ = 0U;
     already_step_up_ = 0U;
 
     // 清空取 KFS 所在方块中心缓存。
@@ -555,7 +575,7 @@ void ROUTE_TASK::vision_choice()
             lift_auto.setStepUpLastMiddle(last_step_center_x_, last_step_center_y_);
         }
         lift_auto.setStepUpRadarTarget(middle_x, middle_y);
-        lift_auto.setStepUpReturnMiddle((next_command_skips_step_up_middle() != 0U) ? 0U : 1U); // 是否上台阶后回中点
+        lift_auto.setStepUpReturnMiddle(shouldStepUpReturnMiddle()); // 连续上两次台阶后强制回一次中心。
         last_step_center_x_ = middle_x;                                                         // 这次坐标变成下一次
         last_step_center_y_ = middle_y;
         last_step_center_valid_ = 1U; // 最近的坐标是否有效
@@ -578,7 +598,7 @@ void ROUTE_TASK::vision_choice()
             lift_auto.setStepUpLastMiddle(last_step_center_x_, last_step_center_y_);
         }
         lift_auto.setStepUpRadarTarget(middle_x, middle_y);
-        lift_auto.setStepUpReturnMiddle((next_command_skips_step_up_middle() != 0U) ? 0U : 1U); // 是否上台阶后回中点
+        lift_auto.setStepUpReturnMiddle(shouldStepUpReturnMiddle()); // 连续上两次台阶后强制回一次中心。
         last_step_center_x_ = middle_x;
         last_step_center_y_ = middle_y;
         last_step_center_valid_ = 1U;

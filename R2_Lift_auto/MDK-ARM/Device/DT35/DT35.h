@@ -13,61 +13,62 @@
  */
 
 /* ======================== ADS8688 Command Register ======================== */
-#define ADS8688_CMD_NO_OP    0x0000 // 空操作命令：本次 SPI 事务不触发额外控制动作，常用于占位或维持时序。
-#define ADS8688_CMD_STDBY    0x8200 // 待机命令：让 ADS8688 进入待机状态，当前模块未实际使用。
-#define ADS8688_CMD_PWR_DN   0x8300 // 掉电命令：让 ADS8688 进入低功耗掉电状态，当前模块未实际使用。
-#define ADS8688_CMD_RST      0x8500 // 软件复位命令：用于在上电后通过 SPI 将芯片内部状态恢复到默认状态。
+#define ADS8688_CMD_NO_OP 0x0000    // 空操作命令：本次 SPI 事务不触发额外控制动作，常用于占位或维持时序。
+#define ADS8688_CMD_STDBY 0x8200    // 待机命令：让 ADS8688 进入待机状态，当前模块未实际使用。
+#define ADS8688_CMD_PWR_DN 0x8300   // 掉电命令：让 ADS8688 进入低功耗掉电状态，当前模块未实际使用。
+#define ADS8688_CMD_RST 0x8500      // 软件复位命令：用于在上电后通过 SPI 将芯片内部状态恢复到默认状态。
 #define ADS8688_CMD_AUTO_RST 0xA000 // 自动扫描复位命令：用于复位自动扫描状态机，当前模块未实际使用。
-#define ADS8688_CMD_MAN_CH0  0xC000 // 手动选择 CH0 采样：后续转换固定针对通道 0。
-#define ADS8688_CMD_MAN_CH1  0xC400 // 手动选择 CH1 采样：当前模块未使用，仅保留定义。
-#define ADS8688_CMD_MAN_CH2  0xC800 // 手动选择 CH2 采样：当前模块未使用，仅保留定义。
-#define ADS8688_CMD_MAN_CH3  0xCC00 // 手动选择 CH3 采样：当前模块未使用，仅保留定义。
-#define ADS8688_CMD_MAN_CH4  0xD000 // 手动选择 CH4 采样：当前模块未使用，仅保留定义。
-#define ADS8688_CMD_MAN_CH5  0xD400 // 手动选择 CH5 采样：当前模块未使用，仅保留定义。
-#define ADS8688_CMD_MAN_CH6  0xD800 // 手动选择 CH6 采样：当前模块未使用，仅保留定义。
-#define ADS8688_CMD_MAN_CH7  0xDC00 // 手动选择 CH7 采样：当前模块未使用，仅保留定义。
-#define ADS8688_CMD_MAN_AUX  0xE000 // 手动选择 AUX 通道采样：当前模块未使用，仅保留定义。
+#define ADS8688_CMD_MAN_CH0 0xC000  // 手动选择 CH0 采样：后续转换固定针对通道 0。
+#define ADS8688_CMD_MAN_CH1 0xC400  // 手动选择 CH1 采样：当前模块未使用，仅保留定义。
+#define ADS8688_CMD_MAN_CH2 0xC800  // 手动选择 CH2 采样：当前模块未使用，仅保留定义。
+#define ADS8688_CMD_MAN_CH3 0xCC00  // 手动选择 CH3 采样：当前模块未使用，仅保留定义。
+#define ADS8688_CMD_MAN_CH4 0xD000  // 手动选择 CH4 采样：当前模块未使用，仅保留定义。
+#define ADS8688_CMD_MAN_CH5 0xD400  // 手动选择 CH5 采样：当前模块未使用，仅保留定义。
+#define ADS8688_CMD_MAN_CH6 0xD800  // 手动选择 CH6 采样：当前模块未使用，仅保留定义。
+#define ADS8688_CMD_MAN_CH7 0xDC00  // 手动选择 CH7 采样：当前模块未使用，仅保留定义。
+#define ADS8688_CMD_MAN_AUX 0xE000  // 手动选择 AUX 通道采样：当前模块未使用，仅保留定义。
 
 /* ====================== ADS8688 Program Register ========================= */
 #define ADS8688_REG_AUTO_SEQ_EN 0x01 // 自动序列使能寄存器：每一位对应一个通道是否参与自动扫描。
-#define ADS8688_REG_CH_PD       0x02 // 通道掉电控制寄存器：用于控制各通道上电/掉电状态。
+#define ADS8688_REG_CH_PD 0x02       // 通道掉电控制寄存器：用于控制各通道上电/掉电状态。
 #define ADS8688_REG_FEATURE_SEL 0x03 // 功能选择寄存器：可配置若干芯片特性，当前模块未使用。
-#define ADS8688_REG_CHIR_0      0x05 // CH0 输入量程寄存器：配置通道 0 的电压量程。
-#define ADS8688_REG_CHIR_1      0x06 // CH1 输入量程寄存器：当前模块未使用。
-#define ADS8688_REG_CHIR_2      0x07 // CH2 输入量程寄存器：当前模块未使用。
-#define ADS8688_REG_CHIR_3      0x08 // CH3 输入量程寄存器：当前模块未使用。
-#define ADS8688_REG_CHIR_4      0x09 // CH4 输入量程寄存器：当前模块未使用。
-#define ADS8688_REG_CHIR_5      0x0A // CH5 输入量程寄存器：当前模块未使用。
-#define ADS8688_REG_CHIR_6      0x0B // CH6 输入量程寄存器：当前模块未使用。
-#define ADS8688_REG_CHIR_7      0x0C // CH7 输入量程寄存器：当前模块未使用。
+#define ADS8688_REG_CHIR_0 0x05      // CH0 输入量程寄存器：配置通道 0 的电压量程。
+#define ADS8688_REG_CHIR_1 0x06      // CH1 输入量程寄存器：当前模块未使用。
+#define ADS8688_REG_CHIR_2 0x07      // CH2 输入量程寄存器：当前模块未使用。
+#define ADS8688_REG_CHIR_3 0x08      // CH3 输入量程寄存器：当前模块未使用。
+#define ADS8688_REG_CHIR_4 0x09      // CH4 输入量程寄存器：当前模块未使用。
+#define ADS8688_REG_CHIR_5 0x0A      // CH5 输入量程寄存器：当前模块未使用。
+#define ADS8688_REG_CHIR_6 0x0B      // CH6 输入量程寄存器：当前模块未使用。
+#define ADS8688_REG_CHIR_7 0x0C      // CH7 输入量程寄存器：当前模块未使用。
 
 /* ====================== Input Range Selection ============================ */
 #define ADS8688_RANGE_PM_10V24 0x00 // 双极性 +/-10.24V 量程：允许采集正负电压，当前模块未使用。
-#define ADS8688_RANGE_PM_5V12  0x01 // 双极性 +/-5.12V 量程：当前模块未使用。
-#define ADS8688_RANGE_PM_2V56  0x02 // 双极性 +/-2.56V 量程：当前模块未使用。
-#define ADS8688_RANGE_0_10V24  0x05 // 单极性 0 ~ 10.24V 量程：当前 CH0 使用该配置，与 DT35 的 0 ~ 10V 输出匹配。
-#define ADS8688_RANGE_0_5V12   0x06 // 单极性 0 ~ 5.12V 量程：当前模块未使用。
+#define ADS8688_RANGE_PM_5V12 0x01  // 双极性 +/-5.12V 量程：当前模块未使用。
+#define ADS8688_RANGE_PM_2V56 0x02  // 双极性 +/-2.56V 量程：当前模块未使用。
+#define ADS8688_RANGE_0_10V24 0x05  // 单极性 0 ~ 10.24V 量程：当前 CH0 使用该配置，与 DT35 的 0 ~ 10V 输出匹配。
+#define ADS8688_RANGE_0_5V12 0x06   // 单极性 0 ~ 5.12V 量程：当前模块未使用。
 
 /* ====================== DT35 Sensor Parameters =========================== */
-#define DT35_VOLTAGE_MAX_V  10.00f  // DT35 在当前应用下的有效满量程输出电压，单位 V，用于距离换算上限。
-#define DT35_DIST_AT_0V_MM  5.3f    // 当传感器输出 0V 时，对应的测量距离，单位 mm。
+#define DT35_VOLTAGE_MAX_V 10.00f   // DT35 在当前应用下的有效满量程输出电压，单位 V，用于距离换算上限。
+#define DT35_DIST_AT_0V_MM 5.3f     // 当传感器输出 0V 时，对应的测量距离，单位 mm。
 #define DT35_DIST_AT_10V_MM 2854.0f // 当传感器输出 10V 时，对应的测量距离，单位 mm。
 
 // 4719.17
-#define DT35_FIT_A         0.09921174f
-#define DT35_FIT_B         0.00788262f
+#define DT35_FIT_A 0.09921174f
+#define DT35_FIT_B 0.00788262f
 
-#define ADS8688_FS_VOLTAGE 10.24f   // ADS8688 在当前量程配置下的满量程电压，单位 V。
-#define ADS8688_ADC_MAX    65535.0f // 16 位 ADC 的最大码值，用于把原始计数换算成电压。
+#define ADS8688_FS_VOLTAGE 10.24f // ADS8688 在当前量程配置下的满量程电压，单位 V。
+#define ADS8688_ADC_MAX 65535.0f  // 16 位 ADC 的最大码值，用于把原始计数换算成电压。
 
 /* ====================== CS / RST Pin Definition ========================== */
-#define ADS8688_CS_PORT  GPIOE       // ADS8688 片选信号所在的 GPIO 端口。
-#define ADS8688_CS_PIN   GPIO_PIN_14 // ADS8688 片选信号引脚，SPI 每次事务前拉低、结束后拉高。
-#define ADS8688_RST_PORT GPIOB       // ADS8688 硬件复位信号所在的 GPIO 端口。
-#define ADS8688_RST_PIN  GPIO_PIN_8  // ADS8688 硬件复位引脚，用于在初始化阶段强制复位芯片。
+#define ADS8688_CS_PORT GPIOE      // ADS8688 片选信号所在的 GPIO 端口。
+#define ADS8688_CS_PIN GPIO_PIN_14 // ADS8688 片选信号引脚，SPI 每次事务前拉低、结束后拉高。
+#define ADS8688_RST_PORT GPIOB     // ADS8688 硬件复位信号所在的 GPIO 端口。
+#define ADS8688_RST_PIN GPIO_PIN_8 // ADS8688 硬件复位引脚，用于在初始化阶段强制复位芯片。
 
 /* ====================== Data Struct ====================================== */
-struct DT35_Data_t {
+struct DT35_Data_t
+{
     float distance_mm;       // 当前换算后的距离值（原始），单位 mm。
     float distance_filtered; // EMA 滤波后的距离值，单位 mm，状态机应使用此值。
     float voltage_V;         // 由 ADC 原始值换算得到的输入电压，单位 V。
