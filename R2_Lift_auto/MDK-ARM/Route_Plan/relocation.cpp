@@ -11,22 +11,22 @@
 
 namespace
 {
-    const float AREA_ONE_X_FIELD_MM = 3200.0f;        // 一区 X 方向场地基准长度，单位 mm。
-    const float AREA_ONE_X_FIELD_DELATE_MM = 385.5f;  // 一区X方向场地原点减去
-    const float AREA_ONE_Y_FIELD_MM = 6000.0f;        // 左右激光反推时使用的场地宽度，单位 mm。
-    const float AREA_ONE_ORIGIN_L_MM = 1357.0f;       // 雷达 Y 坐标原点偏移量 L，单位 mm。
-    const float FRONT_DT35_TO_CENTER_MM = 308.18f;    // 前方 DT35 到车中心的安装距离，单位 mm。
-    const float SIDE_LASER_TO_CENTER_MM = 309.23f;    // 左右激光到车中心的安装距离，单位 mm。
-    const float SIDE_LASER_TO_WALL = 125.0f;          // 墙的距离 单位mm。
-    const float LEFT_LASER_Y_COMPENSATION_MM = 50.0f; // 左侧单激光重定位后 Y 偏 -5cm，补回 50mm。
-    const float SIDE_Y_ERROR_LIMIT_MM = 10.0f;        // 左右两侧推算出的 Y 误差阈值，单位 mm。
+    const float AREA_ONE_X_FIELD_MM = 3200.0f;                 // 一区 X 方向场地基准长度，单位 mm。
+    const float AREA_ONE_X_FIELD_DELATE_MM = 385.5f;           // 一区X方向场地原点减去
+    const float AREA_ONE_Y_FIELD_MM = 6000.0f;                 // 左右激光反推时使用的场地宽度，单位 mm。
+    const float AREA_ONE_ORIGIN_L_MM = 1357.0f;                // 雷达 Y 坐标原点偏移量 L，单位 mm。
+    const float FRONT_DT35_TO_CENTER_MM = 308.18f;             // 前方 DT35 到车中心的安装距离，单位 mm。
+    const float SIDE_LASER_TO_CENTER_MM = 309.23f;             // 左右激光到车中心的安装距离，单位 mm。
+    const float SIDE_LASER_TO_WALL = 125.0f;                   // 墙的距离 单位mm。
+    const float LEFT_LASER_Y_COMPENSATION_MM = 50.0f;          // 左侧单激光重定位后 Y 偏 -5cm，补回 50mm。
+    const float SIDE_Y_ERROR_LIMIT_MM = 10.0f;                 // 左右两侧推算出的 Y 误差阈值，单位 mm。
     const uint16_t AREA_ONE_RELOCATION_STABLE_COUNT = 100U;    // 一区误差连续满足要求的周期数。
     const uint16_t AREA_THREE_RELOCATION_STABLE_COUNT = 1500U; // 三区重定位连续稳定的周期数。
 
     // 本文件只需要简单绝对值，避免额外依赖通用数学库。
-    const float LASER_YAW_BASE_MM = 0.0f;             // 右侧前后两只平行激光的 X 向间距，待实测填写，单位 mm。
-    const float AREA_THREE_ORIGIN_Y_OFFSET_MM = 0.0f; // 三区原点到右侧墙的 Y 向偏移量，待按场地原点填写，单位 mm。
-    const float RAD_TO_DEG = 57.29577951308232f;      // 弧度转角度系数。
+    const float LASER_YAW_BASE_MM = 125.69f;            // 右侧前后两只平行激光的 X 向间距，待实测填写，单位 mm。
+    const float AREA_THREE_ORIGIN_Y_OFFSET_MM = 385.5f; // 三区原点到右侧墙的 Y 向偏移量，待按场地原点填写，单位 mm。
+    const float RAD_TO_DEG = 57.29577951308232f;        // 弧度转角度系数。
 
     float calcAbs(float value)
     {
@@ -190,7 +190,7 @@ uint8_t AreaThreeRelocation::update(uint8_t chassis_speed_zero)
         if (position_sent_ == 0U)
         {
             // X 保持当前视觉值不校准，只上传由双右侧激光修正出的 Y 和 yaw。
-            send_position_to_pc(1, 1, last_x_m_, last_y_m_, last_yaw_deg_);
+            send_position_to_pc(1, 0, last_x_m_, last_y_m_, last_yaw_deg_);
             position_sent_ = 1U;
         }
 

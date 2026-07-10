@@ -18,7 +18,7 @@ extern float yaw_target;
 
 // 通用参数
 float CONBAT_DEG_TO_RAD = 3.1415926f / 180.0f; // 角度转弧度系数，用于视觉角度转换。
-uint8_t CONBAT_IDLE_CHASSIS_STOP_ENABLE = 1U;  // 空闲状态底盘停车开关：1 限制为零速度，0 透传手动速度。
+uint8_t CONBAT_IDLE_CHASSIS_STOP_ENABLE = 0U;  // 空闲状态底盘停车开关：1 限制为零速度，0 透传手动速度。
 
 // 上坡状态的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_ramp_up_goals[] = {
@@ -321,7 +321,7 @@ void CONBAT_TASK::runOnce(void)
         break;
     case CONBAT_RELOAD_COMBINE: // 合体重试车略
         /* 合体重试状态：先用 B 样条回到合体终点，再用二维 P 精调。 */
-        action_result = runReloadCombine();  
+        action_result = runReloadCombine();
         update_state_by_action_result(action_result, CONBAT_COMBINE, &state);
         break;
 
@@ -1726,79 +1726,7 @@ extern "C" void conbat_task(void *argument)
 
         conbat_t.runOnce();
         conbat_t.setKfsPlaceIndex(numo);
-        if (flag_beh == 1)
-        {
-            arm_comm.executeAction(ArmComm::ACTION_PICK_FIRST_KFS, 1U);
-            /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
-            for (uint8_t i = 0U; i < 10U; ++i)
-            {
-                arm_comm.send();
-            }
-        }
-
-        if (flag_beh == 2)
-        {
-            arm_comm.executeAction(ArmComm::ACTION_PICK_SECOND_KFS, 1U);
-            /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
-            for (uint8_t i = 0U; i < 10U; ++i)
-            {
-                arm_comm.send();
-            }
-        }
-
-        if (flag_beh == 3)
-        {
-            arm_comm.executeAction(ArmComm::ACTION_ZONE3_READY, 2U);
-            /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
-            for (uint8_t i = 0U; i < 10U; ++i)
-            {
-                arm_comm.send();
-            }
-        }
-
-        if (flag_beh == 4)
-        {
-            arm_comm.executeAction(ArmComm::ACTION_ZONE3_PLACE_HAND, 1U);
-            /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
-            for (uint8_t i = 0U; i < 10U; ++i)
-            {
-                arm_comm.send();
-            }
-            flag_beh = 0;
-        }
-
-        if (flag_beh == 5)
-        {
-            arm_comm.executeAction(ArmComm::ACTION_ZONE3_PLACE_LOWER, 1U);
-            /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
-            for (uint8_t i = 0U; i < 10U; ++i)
-            {
-                arm_comm.send();
-                flag_beh = 0;
-            }
-        }
-
-        if (flag_beh == 6)
-        {
-            arm_comm.executeAction(ArmComm::ACTION_PICK_THIRD_KFS, 1U);
-            /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
-            for (uint8_t i = 0U; i < 10U; ++i)
-            {
-                arm_comm.send();
-                flag_beh = 0;
-            }
-        }
-
-        if (flag_beh == 7)
-        {
-            arm_comm.executeAction(ArmComm::ACTION_ZONE3_PLACE_FINALL, 1U);
-            /* 连续发送 10 次，降低机械臂漏收单帧命令的概率。 */
-            for (uint8_t i = 0U; i < 10U; ++i)
-            {
-                arm_comm.send();
-                flag_beh = 0;
-            }
-        }
+        area_three_relocation.update(1);
 
         osDelay(1);
     }
