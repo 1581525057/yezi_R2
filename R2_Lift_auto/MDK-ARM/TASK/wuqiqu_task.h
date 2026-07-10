@@ -9,6 +9,7 @@ extern "C" {
 
 // 武器区路径任务对外接口，供 FreeRTOS 入口和其他任务统一引用。
 void wuqiqu_task(void *argument);
+void WuqiquTask_SetTeamSide(uint8_t team_side);
 void WuqiquTask_Start(void);
 void WuqiquTask_StartAt(uint8_t waypoint_index);
 void WuqiquTask_StartAtPrelimWeaponHead(uint8_t weapon_index);

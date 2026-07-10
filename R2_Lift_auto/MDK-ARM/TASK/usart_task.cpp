@@ -137,10 +137,12 @@ void field_side_set(FieldSide side)
     if (side == FIELD_SIDE_RED)
     {
         current_field_side = FIELD_SIDE_RED;
+        g_ftm_team_side = 1U;
     }
     else
     {
         current_field_side = FIELD_SIDE_BLUE;
+        g_ftm_team_side = 0U;
     }
     Block_claulate_Middle();
 }

@@ -2,6 +2,39 @@
 #include "main.h"
 #include <math.h>
 
+// 红蓝方目标点均为视觉置零后的世界/雷达绝对坐标，参数顺序：x y yaw xy_tolerance yaw_tolerance。
+//只需要修改x y
+//蓝色方路径点
+static const WuqiquPathPlanner::TargetPoint kBlueWaypoints[] = {
+    {1.07f, -0.97f, 90.0f, 0.015f, 1.5f}, //取武器头
+    {0.59f, -0.70f, 90.0f, 0.035f, 3.0f}, //后退到一定距离准备进行转180度
+    {0.59f, -0.70f, -90.0f, 0.035f, 2.0f},//原地转180
+    {0.93f, 1.60f, 0.0f, 0.030f, 1.5f},   //到梅林前重定位的坐标
+    {0.59f, -0.96f, -90.0f, 0.050f, 2.0f},//原地转180度时候贴墙的坐标
+};
+//红色方路径点 意义如上 
+static const WuqiquPathPlanner::TargetPoint kRedWaypoints[] = {
+    {0.04f, 0.91f, -90.0f, 0.015f, 1.5f},
+    {0.35f, 0.60f, -90.0f, 0.035f, 3.0f},
+    {0.35f, 0.60f, 90.0f, 0.035f, 2.0f},
+    {0.96f, -1.64f, 0.0f, 0.030f, 1.5f},
+    {0.35f, 0.87f, 90.0f, 0.050f, 2.0f},
+};
+
+// 三个武器头的顺序固定为：0 矛头、1 拳头、2 巴掌。
+//蓝色方三个武器头的坐标
+static const WuqiquPathPlanner::TargetPoint kBluePrelimWeaponHeadPoints[] = {
+    {1.07f, -0.97f, 90.0f, 0.020f, 1.5f},
+    {0.87f, -0.97f, 90.0f, 0.020f, 1.5f},
+    {0.67f, -0.97f, 90.0f, 0.020f, 1.5f},
+};
+//红色方三个武器头的坐标
+static const WuqiquPathPlanner::TargetPoint kRedPrelimWeaponHeadPoints[] = {
+    {0.04f, 0.90f, -90.0f, 0.020f, 1.5f},
+    {0.23f, 0.90f, -90.0f, 0.020f, 1.5f},
+    {0.44f, 0.90f, -90.0f, 0.020f, 1.5f},
+};
+
 static const float WUQIQU_PI = 3.14159265358979323846f;  // 圆周率，用于角度转弧度
 static const float kDegToRad = WUQIQU_PI / 180.0f;       // 角度转弧度系数
 static const float kFastVMaxMps = 1.80f;                 // 快速阶段最大平移速度，单位 m/s
@@ -15,29 +48,34 @@ static const uint16_t kFastLinkStableCycles = 8U;      // 快速衔接点的姿�
 static const uint32_t kFastLinkContactHoldMs = 20U;    // 快速衔接点进入 SETTLE 后的最短保持时间
 static const uint32_t kFastLinkContactTimeoutMs = 80U; // 快速衔接点 SETTLE 阶段超时时间
 
-// 目标点为视觉置零后的世界/雷达绝对坐标，任务层会把 world 速度转成底盘车体系速度。
-// 参数顺序：x y yaw xy_tolerance yaw_tolerance
-static const WuqiquPathPlanner::TargetPoint kWaypoints[] = {
-    {1.07f, -0.97f, 90.0f, 0.015f, 1.5f},
-    {0.59f, -0.70f, 90.0f, 0.035f, 3.0f},
-    {0.59f, -0.70f, -90.0f, 0.035f, 2.0f},
-    {0.93f, 1.60f, 0.0f, 0.030f, 1.5f},
-    {0.59f, -0.96f, -90.0f, 0.050f, 2.0f},
-};
-static const uint8_t kWaypointCount = sizeof(kWaypoints) / sizeof(kWaypoints[0]);
-//蓝方三个武器头的坐标 矛头 拳头 巴掌1
-static const WuqiquPathPlanner::TargetPoint kPrelimWeaponHeadPoints[] = {
-    {1.07f, -0.97f, 90.0f, 0.020f, 1.5f},
-    {0.87f, -0.97f, 90.0f, 0.020f, 1.5f},
-    {0.67f, -0.97f, 90.0f, 0.020f, 1.5f},
-};
+static const uint8_t kTeamSideBlue = 0U;
+static const uint8_t kTeamSideRed = 1U;
+static const uint8_t kWaypointCount = sizeof(kBlueWaypoints) / sizeof(kBlueWaypoints[0]);
 static const uint8_t kPrelimWeaponHeadCount =
-    sizeof(kPrelimWeaponHeadPoints) / sizeof(kPrelimWeaponHeadPoints[0]);
+    sizeof(kBluePrelimWeaponHeadPoints) / sizeof(kBluePrelimWeaponHeadPoints[0]);
+
+static_assert(sizeof(kBlueWaypoints) / sizeof(kBlueWaypoints[0]) == 5U,
+              "Blue waypoint count must be 5");
+static_assert(sizeof(kRedWaypoints) / sizeof(kRedWaypoints[0]) == 5U,
+              "Red waypoint count must be 5");
+static_assert(sizeof(kBlueWaypoints) / sizeof(kBlueWaypoints[0]) ==
+                  sizeof(kRedWaypoints) / sizeof(kRedWaypoints[0]),
+              "Blue and red waypoint counts must match");
+static_assert(sizeof(kBluePrelimWeaponHeadPoints) / sizeof(kBluePrelimWeaponHeadPoints[0]) == 3U,
+              "Blue weapon head count must be 3");
+static_assert(sizeof(kRedPrelimWeaponHeadPoints) / sizeof(kRedPrelimWeaponHeadPoints[0]) == 3U,
+              "Red weapon head count must be 3");
+static_assert(sizeof(kBluePrelimWeaponHeadPoints) / sizeof(kBluePrelimWeaponHeadPoints[0]) ==
+                  sizeof(kRedPrelimWeaponHeadPoints) / sizeof(kRedPrelimWeaponHeadPoints[0]),
+              "Blue and red weapon head counts must match");
+static_assert(sizeof(kBlueWaypoints) / sizeof(kBlueWaypoints[0]) <= WuqiquPathPlanner::MAX_WAYPOINTS,
+              "Waypoint count exceeds MAX_WAYPOINTS");
 
 WuqiquPathPlanner wuqiqu;
 
 WuqiquPathPlanner::WuqiquPathPlanner()
 {
+    team_side_ = kTeamSideBlue;
     reset();
 
     finish_dist_ = 0.010f;                  // XY 到点判定距离，单位 m
@@ -68,10 +106,11 @@ WuqiquPathPlanner::WuqiquPathPlanner()
 
 void WuqiquPathPlanner::reloadDefaultWaypoints(void)
 {
+    const TargetPoint *selected_waypoints = (team_side_ == kTeamSideRed) ? kRedWaypoints : kBlueWaypoints;
     waypoint_count_ = kWaypointCount;
     for (uint8_t i = 0U; i < waypoint_count_; ++i)
     {
-        waypoints_[i] = kWaypoints[i];
+        waypoints_[i] = selected_waypoints[i];
     }
 }
 //加载当前目标点
@@ -97,6 +136,13 @@ void WuqiquPathPlanner::resetRoute(void)
     current_index_ = 0U;
     loadCurrentWaypoint();
     reset();
+}
+
+void WuqiquPathPlanner::setTeamSide(uint8_t team_side)
+{
+    // 仅 1 表示红方，其他输入统一回退到蓝方。
+    team_side_ = (team_side == kTeamSideRed) ? kTeamSideRed : kTeamSideBlue;
+    resetRoute();
 }
 
 void WuqiquPathPlanner::advanceToNext(void)
@@ -139,7 +185,9 @@ uint8_t WuqiquPathPlanner::overrideFirstWaypointWithPrelimWeaponHead(uint8_t wea
     {
         return 0U;
     }
-    waypoints_[0] = kPrelimWeaponHeadPoints[weapon_index];
+    const TargetPoint *selected_weapon_head_points =
+        (team_side_ == kTeamSideRed) ? kRedPrelimWeaponHeadPoints : kBluePrelimWeaponHeadPoints;
+    waypoints_[0] = selected_weapon_head_points[weapon_index];
     if (current_index_ == 0U)
     {
         target_ = waypoints_[0];

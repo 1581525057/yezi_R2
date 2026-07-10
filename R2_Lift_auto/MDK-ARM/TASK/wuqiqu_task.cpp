@@ -228,6 +228,17 @@ public:
     {
     }
 
+    void setTeamSide(uint8_t team_side)
+    {
+        // 阵营只在初始化阶段配置；切换前清零任务输出，避免保留旧路线目标。
+        active_ = 0U;
+        finished_ = 0U;
+        manual_control_ = 0U;
+        clearOutput();
+        last_update_tick_ = 0U;
+        wuqiqu.setTeamSide(team_side);
+    }
+
     void start()
     {
         startAt(0U);
@@ -502,6 +513,11 @@ void wuqiqu_task(void *argument)
         (void)g_wuqiqu_task.runOnce();
         osDelay(1);
     }
+}
+
+void WuqiquTask_SetTeamSide(uint8_t team_side)
+{
+    g_wuqiqu_task.setTeamSide(team_side);
 }
 
 void WuqiquTask_Start(void)

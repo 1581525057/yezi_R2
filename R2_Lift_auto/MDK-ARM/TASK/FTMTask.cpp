@@ -10,14 +10,24 @@
 #include "cmsis_os.h"
 #include <math.h>
 
-extern "C" volatile uint32_t g_ftm_grab_settle_delay_ms;
+// 0 表示蓝方，1 表示红方。会在field_side_set中被修改
+extern "C" volatile uint8_t g_ftm_team_side = 0U; 
+// 蓝方激光值：矛头、拳头、巴掌。
+static const float kBlueLaserCorrTargetM[3] = {1.14f, 0.94f, 0.74f};
+// 红方激光值：矛头、拳头、巴掌。
+static const float kRedLaserCorrTargetM[3] = {0.14f, 0.34f, 0.54f};
+
+//夹取武器头上升的高度
+extern "C" volatile float g_ftm_lift_up_target_mm = 74.0f;
+//对接高度
+extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 214.0f;
 
 enum FTMMainState
 {
     FTM_MAIN_INIT = 0,                 // 初始化各功能模块，完成后进入空闲。
     FTM_MAIN_IDLE = 1,                 // 空闲/手动调试状态，等待 Watch 写入动作状态。
     FTM_MAIN_WUQIQU_ROUTE = 2,         // 独立执行武器区第 1 个跑点。
-    FTM_MAIN_WUQIQU_ZERO = 3,          // 向视觉发送置零命令。 0 0 90
+    FTM_MAIN_WUQIQU_ZERO = 3,          // 向视觉发送阵营对应的置零命令：蓝方 0 0 90，红方 0 0 -90。
     FTM_MAIN_DONE = 4,                 // 全流程完成保持状态。
     FTM_MAIN_AUTO_PICK_ROUTE = 5,      // 武器区综合取物流程：跑第 1 点时同步开爪、预抬和 RS05 对位，到点后下降闭爪并抬到对接高度，后续跑点同步回位。
     FTM_MAIN_AUTO_TURN_READY = 6,      // 武器区调整姿态 再次取武器头流程：张爪、对位、M2006 翻转。
@@ -51,16 +61,68 @@ enum FTMActionState
     FTM_ACTION_GRAB_SETTLE_DELAY = 20                 // 到抓取高度后等待稳定，再闭合夹爪。
 };
 
+extern "C" volatile uint32_t g_ftm_grab_settle_delay_ms;
+
 namespace
 {
+    constexpr uint8_t kTeamSideBlue = 0U;
+    constexpr uint8_t kTeamSideRed = 1U;
+    constexpr uint8_t kPrelimWeaponCount = 3U;
+
+    static_assert(sizeof(kBlueLaserCorrTargetM) / sizeof(kBlueLaserCorrTargetM[0]) == kPrelimWeaponCount,
+                  "Blue laser target count must match weapon count");
+    static_assert(sizeof(kRedLaserCorrTargetM) / sizeof(kRedLaserCorrTargetM[0]) == kPrelimWeaponCount,
+                  "Red laser target count must match weapon count");
+
+    struct FTMTeamConfig
+    {
+        const float *laser_corr_target_m;
+        LaserDistance *laser;
+        float laser_error_sign;
+        float y_hold_error_sign;
+        float wuqiqu_zero_x_m;
+        float wuqiqu_zero_y_m;
+        float wuqiqu_zero_yaw_deg;
+    };
+
+    static const FTMTeamConfig kBlueTeamConfig = {
+        kBlueLaserCorrTargetM,
+        &laser_left,
+        1.0f,
+        1.0f,
+        0.0f,
+        0.0f,
+        90.0f,
+    };
+
+    static const FTMTeamConfig kRedTeamConfig = {
+        kRedLaserCorrTargetM,
+        &laser_right,
+        -1.0f,
+        -1.0f,
+        0.0f,
+        0.0f,
+        -90.0f,
+    };
+
+    uint8_t GetNormalizedTeamSide(void)
+    {
+        return (g_ftm_team_side == kTeamSideRed) ? kTeamSideRed : kTeamSideBlue;
+    }
+
+    const FTMTeamConfig &GetActiveTeamConfig(void)
+    {
+        return (GetNormalizedTeamSide() == kTeamSideRed) ? kRedTeamConfig : kBlueTeamConfig;
+    }
+
     constexpr float kDegToRad = 0.01745329251994329577f;          // 角度转弧度的固定换算系数。
     constexpr float kRs05AngleToleranceRad = 0.02f;               // RS05 角度到位容差，单位 rad。
     constexpr uint32_t kRs05CommandIntervalMs = 20U;              // RS05 发送控制指令的周期，单位 ms。
     constexpr uint32_t kRs05SettleMs = 300U;                      // RS05 到位后等待稳定时间，单位 ms。
     constexpr uint32_t kRs05TimeoutMs = 3500U;                    // RS05 转角动作超时时间，单位 ms。
 
-    constexpr float kLiftToleranceMm = 5.0f;                      // 抬升高度到位容差，单位 mm。
-    constexpr float kLiftGrabApproachOffsetMm = 20.0f;            // 抓取预备高度：在抓取高度基础上上抬 20mm。
+    constexpr float kLiftToleranceMm = 3.0f;                      // 抬升高度到位容差，单位 mm。
+    constexpr float kLiftGrabApproachOffsetMm = 10.0f;            // 抓取预备高度：在抓取高度基础上上抬 10mm。
 
     constexpr uint32_t kClawActionDelayMs = 200U;                 // 夹爪动作后的等待时间，单位 ms。
     constexpr float kM2006TurnAngleDeg = 180.0f;                  // M2006 翻转目标角度，单位 deg。
@@ -69,9 +131,6 @@ namespace
 
     constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;           // 武器区置零指令发送周期，单位 ms。
     constexpr uint32_t kWuqiquZeroSettleMs = 200U;                // 置零后等待视觉/底盘稳定时间，单位 ms。
-    constexpr float kWuqiquZeroRelocalizeX = 0.0f;                // 置零后重定位 X 坐标。
-    constexpr float kWuqiquZeroRelocalizeY = 0.0f;                // 置零后重定位 Y 坐标。
-    constexpr float kWuqiquZeroRelocalizeYawDeg = 90.0f;          // 置零后重定位航向角，单位 deg。
     constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;            // 武器区原地转向到位容差，单位 deg。
     constexpr uint16_t kWuqiquYawTurnStableCycles = 200U;         // 航向满足容差后需连续稳定的周期数。
     constexpr uint8_t kWuqiquSecondWaypointIndex = 1U;            // 武器区第 2 个跑点索引。
@@ -82,16 +141,14 @@ namespace
     constexpr int kPrelimExecFirstWeapon = 2;        // 预选赛流程：exec=2 表示第 1 个武器头。
     constexpr int kPrelimExecSecondWeapon = 3;       // 预选赛流程：exec=3 表示第 2 个武器头。
     constexpr int kPrelimExecThirdWeapon = 4;        // 预选赛流程：exec=4 表示第 3 个武器头。
-    constexpr uint8_t kPrelimWeaponCount = 3U;       // 预选赛连续夹取的武器头数量。
     constexpr uint8_t kPrelimPickWaypointIndex = 0U; // 预选赛每次夹取从第 1 个跑点开始。
 
     // 激光修正参数
-    static const float kLaserCorrTargetM[3] = {1.14f, 0.94f, 0.74f}; // 各武器头到位后 laser_left 目标值（m）
     constexpr float kLaserCorrToleranceM = 0.030f;       // 到位容差 ±30mm
     constexpr float kLaserCorrKp = 1.2f;               // 激光距离闭环比例增益，误差 0.10m 时目标速度约 0.12m/s。
     constexpr float kLaserCorrMinSpeedMps = 0.07f;       // 底盘最小有效修正速度，避免小误差时推不动车。
     constexpr float kLaserCorrMaxSpeedMps = 0.25f;       // 激光闭环最大修正速度，限制贴近阶段速度。
-    constexpr float kLaserCorrYHoldToleranceM = 0.020f;  // laser_left 修正时，vision.y_diff 回正容差 ±10mm。
+    constexpr float kLaserCorrYHoldToleranceM = 0.020f;  // 激光修正时，vision.y_diff 回正容差 ±20mm。
     constexpr float kLaserCorrYHoldKp = 1.0f;            // vision.y_diff 保持比例增益，误差 0.10m 时目标速度约 0.10m/s。
     constexpr float kLaserCorrYHoldMaxSpeedMps = 0.20f;  // vision.y_diff 保持最大修正速度。
     constexpr uint32_t kLaserCorrTotalTimeoutMs = 5000U; // 激光修正总超时，超时后跳过直接夹
@@ -1326,16 +1383,16 @@ namespace
         }
     }
 
-    // 返回当前武器头对应的 laser_left 目标值（m）。
+    // 返回当前阵营、当前武器头对应的激光目标值（m）。
     // 预选赛流程按 g_prelim_weapon_index 索引，非预选赛流程固定使用第 0 个。
     float GetCurrentWeaponHeadLaserTargetM(void)
     {
         uint8_t idx = 0U;
-        if ((g_prelim_auto_full_flow_active != 0U) && (g_prelim_weapon_index < 3U))
+        if ((g_prelim_auto_full_flow_active != 0U) && (g_prelim_weapon_index < kPrelimWeaponCount))
         {
             idx = g_prelim_weapon_index;
         }
-        return kLaserCorrTargetM[idx];
+        return GetActiveTeamConfig().laser_corr_target_m[idx];
     }
 
     float ClampLaserCorrSpeed(float vx_mps)
@@ -1371,10 +1428,12 @@ namespace
         return vx_mps;
     }
 
-    // 到位后用 laser_left 修正贴边距离，同时用 vision.y_diff 保持进入修正时的 Y 基准。
+    // 到位后用当前阵营对应的侧向激光修正贴边距离，同时保持进入修正时的 vision.y_diff 基准。
     // 每次 tick 调用一次；返回 true 表示修正完成（含超时跳过情况），返回 false 表示仍在进行。
     bool RunLaserCorrectionStep(void)
     {
+        const FTMTeamConfig &team_config = GetActiveTeamConfig();
+
         if (g_laser_corr_active == 0U)
         {
             g_laser_corr_active = 1U;
@@ -1390,7 +1449,7 @@ namespace
         }
 
         // 激光无效时等待；超时则跳过
-        if (laser_left.data.valid == 0U)
+        if (team_config.laser->data.valid == 0U)
         {
             if (HasElapsed(g_laser_corr_start_tick, kLaserCorrInvalidTimeoutMs))
             {
@@ -1401,10 +1460,10 @@ namespace
             return false;
         }
 
-        const float actual_m = laser_left.data.distance_m;
+        const float actual_m = team_config.laser->data.distance_m;
         const float target_m = GetCurrentWeaponHeadLaserTargetM();
-        const float delta_m = actual_m - target_m;
-        const float y_delta_m = g_laser_corr_y_hold_ref_m - vision.y_diff;
+        const float delta_m = team_config.laser_error_sign * (actual_m - target_m);
+        const float y_delta_m = team_config.y_hold_error_sign * (g_laser_corr_y_hold_ref_m - vision.y_diff);
 
         // 已在容差范围内，修正完成
         if ((fabsf(delta_m) <= kLaserCorrToleranceM) &&
@@ -1415,7 +1474,7 @@ namespace
         }
 
         // 到点后不再改路线点，直接下发底盘车体系速度做闭环微调。
-        // laser_left 偏大时向左平移（+Vy），偏小时向右平移（-Vy）。
+        // 蓝方左激光使用正号，红方右激光和 -90 度航向同时反号，统一为正确的车体系修正方向。
         // Vx 用来把 vision.y_diff 拉回进入修正瞬间的基准，抑制贴边修正时车身走歪。
         const float vx_mps = ClampLaserCorrYHoldSpeed(kLaserCorrYHoldKp * y_delta_m);
         const float vy_mps = ClampLaserCorrSpeed(kLaserCorrKp * delta_m);
@@ -1441,7 +1500,7 @@ namespace
             ResetMechanismStep();
             return false;
 
-        // case 1：激光修正 —— 到位后根据 laser_left 和 vision.y_diff 微调底盘，直到进入容差或超时。
+        // case 1：激光修正 —— 到位后根据当前阵营侧向激光和 vision.y_diff 微调底盘，直到进入容差或超时。
         case 1:
             if (RunLaserCorrectionStep() == false)
             {
@@ -1574,11 +1633,12 @@ namespace
         if ((g_wuqiqu_zero_last_send_tick == 0U) ||
             HasElapsed(g_wuqiqu_zero_last_send_tick, kWuqiquZeroSendIntervalMs))
         {
+            const FTMTeamConfig &team_config = GetActiveTeamConfig();
             send_position_to_pc(0,
                                 1,
-                                kWuqiquZeroRelocalizeX,
-                                kWuqiquZeroRelocalizeY,
-                                kWuqiquZeroRelocalizeYawDeg);
+                                team_config.wuqiqu_zero_x_m,
+                                team_config.wuqiqu_zero_y_m,
+                                team_config.wuqiqu_zero_yaw_deg);
             g_wuqiqu_zero_last_send_tick = HAL_GetTick();
         }
 
@@ -1595,6 +1655,8 @@ namespace
             return;
         }
 
+        // 在任何手动跑点或 yaw 转向读取路径参数前，先装载当前阵营的路线表。
+        WuqiquTask_SetTeamSide(GetNormalizedTeamSide());
         RS05_Init();
         M2006Angle_Init();
         FTMLiftAction_Reset();
@@ -1607,8 +1669,6 @@ extern "C" volatile uint8_t g_ftm_action_state = FTM_ACTION_NONE;
 extern "C" volatile uint8_t wuqiqu_done = 0U;
 extern "C" volatile uint8_t g_ftm_yaw_target_correction_state = 0U;
 extern "C" volatile float g_ftm_yaw_target_degree = 0.0f;
-extern "C" volatile float g_ftm_lift_up_target_mm = 74.0f;
-extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 214.0f;
 extern "C" volatile float g_ftm_lift_down_target_mm = 68.0f;
 extern "C" volatile float g_ftm_rs05_return_target_degree = 0.0f;
 extern "C" volatile uint32_t g_ftm_grab_settle_delay_ms = 200U;

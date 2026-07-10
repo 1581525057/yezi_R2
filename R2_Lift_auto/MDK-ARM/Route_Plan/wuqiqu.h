@@ -54,6 +54,7 @@ public:
     int follow(const Pose &current_pose);
     void reset(void);
     void resetRoute(void);
+    void setTeamSide(uint8_t team_side);
 
     void advanceToNext(void);
     bool isAllFinished(void) const;
@@ -98,6 +99,8 @@ public:
     bool isFinished(void) const;
 
 private:
+    uint8_t team_side_;
+
     void reloadDefaultWaypoints(void);
     void loadCurrentWaypoint(void);
     void setZeroOutput(void);
