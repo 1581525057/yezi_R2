@@ -47,6 +47,7 @@ void LedTask_SetMode(LedTask_Mode mode, LedTask_Segment segment);
  * 11 蓝色闪烁，12 蓝色常亮，13 全灭
  * 14 整条同色彩虹渐变
  * 15 全部白色闪烁，16 全部红色常亮
+ * 17 全部绿色常亮
  */
 extern volatile uint8_t LED_state;
 

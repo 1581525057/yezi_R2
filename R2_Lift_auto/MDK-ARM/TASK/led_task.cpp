@@ -105,6 +105,10 @@ namespace
             *mode = LED_TASK_MODE_POWER_ON_RED;
             *segment = LED_TASK_SEG_ALL;
             break;
+        case 17U:
+            *mode = LED_TASK_MODE_ALL_GREEN;
+            *segment = LED_TASK_SEG_ALL;
+            break;
         default:
             break;
         }
