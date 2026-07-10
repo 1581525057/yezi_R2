@@ -18,6 +18,7 @@ extern float yaw_target;
 
 // 通用参数
 float CONBAT_DEG_TO_RAD = 3.1415926f / 180.0f; // 角度转弧度系数，用于视觉角度转换。
+uint8_t CONBAT_IDLE_CHASSIS_STOP_ENABLE = 1U;  // 空闲状态底盘停车开关：1 限制为零速度，0 透传手动速度。
 
 // 上坡状态的终点表，单位：x/y 为 m，yaw 为 rad；你后续直接改这里。
 static BRPathPose conbat_ramp_up_goals[] = {
@@ -320,7 +321,7 @@ void CONBAT_TASK::runOnce(void)
         break;
     case CONBAT_RELOAD_COMBINE: // 合体重试车略
         /* 合体重试状态：先用 B 样条回到合体终点，再用二维 P 精调。 */
-        action_result = runReloadCombine();
+        action_result = runReloadCombine();  
         update_state_by_action_result(action_result, CONBAT_COMBINE, &state);
         break;
 
@@ -385,7 +386,7 @@ uint8_t CONBAT_TASK::isActive(void) const
 
 /*
  * 获取 conbat_task 给底盘的目标速度。
- * 空闲时也保持零速度；激活且有路径输出时返回路径跟随速度；激活但暂无具体动作时返回零速度。
+ * 空闲停车开关为 1 时保持零速度，为 0 时透传手动速度；激活且有路径输出时返回路径跟随速度。
  * chassis_task 通过这个函数把 conbat_task 纳入统一底盘控制权仲裁。
  */
 uint8_t CONBAT_TASK::getChassisTarget(float manual_vx,
@@ -395,12 +396,12 @@ uint8_t CONBAT_TASK::getChassisTarget(float manual_vx,
                                       float *target_vy,
                                       float *target_wz) const
 {
-    /* 默认透传遥控目标，除空闲停车和 conbat 激活外不覆盖底盘速度。 */
+    /* 默认透传遥控目标，除启用空闲停车和 conbat 激活外不覆盖底盘速度。 */
     *target_vx = manual_vx;
     *target_vy = manual_vy;
     *target_wz = manual_wz;
 
-    if (state == CONBAT_IDLE)
+    if (state == CONBAT_IDLE && CONBAT_IDLE_CHASSIS_STOP_ENABLE != 0U)
     {
         *target_vx = 0.0f;
         *target_vy = 0.0f;
@@ -1488,8 +1489,8 @@ uint8_t CONBAT_TASK::runCombine(void)
     }
 }
 
-float CONBAT_KFS_PLACE_PATH_MAX_VEL_M_S = 1.5f;  // KFS 放置点路径的最大线速度，单位 m/s。
-float CONBAT_KFS_PLACE_PATH_MAX_ACC_M_S2 = 0.8f; // KFS 放置点路径的最大加速度，单位 m/s2。
+float CONBAT_KFS_PLACE_PATH_MAX_VEL_M_S = 1.5f;   // KFS 放置点路径的最大线速度，单位 m/s。
+float CONBAT_KFS_PLACE_PATH_MAX_ACC_M_S2 = 0.8f;  // KFS 放置点路径的最大加速度，单位 m/s2。
 float CONBAT_KFS_PLACE_FINAL_Y_DISTANCE_M = 1.0f; // 进入终点前仅沿世界系 Y 轴运动的距离，单位 m。
 
 /*
