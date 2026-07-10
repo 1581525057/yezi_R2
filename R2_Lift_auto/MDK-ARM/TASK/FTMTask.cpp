@@ -88,10 +88,10 @@ namespace
     // 激光修正参数
     static const float kLaserCorrTargetM[3] = {1.14f, 0.94f, 0.74f}; // 各武器头到位后 laser_left 目标值（m）
     constexpr float kLaserCorrToleranceM = 0.030f;       // 到位容差 ±30mm
-    constexpr float kLaserCorrKp = 1.2f;                 // 激光距离闭环比例增益，误差 0.10m 时目标速度约 0.12m/s。
+    constexpr float kLaserCorrKp = 1.2f;               // 激光距离闭环比例增益，误差 0.10m 时目标速度约 0.12m/s。
     constexpr float kLaserCorrMinSpeedMps = 0.07f;       // 底盘最小有效修正速度，避免小误差时推不动车。
     constexpr float kLaserCorrMaxSpeedMps = 0.25f;       // 激光闭环最大修正速度，限制贴近阶段速度。
-    constexpr float kLaserCorrYHoldToleranceM = 0.010f;  // laser_left 修正时，vision.y_diff 回正容差 ±10mm。
+    constexpr float kLaserCorrYHoldToleranceM = 0.020f;  // laser_left 修正时，vision.y_diff 回正容差 ±10mm。
     constexpr float kLaserCorrYHoldKp = 1.0f;            // vision.y_diff 保持比例增益，误差 0.10m 时目标速度约 0.10m/s。
     constexpr float kLaserCorrYHoldMaxSpeedMps = 0.20f;  // vision.y_diff 保持最大修正速度。
     constexpr uint32_t kLaserCorrTotalTimeoutMs = 5000U; // 激光修正总超时，超时后跳过直接夹
@@ -137,6 +137,7 @@ namespace
     LedTask_Segment g_led_prelim_green_hold_segment = LED_TASK_SEG_ALL;
     uint8_t g_led_go_meilin_if_go_latched = 0U;
     uint8_t g_led_go_meilin_rainbow_latched = 0U;
+    uint8_t g_led_angle_x_seen = 0U;
     uint8_t g_wuqiqu_yaw_turn_active = 0U;
     uint8_t g_wuqiqu_yaw_turn_target_waypoint_index = kWuqiquYawTargetWaypointIndex;
     uint16_t g_wuqiqu_yaw_turn_stable_count = 0U;
@@ -182,6 +183,10 @@ namespace
     uint32_t g_wuqiqu_zero_start_tick = 0U;
     uint32_t g_wuqiqu_zero_last_send_tick = 0U;
     uint8_t g_wuqiqu_zero_active = 0U;
+
+    constexpr uint8_t kLedStateAllWhiteOn = 1U;
+    constexpr uint8_t kLedStateAllRedOn = 16U;
+    constexpr uint8_t kLedStateAllGreenOn = 17U;
 
     bool HasElapsed(uint32_t start_tick, uint32_t duration_ms)
     {
@@ -418,6 +423,12 @@ namespace
     {
         const LedTask_Segment segment = GetActiveWeaponLedSegment();
 
+        if ((g_led_angle_x_seen == 0U) && (vision.angle_x != 0.0f))
+        {
+            // 视觉角度首次有效后锁存白灯，后续由 exec 和状态 3 提升优先级。
+            g_led_angle_x_seen = 1U;
+        }
+
         switch (main_state)
         {
         case FTM_MAIN_INIT:
@@ -438,6 +449,9 @@ namespace
             {
                 g_led_prelim_green_hold_active = 0U;
             }
+            LED_state = GetRedOnLedState(segment);
+            break;
+        case FTM_MAIN_PRELIM_AUTO_FULL_FLOW:
             LED_state = GetRedOnLedState(segment);
             break;
         case FTM_MAIN_AUTO_TURN_READY:
@@ -472,6 +486,19 @@ namespace
             break;
         default:
             break;
+        }
+
+        if ((main_state == FTM_MAIN_IDLE) && (vision.exec == 0) && (g_led_angle_x_seen != 0U))
+        {
+            LED_state = kLedStateAllWhiteOn;
+        }
+        if ((main_state == FTM_MAIN_IDLE) && (vision.exec != 0))
+        {
+            LED_state = kLedStateAllRedOn;
+        }
+        if (main_state == FTM_MAIN_WUQIQU_ZERO)
+        {
+            LED_state = kLedStateAllGreenOn;
         }
     }
 

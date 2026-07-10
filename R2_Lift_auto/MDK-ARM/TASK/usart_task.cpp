@@ -9,6 +9,7 @@
 #include "bsp_dwt.h"
 #include "chassis_task.h"
 #include "FTMTask.h"
+#include "led_task.h"
 #include "PID.h"
 #include "route_task.h"
 #include <string.h>
@@ -576,6 +577,12 @@ uint16_t flag_bottom = 0;
 extern uint16_t numo;
 extern "C" void usart_task(void *argument)
 {
+    constexpr uint32_t kFtmStateGreenHoldMs = 1000U;
+    constexpr uint8_t kLedStateAllGreenOn = 17U;
+    uint8_t ftm_state_green_latched = 0U;
+    uint8_t ftm_state_green_hold_active = 0U;
+    uint32_t ftm_state_green_hold_until = 0U;
+
     // as5047.init(&hspi1);
     HAL_Delay(200); // 先给 DT35 / SPI ADC / 电源稳定时间
     dt35.init(&hspi3);
@@ -596,11 +603,23 @@ extern "C" void usart_task(void *argument)
         }
         if (Green == 1)
         {
-            g_ftm_main_state = 3; // 先执行视觉置零
         }
         if (Orange == 1)
         {
-            conbat_t.conbat_start = 3;
+            g_ftm_main_state = 3; // 先执行视觉置零
+            if (ftm_state_green_latched == 0U)
+            {
+                // 进入 FTM 主状态后给 1s 绿灯反馈，不阻塞串口和传感器更新。
+                LED_state = kLedStateAllGreenOn;
+                ftm_state_green_hold_until = HAL_GetTick() + kFtmStateGreenHoldMs;
+                ftm_state_green_hold_active = 1U;
+                ftm_state_green_latched = 1U;
+            }
+            // conbat_t.conbat_start = 3;
+        }
+        else
+        {
+            ftm_state_green_latched = 0U;
         }
 
         if (Red == 1)
@@ -632,6 +651,18 @@ extern "C" void usart_task(void *argument)
         if (Yellow2 == 0)
         {
             numo = 0;
+        }
+
+        if (ftm_state_green_hold_active != 0U)
+        {
+            if (static_cast<int32_t>(HAL_GetTick() - ftm_state_green_hold_until) < 0)
+            {
+                LED_state = kLedStateAllGreenOn;
+            }
+            else
+            {
+                ftm_state_green_hold_active = 0U;
+            }
         }
 
         /* 更新传感器数据 */
