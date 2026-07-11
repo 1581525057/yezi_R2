@@ -57,8 +57,8 @@ float block_middle_blue_x = 3.45f;
 float block_middle_blue_y = 1.61f;
 
 // 红方第 2 个方块的中心坐标，单独标定，不从蓝方中心坐标计算。
-float block_middle_red_x = 0.0f;
-float block_middle_red_y = 0.0f;
+float block_middle_red_x = 3.45f;
+float block_middle_red_y = -1.57f;
 
 // 根据蓝方第 2 个方块中心，计算蓝方全部方块中心坐标。
 static void Block_calculate_blue_middle(void)
