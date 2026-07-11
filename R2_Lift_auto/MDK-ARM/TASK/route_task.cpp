@@ -42,9 +42,9 @@ static const BRPathPose route_find_kfs_goals[2][3] = {
      {2.36f, 1.60f, 0.0f},
      {2.33f, 0.44f, 0.0f}},
     // 红方坐标
-    {{2.36f, -2.82f, 0.0f},
-     {2.36f, -1.60f, 0.0f},
-     {2.33f, -0.44f, 0.0f}},
+    {{2.36f, -2.78f, 0.0f},
+     {2.36f, -1.56f, 0.0f},
+     {2.33f, -0.39f, 0.0f}},
 };
 
 // 寻找三个 KFS 的中间点表，单位：x/y 为 m；第一组蓝方，第二组红方。
@@ -584,7 +584,7 @@ void ROUTE_TASK::vision_choice()
         }
         lift_auto.setStepUpRadarTarget(middle_x, middle_y);
         lift_auto.setStepUpReturnMiddle(shouldStepUpReturnMiddle()); // 连续上两次台阶后强制回一次中心。
-        last_step_center_x_ = middle_x;                                                         // 这次坐标变成下一次
+        last_step_center_x_ = middle_x;                              // 这次坐标变成下一次
         last_step_center_y_ = middle_y;
         last_step_center_valid_ = 1U; // 最近的坐标是否有效
         state = PHASE_STEP_UP;
