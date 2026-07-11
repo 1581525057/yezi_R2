@@ -17,14 +17,13 @@ extern float yaw_target;
 
 // 通用参数
 float CONBAT_DEG_TO_RAD = 3.1415926f / 180.0f; // 角度转弧度系数，用于视觉角度转换。
-uint8_t CONBAT_IDLE_CHASSIS_STOP_ENABLE = 1U;  // 空闲状态底盘停车开关：1 限制为零速度，0 透传手动速度。
 
 // 上坡状态终点表，单位：x/y 为 m，yaw 为 rad；第一组蓝方，第二组红方。
 static const BRPathPose conbat_ramp_up_goals[2][1] = {
     // 蓝方坐标
     {{2.93f, -1.60f, 0.0f}},
     // 红方坐标
-    {{2.93f, 1.60f, 0.0f}},
+    {{2.93f, 1.6f, 0.0f}},
 };
 
 // 上坡状态中间点表，单位：x/y 为 m；第一组蓝方，第二组红方。
@@ -37,12 +36,14 @@ static const BRPathControlPoint conbat_ramp_up_middle_points[2][6] = {
      {3.18f, -1.50f},
      {3.18f, -1.60f}},
     // 红方坐标
-    {{0.84f, -0.07f},
-     {1.69f, -0.04f},
-     {3.46f, -0.06f},
-     {3.36f, 0.53f},
-     {3.18f, 1.50f},
-     {3.18f, 1.60f}},
+    {
+        {0.84f, -0.07f},
+        {1.69f, -0.04f},
+        {3.46f, -0.06f},
+        {3.36f, 0.53f},
+        {3.18f, 1.5f},
+        {3.18f, 1.6f},
+    },
 };
 static const std::size_t conbat_ramp_up_middle_point_count =
     sizeof(conbat_ramp_up_middle_points[0]) / sizeof(conbat_ramp_up_middle_points[0][0]);
@@ -53,8 +54,10 @@ static const BRPathPose conbat_pick_kfs_goals[2][2] = {
     {{3.05f, -2.41f, 0.0f},
      {3.05f, -3.04f, 0.0f}},
     // 红方坐标
-    {{3.05f, 2.41f, 0.0f},
-     {3.05f, 3.04f, 0.0f}},
+    {
+        {3.00f, 2.52f, 0.0f},
+        {3.05f, 3.24f, 0.0f},
+    },
 };
 
 // 合体目标终点表，单位：x/y 为 m，yaw 为 rad；第一组蓝方，第二组红方。
@@ -62,7 +65,7 @@ static const BRPathPose conbat_combine_goals[2][1] = {
     // 蓝方坐标与角度
     {{3.12f, -3.05f, -1.5708f}},
     // 红方坐标与角度
-    {{3.12f, 3.05f, 1.5708f}},
+    {{2.98f, 3.07f, 1.5708f}},
 };
 
 // 合体重试路径中间点表，单位：x/y 为 m；第一组蓝方，第二组红方。
@@ -82,9 +85,10 @@ static const BRPathPose conbat_kfs_place_goals[2][3] = {
      {3.28f, -4.38f, -1.5708f},
      {2.73f, -4.38f, -1.5708f}},
     // 红方坐标与角度
-    {{3.80f, 4.38f, 1.5708f},
-     {3.28f, 4.38f, 1.5708f},
-     {2.73f, 4.38f, 1.5708f}},
+    {
+        {2.4f, 4.52f, 1.5708f},
+        {2.94f, 4.52f, 1.5708f},
+        {3.48f, 4.52f, 1.5708f}},
 };
 
 // 三个放 KFS 位置的中间点表；第一组蓝方，第二组红方。
@@ -289,7 +293,6 @@ void CONBAT_TASK::reset(void)
     path_follower_.reset();
     path_loaded_ = 0U;
     ramp_up_waiting_ = 0U;
-    ramp_up_relocation_done_ = 0U;
     ramp_up_zero_yaw_done_ = 0U;
     pick_kfs_step_ = PICK_KFS_LOCK_ZERO;
     place_kfs_new_step_ = PLACE_KFS_NEW_PATH_TO_PLACE;
@@ -348,7 +351,7 @@ void CONBAT_TASK::runOnce(void)
         /* 捡 KFS 状态：生成到捡取点的路径并开始跟随。 */
         action_result = runPickKfs();
 
-        update_state_by_action_result(action_result, CONBAT_IDLE, &state);
+        update_state_by_action_result(action_result, CONBAT_COMBINE, &state);
         break;
     case CONBAT_RELOAD_COMBINE: // 合体重试车略
         /* 合体重试状态：先用 B 样条回到合体终点，再用二维 P 精调。 */
@@ -417,7 +420,7 @@ uint8_t CONBAT_TASK::isActive(void) const
 
 /*
  * 获取 conbat_task 给底盘的目标速度。
- * 空闲停车开关为 1 时保持零速度，为 0 时透传手动速度；激活且有路径输出时返回路径跟随速度。
+ * 空闲时透传手动速度；激活且有路径输出时返回路径跟随速度。
  * chassis_task 通过这个函数把 conbat_task 纳入统一底盘控制权仲裁。
  */
 uint8_t CONBAT_TASK::getChassisTarget(float manual_vx,
@@ -427,18 +430,10 @@ uint8_t CONBAT_TASK::getChassisTarget(float manual_vx,
                                       float *target_vy,
                                       float *target_wz) const
 {
-    /* 默认透传遥控目标，除启用空闲停车和 conbat 激活外不覆盖底盘速度。 */
+    /* 默认透传遥控目标，仅在 conbat 激活时覆盖底盘速度。 */
     *target_vx = manual_vx;
     *target_vy = manual_vy;
     *target_wz = manual_wz;
-
-    if (state == CONBAT_IDLE && CONBAT_IDLE_CHASSIS_STOP_ENABLE != 0U)
-    {
-        *target_vx = 0.0f;
-        *target_vy = 0.0f;
-        *target_wz = 0.0f;
-        return 1U;
-    }
 
     if (isActive() == 0U)
     {
@@ -532,7 +527,6 @@ void CONBAT_TASK::handleStateChanged(void)
     path_follower_.reset();
     path_loaded_ = 0U;
     ramp_up_waiting_ = 0U;
-    ramp_up_relocation_done_ = 0U;
     ramp_up_zero_yaw_done_ = 0U;
     pick_kfs_step_ = PICK_KFS_LOCK_ZERO;
     place_kfs_new_step_ = PLACE_KFS_NEW_PATH_TO_PLACE;
@@ -554,11 +548,6 @@ void CONBAT_TASK::handleStateChanged(void)
     lift_linear_speed_target_ = 0.0f;
     pick_kfs_second_back_start_x_m_ = 0.0f;
     clearPathOutput();
-
-    if (state == CONBAT_RAMP_UP)
-    {
-        area_three_relocation.reset();
-    }
 
     if (state == CONBAT_IDLE)
     {
@@ -588,30 +577,11 @@ void CONBAT_TASK::clearPathOutput(void)
 /*
  * 上斜坡状态处理。
  */
-static const float CONBAT_RAMP_UP_ZERO_YAW_TOL_DEG = 3.0f;             // 上坡前锁 0 度的角度容差，单位度。
-static const float CONBAT_RAMP_UP_RELOCATION_STOP_SPEED_LIMIT = 0.01f; // 三区重定位时底盘速度阈值。
+static const float CONBAT_RAMP_UP_ZERO_YAW_TOL_DEG = 3.0f; // 上坡前锁 0 度的角度容差，单位度。
 
 uint8_t CONBAT_TASK::runRampUp(void)
 {
     const uint8_t field_side_index = conbat_field_side_index();
-
-    if (ramp_up_relocation_done_ == 0U)
-    {
-        clearPathOutput();
-        const uint8_t chassis_speed_zero =
-            (fabsf(omni_chassis.now.Vx) <= CONBAT_RAMP_UP_RELOCATION_STOP_SPEED_LIMIT &&
-             fabsf(omni_chassis.now.Vy) <= CONBAT_RAMP_UP_RELOCATION_STOP_SPEED_LIMIT &&
-             fabsf(omni_chassis.now.Vz) <= CONBAT_RAMP_UP_RELOCATION_STOP_SPEED_LIMIT)
-                ? 1U
-                : 0U;
-
-        if (area_three_relocation.update(chassis_speed_zero) != AreaThreeRelocation::SENT)
-        {
-            return 0U;
-        }
-
-        ramp_up_relocation_done_ = 1U;
-    }
 
     if (ramp_up_zero_yaw_done_ == 0U)
     {
@@ -648,14 +618,14 @@ uint8_t CONBAT_TASK::runRampUp(void)
 // 捡 KFS 流程参数。
 float CONBAT_PICK_KFS_PATH_MAX_VEL_M_S = 1.5f;              // 捡 KFS 跑点的最大线速度，单位 m/s。
 float CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2 = 0.8f;             // 捡 KFS 跑点的最大加速度，单位 m/s2。
-float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2 = 0.4f;   // KFS 等待阶段车体前进加速度，单位 m/s2。
-float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS = 0.4f;    // KFS 等待阶段车体前进最大速度，单位 m/s。
+float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2 = 0.8f;   // KFS 等待阶段车体前进加速度，单位 m/s2。
+float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS = 0.6f;    // KFS 等待阶段车体前进最大速度，单位 m/s。
 float CONBAT_PICK_KFS_FIRST_BACK_DISTANCE_M = 0.06f;        // KFS 吸取成功后沿 X 轴后退距离，单位 m。
 float CONBAT_PICK_KFS_FIRST_BACK_SPEED_MPS = 0.4f;          // KFS 吸取成功后沿 X 轴后退速度，单位 m/s。
 float CONBAT_PICK_GO_TO_COMBINE_KP = 1.6f;                  // 去合体目标点的二维位置 P 闭环系数。
-float CONBAT_PICK_GO_TO_COMBINE_TOL_M = 0.03f;              // 去合体目标点的到位误差，单位 m。
+float CONBAT_PICK_GO_TO_COMBINE_TOL_M = 0.05f;              // 去合体目标点的到位误差，单位 m。
 float CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM = 455.0f;   // 第一个 KFS 边吸边前进的 DT35 目标距离。
-float CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM = 460.0f;  // 第二个 KFS 边吸边前进的 DT35 目标距离。
+float CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM = 455.0f;  // 第二个 KFS 边吸边前进的 DT35 目标距离。
 static const float CONBAT_PICK_KFS_ZERO_YAW_TOL_DEG = 3.0f; // 捡 KFS 前锁 0 度的角度容差，单位度。
 
 uint8_t CONBAT_TASK::runPickKfs(void)

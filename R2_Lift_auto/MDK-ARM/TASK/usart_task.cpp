@@ -18,7 +18,7 @@
 /* ========================== 全局变量 ========================== */
 
 // 改这个，红蓝方坐标切换
-static volatile FieldSide current_field_side = FIELD_SIDE_BLUE;
+static volatile FieldSide current_field_side = FIELD_SIDE_RED;
 
 /* USB 串口接收缓冲区 */
 uint8_t data_usb[USB_RX_BUFFER_SIZE];
@@ -53,8 +53,8 @@ static uint8_t vision_last_block_count = 0U;
 Block_Vision block_vision_middle[16];
 
 // 蓝方第 2 个方块的中心坐标，暂时留空，后续直接填写这里。
-float block_middle_blue_x = 0.0f;
-float block_middle_blue_y = 0.0f;
+float block_middle_blue_x = 3.45f;
+float block_middle_blue_y = 1.61f;
 
 // 红方第 2 个方块的中心坐标，单独标定，不从蓝方中心坐标计算。
 float block_middle_red_x = 0.0f;
@@ -664,20 +664,23 @@ extern "C" void usart_task(void *argument)
     Block_claulate_Middle();
     for (;;)
     {
-        if (Yellow == 1)
+        if (Yellow == 1) // 去启动合体
         {
             dt35.init(&hspi3);
             conbat_t.conbat_start = 1;
         }
-        if (Blue == 1)
+        if (Blue == 1) // 去放置二层kfs
         {
+            dt35.init(&hspi3);
             conbat_t.conbat_start = 2;
         }
-        if (Green == 1)
+        if (Green == 1) // 回到空闲状态
         {
+            conbat_t.state = CONBAT_IDLE;
         }
-        if (Orange == 1)
+        if (Orange == 1) // 视觉置0
         {
+            dt35.init(&hspi3);
             g_ftm_main_state = 3; // 先执行视觉置零
             if (ftm_state_green_latched == 0U)
             {
@@ -687,14 +690,13 @@ extern "C" void usart_task(void *argument)
                 ftm_state_green_hold_active = 1U;
                 ftm_state_green_latched = 1U;
             }
-            // conbat_t.conbat_start = 3;
         }
         else
         {
             ftm_state_green_latched = 0U;
         }
 
-        if (Red == 1)
+        if (Red == 1) // 一区开始按钮
         {
             dt35.init(&hspi3);
             static uint8_t red_step = 1; // 1=待触发9, 2=已完成
@@ -710,17 +712,17 @@ extern "C" void usart_task(void *argument)
             flag_bottom = 1;
         }
 
-        if (Red2 == 0)
+        if (Red2 == 0) // 选择第三个九宫格
         {
             numo = 1;
         }
 
-        if (Blue2 == 0)
+        if (Blue2 == 0) // 选择第二个九宫格
         {
             numo = 2;
         }
 
-        if (Yellow2 == 0)
+        if (Yellow2 == 0) // 选择合体重试按钮
         {
             conbat_t.conbat_start = 3;
         }

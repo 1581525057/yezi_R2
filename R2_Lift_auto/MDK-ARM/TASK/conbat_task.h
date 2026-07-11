@@ -99,7 +99,6 @@ private:
     uint8_t path_loaded_;
     uint8_t path_active_;
     uint8_t ramp_up_waiting_;
-    uint8_t ramp_up_relocation_done_;
     uint8_t ramp_up_zero_yaw_done_;
     PickKfsStep pick_kfs_step_;
     PlaceKfsNewStep place_kfs_new_step_;
