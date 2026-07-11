@@ -676,6 +676,7 @@ extern "C" void usart_task(void *argument)
         }
         if (Green == 1) // 回到空闲状态
         {
+            dt35.init(&hspi3);
             conbat_t.state = CONBAT_IDLE;
         }
         if (Orange == 1) // 视觉置0
@@ -712,18 +713,21 @@ extern "C" void usart_task(void *argument)
             flag_bottom = 1;
         }
 
-        if (Red2 == 0) // 选择第三个九宫格
+        if (Red2 == 0) // 选择第二个九宫格
         {
+            dt35.init(&hspi3);
             numo = 1;
         }
 
-        if (Blue2 == 0) // 选择第二个九宫格
+        if (Blue2 == 0) // 选择第三 个九宫格
         {
+            dt35.init(&hspi3);
             numo = 2;
         }
 
         if (Yellow2 == 0) // 选择合体重试按钮
         {
+            dt35.init(&hspi3);
             conbat_t.conbat_start = 3;
         }
 

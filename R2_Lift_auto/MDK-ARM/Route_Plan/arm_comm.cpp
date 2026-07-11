@@ -113,6 +113,14 @@ uint8_t ArmComm::executeAction(uint8_t action_code, uint8_t num_KFS)
         setFrame(0x00U, 0x00U, 0x00U, 0x00U, 0x00U);
         break;
 
+    case ACTION_jiuyou:
+        setFrame(0x01U, 0x00U, 0x00U, 0x00U, 0x01U);
+        break;
+
+    case ACTION_jiugong:
+        setFrame(0x01U, 0x00U, 0x00U, 0x00U, 0x02U);
+        break;
+
     default:
         return 0U;
     }

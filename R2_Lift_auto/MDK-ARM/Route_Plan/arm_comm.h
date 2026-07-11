@@ -42,6 +42,8 @@ public:
         ACTION_ZONE3_PLACE_LOWER,  // 放车底层KFS
         ACTION_PICK_THIRD_KFS,     // 拾取第三个KFS
         ACTION_ZONE3_PLACE_FINALL, // 放最后一个KFS
+        ACTION_jiuyou,             // 九幽
+        ACTION_jiugong,            // 九宫参保
 
     };
 

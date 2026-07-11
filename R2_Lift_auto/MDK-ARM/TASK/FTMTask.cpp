@@ -11,15 +11,15 @@
 #include <math.h>
 
 // 0 表示蓝方，1 表示红方。会在field_side_set中被修改
-extern "C" volatile uint8_t g_ftm_team_side = 0U; 
+extern "C" volatile uint8_t g_ftm_team_side = 1U;
 // 蓝方激光值：矛头、拳头、巴掌。
 static const float kBlueLaserCorrTargetM[3] = {1.14f, 0.94f, 0.74f};
 // 红方激光值：矛头、拳头、巴掌。
 static const float kRedLaserCorrTargetM[3] = {0.14f, 0.34f, 0.54f};
 
-//夹取武器头上升的高度
+// 夹取武器头上升的高度
 extern "C" volatile float g_ftm_lift_up_target_mm = 74.0f;
-//对接高度
+// 对接高度
 extern "C" volatile float g_ftm_lift_weapon_head_takeout_dock_target_mm = 214.0f;
 
 enum FTMMainState
@@ -115,43 +115,43 @@ namespace
         return (GetNormalizedTeamSide() == kTeamSideRed) ? kRedTeamConfig : kBlueTeamConfig;
     }
 
-    constexpr float kDegToRad = 0.01745329251994329577f;          // 角度转弧度的固定换算系数。
-    constexpr float kRs05AngleToleranceRad = 0.02f;               // RS05 角度到位容差，单位 rad。
-    constexpr uint32_t kRs05CommandIntervalMs = 20U;              // RS05 发送控制指令的周期，单位 ms。
-    constexpr uint32_t kRs05SettleMs = 300U;                      // RS05 到位后等待稳定时间，单位 ms。
-    constexpr uint32_t kRs05TimeoutMs = 3500U;                    // RS05 转角动作超时时间，单位 ms。
+    constexpr float kDegToRad = 0.01745329251994329577f; // 角度转弧度的固定换算系数。
+    constexpr float kRs05AngleToleranceRad = 0.02f;      // RS05 角度到位容差，单位 rad。
+    constexpr uint32_t kRs05CommandIntervalMs = 20U;     // RS05 发送控制指令的周期，单位 ms。
+    constexpr uint32_t kRs05SettleMs = 300U;             // RS05 到位后等待稳定时间，单位 ms。
+    constexpr uint32_t kRs05TimeoutMs = 3500U;           // RS05 转角动作超时时间，单位 ms。
 
-    constexpr float kLiftToleranceMm = 3.0f;                      // 抬升高度到位容差，单位 mm。
-    constexpr float kLiftGrabApproachOffsetMm = 10.0f;            // 抓取预备高度：在抓取高度基础上上抬 10mm。
+    constexpr float kLiftToleranceMm = 3.0f;           // 抬升高度到位容差，单位 mm。
+    constexpr float kLiftGrabApproachOffsetMm = 10.0f; // 抓取预备高度：在抓取高度基础上上抬 10mm。
 
-    constexpr uint32_t kClawActionDelayMs = 200U;                 // 夹爪动作后的等待时间，单位 ms。
-    constexpr float kM2006TurnAngleDeg = 180.0f;                  // M2006 翻转目标角度，单位 deg。
-    constexpr float kM2006ToleranceDeg = 3.0f;                    // M2006 翻转到位容差，单位 deg。
-    constexpr uint32_t kM2006TimeoutMs = 3000U;                   // M2006 翻转动作超时时间，单位 ms。
+    constexpr uint32_t kClawActionDelayMs = 200U; // 夹爪动作后的等待时间，单位 ms。
+    constexpr float kM2006TurnAngleDeg = 180.0f;  // M2006 翻转目标角度，单位 deg。
+    constexpr float kM2006ToleranceDeg = 3.0f;    // M2006 翻转到位容差，单位 deg。
+    constexpr uint32_t kM2006TimeoutMs = 3000U;   // M2006 翻转动作超时时间，单位 ms。
 
-    constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;           // 武器区置零指令发送周期，单位 ms。
-    constexpr uint32_t kWuqiquZeroSettleMs = 200U;                // 置零后等待视觉/底盘稳定时间，单位 ms。
-    constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;            // 武器区原地转向到位容差，单位 deg。
-    constexpr uint16_t kWuqiquYawTurnStableCycles = 200U;         // 航向满足容差后需连续稳定的周期数。
-    constexpr uint8_t kWuqiquSecondWaypointIndex = 1U;            // 武器区第 2 个跑点索引。
-    constexpr uint8_t kWuqiquYawTargetWaypointIndex = 2U;         // 武器区第 3 点前的转向目标点索引。
-    constexpr uint8_t kWuqiquMeilinWaypointIndex = 3U;            // 前往梅林使用的目标点索引。
-    constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;           // 对接调试时 MiniPC 每次微调的高度步进，单位 mm。
-    constexpr int kPrelimExecGoMeilin = 1;           // 预选赛流程：exec=1 表示跳转梅林。
-    constexpr int kPrelimExecFirstWeapon = 2;        // 预选赛流程：exec=2 表示第 1 个武器头。
-    constexpr int kPrelimExecSecondWeapon = 3;       // 预选赛流程：exec=3 表示第 2 个武器头。
-    constexpr int kPrelimExecThirdWeapon = 4;        // 预选赛流程：exec=4 表示第 3 个武器头。
-    constexpr uint8_t kPrelimPickWaypointIndex = 0U; // 预选赛每次夹取从第 1 个跑点开始。
+    constexpr uint32_t kWuqiquZeroSendIntervalMs = 20U;   // 武器区置零指令发送周期，单位 ms。
+    constexpr uint32_t kWuqiquZeroSettleMs = 200U;        // 置零后等待视觉/底盘稳定时间，单位 ms。
+    constexpr float kWuqiquYawTurnToleranceDeg = 1.5f;    // 武器区原地转向到位容差，单位 deg。
+    constexpr uint16_t kWuqiquYawTurnStableCycles = 200U; // 航向满足容差后需连续稳定的周期数。
+    constexpr uint8_t kWuqiquSecondWaypointIndex = 1U;    // 武器区第 2 个跑点索引。
+    constexpr uint8_t kWuqiquYawTargetWaypointIndex = 2U; // 武器区第 3 点前的转向目标点索引。
+    constexpr uint8_t kWuqiquMeilinWaypointIndex = 3U;    // 前往梅林使用的目标点索引。
+    constexpr float kMiniPcLiftDockAdjustStepMm = 1.0f;   // 对接调试时 MiniPC 每次微调的高度步进，单位 mm。
+    constexpr int kPrelimExecGoMeilin = 1;                // 预选赛流程：exec=1 表示跳转梅林。
+    constexpr int kPrelimExecFirstWeapon = 2;             // 预选赛流程：exec=2 表示第 1 个武器头。
+    constexpr int kPrelimExecSecondWeapon = 3;            // 预选赛流程：exec=3 表示第 2 个武器头。
+    constexpr int kPrelimExecThirdWeapon = 4;             // 预选赛流程：exec=4 表示第 3 个武器头。
+    constexpr uint8_t kPrelimPickWaypointIndex = 0U;      // 预选赛每次夹取从第 1 个跑点开始。
 
     // 激光修正参数
-    constexpr float kLaserCorrToleranceM = 0.030f;       // 到位容差 ±30mm
-    constexpr float kLaserCorrKp = 1.2f;               // 激光距离闭环比例增益，误差 0.10m 时目标速度约 0.12m/s。
-    constexpr float kLaserCorrMinSpeedMps = 0.07f;       // 底盘最小有效修正速度，避免小误差时推不动车。
-    constexpr float kLaserCorrMaxSpeedMps = 0.25f;       // 激光闭环最大修正速度，限制贴近阶段速度。
-    constexpr float kLaserCorrYHoldToleranceM = 0.020f;  // 激光修正时，vision.y_diff 回正容差 ±20mm。
-    constexpr float kLaserCorrYHoldKp = 1.0f;            // vision.y_diff 保持比例增益，误差 0.10m 时目标速度约 0.10m/s。
-    constexpr float kLaserCorrYHoldMaxSpeedMps = 0.20f;  // vision.y_diff 保持最大修正速度。
-    constexpr uint32_t kLaserCorrTotalTimeoutMs = 5000U; // 激光修正总超时，超时后跳过直接夹
+    constexpr float kLaserCorrToleranceM = 0.030f;         // 到位容差 ±30mm
+    constexpr float kLaserCorrKp = 1.2f;                   // 激光距离闭环比例增益，误差 0.10m 时目标速度约 0.12m/s。
+    constexpr float kLaserCorrMinSpeedMps = 0.07f;         // 底盘最小有效修正速度，避免小误差时推不动车。
+    constexpr float kLaserCorrMaxSpeedMps = 0.25f;         // 激光闭环最大修正速度，限制贴近阶段速度。
+    constexpr float kLaserCorrYHoldToleranceM = 0.020f;    // 激光修正时，vision.y_diff 回正容差 ±20mm。
+    constexpr float kLaserCorrYHoldKp = 1.0f;              // vision.y_diff 保持比例增益，误差 0.10m 时目标速度约 0.10m/s。
+    constexpr float kLaserCorrYHoldMaxSpeedMps = 0.20f;    // vision.y_diff 保持最大修正速度。
+    constexpr uint32_t kLaserCorrTotalTimeoutMs = 5000U;   // 激光修正总超时，超时后跳过直接夹
     constexpr uint32_t kLaserCorrInvalidTimeoutMs = 1000U; // 激光无效等待超时，超时后跳过直接夹
 
     struct TimedStep
@@ -202,9 +202,9 @@ namespace
     uint8_t g_prelim_turn_ready_step_index = 0U;
 
     // 激光修正运行时状态
-    uint8_t g_laser_corr_active = 0U;           // 修正步骤是否已进入
-    uint32_t g_laser_corr_start_tick = 0U;      // 修正步骤起始时间戳
-    float g_laser_corr_y_hold_ref_m = 0.0f;     // 进入修正瞬间锁存的 vision.y_diff 基准值
+    uint8_t g_laser_corr_active = 0U;       // 修正步骤是否已进入
+    uint32_t g_laser_corr_start_tick = 0U;  // 修正步骤起始时间戳
+    float g_laser_corr_y_hold_ref_m = 0.0f; // 进入修正瞬间锁存的 vision.y_diff 基准值
 
     const uint8_t kSequenceOpenLiftRs05[] = {
         FTM_ACTION_CLAW_OPEN,

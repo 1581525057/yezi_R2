@@ -54,7 +54,7 @@ static const BRPathControlPoint route_find_kfs_middle_points[2][3][1] = {
      {{1.615f, 1.545f}},
      {{1.600f, 0.935f}}},
     // 红方坐标
-    {{{1.690f, -2.135f}},
+    {{{1.69f, -2.135f}},
      {{1.615f, -1.545f}},
      {{1.600f, -0.935f}}},
 };
@@ -710,7 +710,7 @@ void ROUTE_TASK::meiling_route()
 
     case FIRST_RELOCATION:
     {
-        const uint8_t relocation_sensor_mask = SENSOR_FRONT | SENSOR_RIGHT;
+        const uint8_t relocation_sensor_mask = SENSOR_FRONT | SENSOR_LEFT;
 
         if (relocation_number == 0U)
         {
@@ -1068,6 +1068,10 @@ uint16_t flag_step = 0;
 extern "C" void plan_route(void *argument)
 {
     uint8_t ftm_done_route_started = 0U;
+
+    // AA 01 00 00 00 01 55 #1 开机 崇武探幽预选赛
+    arm_comm.executeAction(ArmComm::ACTION_jiuyou, 0);
+    arm_comm.send();
 
     for (;;)
     {

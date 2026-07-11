@@ -51,8 +51,8 @@ static const std::size_t conbat_ramp_up_middle_point_count =
 // 捡 KFS 状态终点表，单位：x/y 为 m，yaw 为 rad；第一组蓝方，第二组红方。
 static const BRPathPose conbat_pick_kfs_goals[2][2] = {
     // 蓝方坐标
-    {{3.05f, -2.41f, 0.0f},
-     {3.05f, -3.04f, 0.0f}},
+    {{3.05f, -2.36f, 0.0f},
+     {3.05f, -3.07f, 0.0f}},
     // 红方坐标
     {
         {3.00f, 2.52f, 0.0f},
@@ -81,9 +81,9 @@ static const std::size_t conbat_combine_middle_point_count =
 // 放 KFS 状态终点表，单位：x/y 为 m，yaw 为 rad；按阵营和 kfs_place_index_ 选择。
 static const BRPathPose conbat_kfs_place_goals[2][3] = {
     // 蓝方坐标与角度
-    {{3.80f, -4.38f, -1.5708f},
-     {3.28f, -4.38f, -1.5708f},
-     {2.73f, -4.38f, -1.5708f}},
+    {{3.70f, -4.40f, -1.5708f},
+     {3.18f, -4.40f, -1.5708f},
+     {2.67f, -4.38f, -1.5708f}},
     // 红方坐标与角度
     {
         {2.4f, 4.52f, 1.5708f},
@@ -504,11 +504,6 @@ uint8_t CONBAT_TASK::getLiftSwitch(uint8_t manual_switch) const
 
 float CONBAT_TASK::getLiftLinearSpeedTarget(float manual_target) const
 {
-    if (state == CONBAT_IDLE)
-    {
-        return 0.0f;
-    }
-
     if (state != CONBAT_COMBINE)
     {
         return manual_target;

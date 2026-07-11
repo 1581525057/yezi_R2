@@ -3,16 +3,16 @@
 #include <math.h>
 
 // 红蓝方目标点均为视觉置零后的世界/雷达绝对坐标，参数顺序：x y yaw xy_tolerance yaw_tolerance。
-//只需要修改x y
-//蓝色方路径点
+// 只需要修改x y
+// 蓝色方路径点
 static const WuqiquPathPlanner::TargetPoint kBlueWaypoints[] = {
-    {1.07f, -0.97f, 90.0f, 0.015f, 1.5f}, //取武器头
-    {0.59f, -0.70f, 90.0f, 0.035f, 3.0f}, //后退到一定距离准备进行转180度
-    {0.59f, -0.70f, -90.0f, 0.035f, 2.0f},//原地转180
-    {0.93f, 1.60f, 0.0f, 0.030f, 1.5f},   //到梅林前重定位的坐标
-    {0.59f, -0.96f, -90.0f, 0.050f, 2.0f},//原地转180度时候贴墙的坐标
+    {1.07f, -0.97f, 90.0f, 0.015f, 1.5f},  // 取武器头
+    {0.59f, -0.70f, 90.0f, 0.035f, 3.0f},  // 后退到一定距离准备进行转180度
+    {0.59f, -0.70f, -90.0f, 0.035f, 2.0f}, // 原地转180
+    {0.93f, 1.60f, 0.0f, 0.030f, 1.5f},    // 到梅林前重定位的坐标
+    {0.59f, -0.96f, -90.0f, 0.050f, 2.0f}, // 原地转180度时候贴墙的坐标
 };
-//红色方路径点 意义如上 
+// 红色方路径点 意义如上
 static const WuqiquPathPlanner::TargetPoint kRedWaypoints[] = {
     {0.04f, 0.91f, -90.0f, 0.015f, 1.5f},
     {0.35f, 0.60f, -90.0f, 0.035f, 3.0f},
@@ -22,13 +22,13 @@ static const WuqiquPathPlanner::TargetPoint kRedWaypoints[] = {
 };
 
 // 三个武器头的顺序固定为：0 矛头、1 拳头、2 巴掌。
-//蓝色方三个武器头的坐标
+// 蓝色方三个武器头的坐标
 static const WuqiquPathPlanner::TargetPoint kBluePrelimWeaponHeadPoints[] = {
-    {1.07f, -0.97f, 90.0f, 0.020f, 1.5f},
-    {0.87f, -0.97f, 90.0f, 0.020f, 1.5f},
-    {0.67f, -0.97f, 90.0f, 0.020f, 1.5f},
+    {1.09f, -0.94f, 90.0f, 0.020f, 1.5f},
+    {0.89f, -0.95f, 90.0f, 0.020f, 1.5f},
+    {0.68f, -0.95f, 90.0f, 0.020f, 1.5f},
 };
-//红色方三个武器头的坐标
+// 红色方三个武器头的坐标
 static const WuqiquPathPlanner::TargetPoint kRedPrelimWeaponHeadPoints[] = {
     {0.04f, 0.90f, -90.0f, 0.020f, 1.5f},
     {0.23f, 0.90f, -90.0f, 0.020f, 1.5f},
@@ -78,14 +78,14 @@ WuqiquPathPlanner::WuqiquPathPlanner()
     team_side_ = kTeamSideBlue;
     reset();
 
-    finish_dist_ = 0.010f;                  // XY 到点判定距离，单位 m
-    brake_margin_m_ = 0.15f;                // 固定刹车提前距离，单位 m
-    finish_speed_tolerance_mps_ = 0.08f;    // 到点稳定确认的平移速度阈值，单位 m/s
+    finish_dist_ = 0.010f;               // XY 到点判定距离，单位 m
+    brake_margin_m_ = 0.15f;             // 固定刹车提前距离，单位 m
+    finish_speed_tolerance_mps_ = 0.08f; // 到点稳定确认的平移速度阈值，单位 m/s
 
-    kp_fast_ = 5.5f; // 快速阶段位置比例增益
+    kp_fast_ = 5.5f;  // 快速阶段位置比例增益
     kd_fast_ = 0.75f; // 快速阶段位置微分增益
-    kp_slow_ = 5.0f; // 减速/稳定确认阶段位置比例增益
-    kd_slow_ = 0.2f; // 减速/稳定确认阶段位置微分增益
+    kp_slow_ = 5.0f;  // 减速/稳定确认阶段位置比例增益
+    kd_slow_ = 0.2f;  // 减速/稳定确认阶段位置微分增益
 
     yaw_sign_ = 1.0f;             // yaw 输出方向修正，1 表示保持当前方向
     yaw_kp_ = 2.2f;               // yaw 角度误差比例增益
@@ -113,7 +113,7 @@ void WuqiquPathPlanner::reloadDefaultWaypoints(void)
         waypoints_[i] = selected_waypoints[i];
     }
 }
-//加载当前目标点
+// 加载当前目标点
 void WuqiquPathPlanner::loadCurrentWaypoint(void)
 {
     if (current_index_ < waypoint_count_)
@@ -317,7 +317,7 @@ void WuqiquPathPlanner::setZeroOutput(void)
     output_.wz_radps = 0.0f;
 }
 
-//更新跑点的状态
+// 更新跑点的状态
 void WuqiquPathPlanner::updateState(float distance_m, float speed_mps, uint8_t xy_in_tolerance, uint32_t now_tick)
 {
     if (state_ == STATE_IDLE)
@@ -340,7 +340,7 @@ void WuqiquPathPlanner::updateState(float distance_m, float speed_mps, uint8_t x
     }
 }
 
-//速度限幅
+// 速度限幅
 void WuqiquPathPlanner::limitVectorToMax(float &vx, float &vy, float max_speed) const
 {
     if (max_speed <= 0.0f)
