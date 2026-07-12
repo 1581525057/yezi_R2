@@ -55,8 +55,8 @@ static const BRPathPose conbat_pick_kfs_goals[2][2] = {
      {3.05f, -3.07f, 0.0f}},
     // 红方坐标
     {
-        {3.00f, 2.52f, 0.0f},
-        {3.05f, 3.24f, 0.0f},
+        {3.33f, 2.55f, 0.0f},
+        {3.33f, 3.24f, 0.0f},
     },
 };
 
@@ -86,9 +86,9 @@ static const BRPathPose conbat_kfs_place_goals[2][3] = {
      {2.67f, -4.38f, -1.5708f}},
     // 红方坐标与角度
     {
-        {2.4f, 4.52f, 1.5708f},
-        {2.94f, 4.52f, 1.5708f},
-        {3.48f, 4.52f, 1.5708f}},
+        {2.45f, 4.42f, 1.5708f},
+        {2.98f, 4.42f, 1.5708f},
+        {3.5f, 4.52f, 1.5708f}},
 };
 
 // 三个放 KFS 位置的中间点表；第一组蓝方，第二组红方。
@@ -611,17 +611,18 @@ uint8_t CONBAT_TASK::runRampUp(void)
 }
 
 // 捡 KFS 流程参数。
-float CONBAT_PICK_KFS_PATH_MAX_VEL_M_S = 1.5f;              // 捡 KFS 跑点的最大线速度，单位 m/s。
-float CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2 = 0.8f;             // 捡 KFS 跑点的最大加速度，单位 m/s2。
-float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2 = 0.8f;   // KFS 等待阶段车体前进加速度，单位 m/s2。
-float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS = 0.6f;    // KFS 等待阶段车体前进最大速度，单位 m/s。
-float CONBAT_PICK_KFS_FIRST_BACK_DISTANCE_M = 0.06f;        // KFS 吸取成功后沿 X 轴后退距离，单位 m。
-float CONBAT_PICK_KFS_FIRST_BACK_SPEED_MPS = 0.4f;          // KFS 吸取成功后沿 X 轴后退速度，单位 m/s。
-float CONBAT_PICK_GO_TO_COMBINE_KP = 1.6f;                  // 去合体目标点的二维位置 P 闭环系数。
-float CONBAT_PICK_GO_TO_COMBINE_TOL_M = 0.05f;              // 去合体目标点的到位误差，单位 m。
-float CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM = 455.0f;   // 第一个 KFS 边吸边前进的 DT35 目标距离。
-float CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM = 455.0f;  // 第二个 KFS 边吸边前进的 DT35 目标距离。
-static const float CONBAT_PICK_KFS_ZERO_YAW_TOL_DEG = 3.0f; // 捡 KFS 前锁 0 度的角度容差，单位度。
+float CONBAT_PICK_KFS_PATH_MAX_VEL_M_S = 1.5f;                   // 捡 KFS 跑点的最大线速度，单位 m/s。
+float CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2 = 0.8f;                  // 捡 KFS 跑点的最大加速度，单位 m/s2。
+float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2 = 0.8f;        // KFS 等待阶段车体前进加速度，单位 m/s2。
+float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS = 0.6f;         // KFS 等待阶段车体前进最大速度，单位 m/s。
+float CONBAT_PICK_KFS_FIRST_BACK_DISTANCE_M = 0.06f;             // KFS 吸取成功后沿 X 轴后退距离，单位 m。
+float CONBAT_PICK_KFS_FIRST_BACK_SPEED_MPS = 0.4f;               // KFS 吸取成功后沿 X 轴后退速度，单位 m/s。
+float CONBAT_PICK_GO_TO_COMBINE_KP = 1.6f;                       // 去合体目标点的二维位置 P 闭环系数。
+float CONBAT_PICK_GO_TO_COMBINE_TOL_M = 0.05f;                   // 去合体目标点的到位误差，单位 m。
+static const float CONBAT_PICK_GO_TO_COMBINE_YAW_TOL_DEG = 3.0f; // 去合体目标点的角度容差，单位度。
+float CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM = 455.0f;        // 第一个 KFS 边吸边前进的 DT35 目标距离。
+float CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM = 455.0f;       // 第二个 KFS 边吸边前进的 DT35 目标距离。
+static const float CONBAT_PICK_KFS_ZERO_YAW_TOL_DEG = 3.0f;      // 捡 KFS 前锁 0 度的角度容差，单位度。
 
 uint8_t CONBAT_TASK::runPickKfs(void)
 {
@@ -921,18 +922,27 @@ uint8_t CONBAT_TASK::runPickKfs(void)
                                           fabsf(y_err) < CONBAT_PICK_GO_TO_COMBINE_TOL_M)
                                              ? 1U
                                              : 0U;
+        const float combine_yaw_deg = combine_goal.yaw_rad / CONBAT_DEG_TO_RAD;
+        const uint8_t yaw_reached =
+            (fabsf(normalizeYawDeg(combine_yaw_deg - vision.angle_x)) <
+             CONBAT_PICK_GO_TO_COMBINE_YAW_TOL_DEG)
+                ? 1U
+                : 0U;
 
         if (position_reached != 0U)
         {
-            setYawTarget(combine_goal.yaw_rad / CONBAT_DEG_TO_RAD);
+            /* 位置到位后继续锁定合体目标角，等待底盘转到约 90 度。 */
+            setYawTarget(combine_yaw_deg);
         }
 
-        if (conbat_stable_confirm(position_reached,
+        if (conbat_stable_confirm((position_reached != 0U && yaw_reached != 0U) ? 1U : 0U,
                                   &pick_kfs_path_stable_count_,
                                   10U) != 0U)
         {
             pick_kfs_path_stable_count_ = 0U;
             clearPathOutput();
+            /* 去合体目标点完成后解除底盘角度锁定。 */
+            yaw_target_enabled = 0U;
             return 1U;
         }
 

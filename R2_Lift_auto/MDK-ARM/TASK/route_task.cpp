@@ -710,7 +710,7 @@ void ROUTE_TASK::meiling_route()
 
     case FIRST_RELOCATION:
     {
-        const uint8_t relocation_sensor_mask = SENSOR_FRONT | SENSOR_LEFT;
+        const uint8_t relocation_sensor_mask = SENSOR_FRONT | SENSOR_RIGHT;
 
         if (relocation_number == 0U)
         {
@@ -1070,8 +1070,8 @@ extern "C" void plan_route(void *argument)
     uint8_t ftm_done_route_started = 0U;
 
     // AA 01 00 00 00 01 55 #1 开机 崇武探幽预选赛
-    arm_comm.executeAction(ArmComm::ACTION_jiuyou, 0);
-    arm_comm.send();
+    // arm_comm.executeAction(ArmComm::ACTION_jiugong, 0);
+    // arm_comm.send();
 
     for (;;)
     {
@@ -1081,7 +1081,7 @@ extern "C" void plan_route(void *argument)
             route_t.route_reset();
             flag_meiling = 0;
             ftm_done_route_started = 0U;
-            arm_comm.executeAction(ArmComm::ACTION_POWER_ON_INIT, 0);
+            arm_comm.executeAction(ArmComm::ACTION_jiugong, 0);
             arm_comm.send();
         }
 

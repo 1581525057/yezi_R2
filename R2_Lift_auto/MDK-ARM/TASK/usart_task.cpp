@@ -18,7 +18,7 @@
 /* ========================== 全局变量 ========================== */
 
 // 改这个，红蓝方坐标切换
-static volatile FieldSide current_field_side = FIELD_SIDE_RED;
+static volatile FieldSide current_field_side = FIELD_SIDE_BLUE;
 
 /* USB 串口接收缓冲区 */
 uint8_t data_usb[USB_RX_BUFFER_SIZE];
@@ -57,7 +57,7 @@ float block_middle_blue_x = 3.45f;
 float block_middle_blue_y = 1.61f;
 
 // 红方第 2 个方块的中心坐标，单独标定，不从蓝方中心坐标计算。
-float block_middle_red_x = 3.45f;
+float block_middle_red_x = 3.44f;
 float block_middle_red_y = -1.57f;
 
 // 根据蓝方第 2 个方块中心，计算蓝方全部方块中心坐标。
@@ -656,7 +656,7 @@ extern "C" void usart_task(void *argument)
     uint32_t ftm_state_green_hold_until = 0U;
 
     // as5047.init(&hspi1);
-    HAL_Delay(200); // 先给 DT35 / SPI ADC / 电源稳定时间
+    osDelay(1000); // 先给 DT35 / SPI ADC / 电源稳定时间
     dt35.init(&hspi3);
     dt35.init(&hspi3);
     dt35.init(&hspi3);
@@ -672,12 +672,13 @@ extern "C" void usart_task(void *argument)
         if (Blue == 1) // 去放置二层kfs
         {
             dt35.init(&hspi3);
+            // g_ftm_main_state = 8;
             conbat_t.conbat_start = 2;
         }
-        if (Green == 1) // 回到空闲状态
+        if (Green == 1)
         {
             dt35.init(&hspi3);
-            conbat_t.state = CONBAT_IDLE;
+            Flag1 = 1;
         }
         if (Orange == 1) // 视觉置0
         {

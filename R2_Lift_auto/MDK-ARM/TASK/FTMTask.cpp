@@ -11,7 +11,7 @@
 #include <math.h>
 
 // 0 表示蓝方，1 表示红方。会在field_side_set中被修改
-extern "C" volatile uint8_t g_ftm_team_side = 1U;
+extern "C" volatile uint8_t g_ftm_team_side = 0U;
 // 蓝方激光值：矛头、拳头、巴掌。
 static const float kBlueLaserCorrTargetM[3] = {1.14f, 0.94f, 0.74f};
 // 红方激光值：矛头、拳头、巴掌。

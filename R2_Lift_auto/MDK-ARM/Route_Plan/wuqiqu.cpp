@@ -24,15 +24,15 @@ static const WuqiquPathPlanner::TargetPoint kRedWaypoints[] = {
 // 三个武器头的顺序固定为：0 矛头、1 拳头、2 巴掌。
 // 蓝色方三个武器头的坐标
 static const WuqiquPathPlanner::TargetPoint kBluePrelimWeaponHeadPoints[] = {
-    {1.09f, -0.94f, 90.0f, 0.020f, 1.5f},
-    {0.89f, -0.95f, 90.0f, 0.020f, 1.5f},
-    {0.68f, -0.95f, 90.0f, 0.020f, 1.5f},
+    {1.09f, -0.97f, 90.0f, 0.020f, 1.5f},
+    {0.89f, -0.97f, 90.0f, 0.020f, 1.5f},
+    {0.68f, -0.97f, 90.0f, 0.020f, 1.5f},
 };
 // 红色方三个武器头的坐标
 static const WuqiquPathPlanner::TargetPoint kRedPrelimWeaponHeadPoints[] = {
-    {0.04f, 0.90f, -90.0f, 0.020f, 1.5f},
-    {0.23f, 0.90f, -90.0f, 0.020f, 1.5f},
-    {0.44f, 0.90f, -90.0f, 0.020f, 1.5f},
+    {0.04f, 0.91f, -90.0f, 0.020f, 1.5f},
+    {0.24f, 0.91f, -90.0f, 0.020f, 1.5f},
+    {0.45f, 0.91f, -90.0f, 0.020f, 1.5f},
 };
 
 static const float WUQIQU_PI = 3.14159265358979323846f;  // 圆周率，用于角度转弧度
