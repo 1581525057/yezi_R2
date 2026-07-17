@@ -649,11 +649,46 @@ uint16_t flag_bottom = 0;
 extern uint16_t numo;
 extern "C" void usart_task(void *argument)
 {
+    struct ButtonDebounceState
+    {
+        uint8_t raw_state;
+        uint8_t stable_state;
+        uint32_t raw_changed_at;
+    };
+
+    constexpr uint32_t kButtonDebounceMs = 20U;
     constexpr uint32_t kFtmStateGreenHoldMs = 1000U;
     constexpr uint8_t kLedStateAllGreenOn = 17U;
+    ButtonDebounceState yellow_button = {1U, 1U, 0U};
+    ButtonDebounceState blue_button = {1U, 1U, 0U};
+    ButtonDebounceState green_button = {1U, 1U, 0U};
+    ButtonDebounceState orange_button = {1U, 1U, 0U};
+    ButtonDebounceState red_button = {1U, 1U, 0U};
+    ButtonDebounceState whihe_button = {1U, 1U, 0U};
+    ButtonDebounceState red2_button = {1U, 1U, 0U};
+    ButtonDebounceState blue2_button = {1U, 1U, 0U};
+    ButtonDebounceState yellow2_button = {1U, 1U, 0U};
     uint8_t ftm_state_green_latched = 0U;
     uint8_t ftm_state_green_hold_active = 0U;
     uint32_t ftm_state_green_hold_until = 0U;
+
+    const auto button_pressed = [](ButtonDebounceState &button, uint8_t raw_state, uint32_t now) -> uint8_t
+    {
+        if (raw_state != button.raw_state)
+        {
+            button.raw_state = raw_state;
+            button.raw_changed_at = now;
+        }
+
+        if ((button.stable_state != button.raw_state) &&
+            ((now - button.raw_changed_at) >= kButtonDebounceMs))
+        {
+            button.stable_state = button.raw_state;
+            return (button.stable_state == 0U) ? 1U : 0U;
+        }
+
+        return 0U;
+    };
 
     // as5047.init(&hspi1);
     osDelay(1000); // 先给 DT35 / SPI ADC / 电源稳定时间
@@ -664,23 +699,47 @@ extern "C" void usart_task(void *argument)
     Block_claulate_Middle();
     for (;;)
     {
-        if (Yellow == 1) // 去启动合体
+        const uint32_t now = HAL_GetTick();
+        const uint8_t yellow_pressed = button_pressed(yellow_button, static_cast<uint8_t>(Yellow), now);
+        const uint8_t blue_pressed = button_pressed(blue_button, static_cast<uint8_t>(Blue), now);
+        const uint8_t green_pressed = button_pressed(green_button, static_cast<uint8_t>(Green), now);
+        const uint8_t orange_pressed = button_pressed(orange_button, static_cast<uint8_t>(Orange), now);
+        const uint8_t red_pressed = button_pressed(red_button, static_cast<uint8_t>(Red), now);
+        const uint8_t whihe_pressed = button_pressed(whihe_button, static_cast<uint8_t>(Whihe), now);
+        const uint8_t red2_pressed = button_pressed(red2_button, static_cast<uint8_t>(Red2), now);
+        const uint8_t blue2_pressed = button_pressed(blue2_button, static_cast<uint8_t>(Blue2), now);
+        const uint8_t yellow2_pressed = button_pressed(yellow2_button, static_cast<uint8_t>(Yellow2), now);
+
+        if (blue_pressed != 0U) // 红色按钮
         {
             dt35.init(&hspi3);
-            conbat_t.conbat_start = 1;
+            conbat_t.conbat_start = 4U; // 捡kfs合体
         }
-        if (Blue == 1) // 去放置二层kfs
+        if (green_pressed != 0U) // 绿色
         {
             dt35.init(&hspi3);
-            // g_ftm_main_state = 8;
-            conbat_t.conbat_start = 2;
+            conbat_t.conbat_start = 1U; // 启动上坡
         }
-        if (Green == 1)
+        if (orange_pressed != 0U) // 边蓝色
         {
             dt35.init(&hspi3);
-            Flag1 = 1;
+            conbat_t.conbat_start = 2U; // 放二层
         }
-        if (Orange == 1) // 视觉置0
+
+        if (red_pressed != 0U) // 中间蓝色
+        {
+            dt35.init(&hspi3);
+            conbat_t.conbat_start = 3U; // 合体重试
+        }
+
+        if (whihe_pressed != 0U) // 橙色
+        {
+            // dt35.init(&hspi3);
+            // Flag1 = 1; // 三区重定位
+            NVIC_SystemReset();
+        }
+
+        if (red2_pressed != 0U)
         {
             dt35.init(&hspi3);
             g_ftm_main_state = 3; // 先执行视觉置零
@@ -698,7 +757,7 @@ extern "C" void usart_task(void *argument)
             ftm_state_green_latched = 0U;
         }
 
-        if (Red == 1) // 一区开始按钮
+        if (blue2_pressed != 0U)
         {
             dt35.init(&hspi3);
             static uint8_t red_step = 1; // 1=待触发9, 2=已完成
@@ -709,27 +768,10 @@ extern "C" void usart_task(void *argument)
             }
         }
 
-        if (Whihe == 1)
-        {
-            flag_bottom = 1;
-        }
-
-        if (Red2 == 0) // 选择第二个九宫格
+        if (yellow2_pressed != 0U)
         {
             dt35.init(&hspi3);
-            numo = 1;
-        }
-
-        if (Blue2 == 0) // 选择第三 个九宫格
-        {
-            dt35.init(&hspi3);
-            numo = 2;
-        }
-
-        if (Yellow2 == 0) // 选择合体重试按钮
-        {
-            dt35.init(&hspi3);
-            conbat_t.conbat_start = 3;
+            g_ftm_main_state = 8; // 直接去梅花林
         }
 
         if (ftm_state_green_hold_active != 0U)

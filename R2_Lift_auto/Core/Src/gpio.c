@@ -74,20 +74,14 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PA2 */
-  GPIO_InitStruct.Pin = GPIO_PIN_2;
+  /*Configure GPIO pins : PA2 red_Pin */
+  GPIO_InitStruct.Pin = GPIO_PIN_2|red_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : red_Pin */
-  GPIO_InitStruct.Pin = red_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(red_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PE9 PE13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_13;
+  /*Configure GPIO pins : PE9 PE13 Blue_Pin */
+  GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_13|Blue_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
@@ -99,22 +93,16 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : Blue_Pin */
-  GPIO_InitStruct.Pin = Blue_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(Blue_GPIO_Port, &GPIO_InitStruct);
-
   /*Configure GPIO pins : green_Pin whihe_Pin yellow_Pin */
   GPIO_InitStruct.Pin = green_Pin|whihe_Pin|yellow_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : orange_Pin */
   GPIO_InitStruct.Pin = orange_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(orange_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PD7 */

@@ -107,6 +107,7 @@ public:
 
     uint8_t flag_start;
     uint8_t flag_vision; // 等待视觉数据。
+    uint8_t flag_action_list_finished; // 动作列表是否已经执行完毕。
     uint8_t number_KFS;  // 机械臂手上和车内的 KFS 总数量。
 };
 

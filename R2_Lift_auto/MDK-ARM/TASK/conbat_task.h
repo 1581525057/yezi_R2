@@ -106,6 +106,7 @@ private:
     uint8_t pick_kfs_meiling_active_;
     uint8_t pick_kfs_second_forward_done_;
     uint8_t pick_kfs_path_stable_count_;
+    uint8_t pick_kfs_laser_align_active_;
     uint16_t kfs_place_stop_stable_count_;
     uint8_t kfs_place_index_;
     uint8_t kfs_place_arrived_;
@@ -132,6 +133,9 @@ private:
     void clearPathOutput(void);
     uint8_t runRampUp(void);
     uint8_t runPickKfs(void);
+    uint8_t runPickKfsLaserAlign(uint8_t field_side_index,
+                                 uint8_t goal_index,
+                                 uint8_t stable_target_count);
     uint8_t runPlaceKfsNew(void);
     uint8_t runReloadCombine(void);
     uint8_t runCombine(void);

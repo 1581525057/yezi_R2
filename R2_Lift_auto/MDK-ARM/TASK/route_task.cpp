@@ -231,6 +231,7 @@ void ROUTE_TASK::route_reset()
     flag_start = 0;
     flag_relocation = 0;
     flag_vision = 0;
+    flag_action_list_finished = 0U;
     relocation_number = 0;
     relocation_position_sent_ = 0U;
     relocation_stop_stable_count_ = 0U;
@@ -793,7 +794,20 @@ void ROUTE_TASK::meiling_route()
         if (lift_step_down.isStepDownFinished())
         {
             lift_step_down.stopStepDown();
-            state = PHASE_VISION;
+            if (vision_command_has_pending() != 0U)
+            {
+                state = PHASE_VISION;
+            }
+            else
+            {
+                // 最后一条下台阶动作完成后结束路线，保持空闲直到外部再次启动。
+                flag_start = 0U;
+                flag_action_list_finished = 1U;
+                state = PHASE_IDLE;
+                vision_plan_mark_consumed_if_empty();
+                // 通知常驻战斗任务从空闲态启动，后续由其线程持续调用 runOnce()。
+                conbat_t.conbat_start = 1U;
+            }
         }
         break;
 
@@ -1068,10 +1082,6 @@ uint16_t flag_step = 0;
 extern "C" void plan_route(void *argument)
 {
     uint8_t ftm_done_route_started = 0U;
-
-    // AA 01 00 00 00 01 55 #1 开机 崇武探幽预选赛
-    // arm_comm.executeAction(ArmComm::ACTION_jiugong, 0);
-    // arm_comm.send();
 
     for (;;)
     {

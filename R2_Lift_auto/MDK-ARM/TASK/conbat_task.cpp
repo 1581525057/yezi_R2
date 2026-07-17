@@ -6,6 +6,7 @@
 #include "DT35.h"
 #include "lift_class.h"
 #include "lift_step_up.h"
+#include "laser_distance.h"
 #include "omni_chassis.h"
 #include <math.h>
 #include "FTMTask.h"
@@ -55,8 +56,8 @@ static const BRPathPose conbat_pick_kfs_goals[2][2] = {
      {3.05f, -3.07f, 0.0f}},
     // 红方坐标
     {
-        {3.33f, 2.55f, 0.0f},
-        {3.33f, 3.24f, 0.0f},
+        {3.05f, 2.46f, 0.0f},
+        {3.05f, 3.16f, 0.0f},
     },
 };
 
@@ -81,14 +82,14 @@ static const std::size_t conbat_combine_middle_point_count =
 // 放 KFS 状态终点表，单位：x/y 为 m，yaw 为 rad；按阵营和 kfs_place_index_ 选择。
 static const BRPathPose conbat_kfs_place_goals[2][3] = {
     // 蓝方坐标与角度
-    {{3.70f, -4.40f, -1.5708f},
-     {3.18f, -4.40f, -1.5708f},
+    {{3.75f, -4.40f, -1.5708f},
+     {3.20f, -4.40f, -1.5708f},
      {2.67f, -4.38f, -1.5708f}},
     // 红方坐标与角度
     {
-        {2.45f, 4.42f, 1.5708f},
+        {2.40f, 4.42f, 1.5708f},
         {2.98f, 4.42f, 1.5708f},
-        {3.5f, 4.52f, 1.5708f}},
+        {3.55f, 4.42f, 1.5708f}},
 };
 
 // 三个放 KFS 位置的中间点表；第一组蓝方，第二组红方。
@@ -300,6 +301,7 @@ void CONBAT_TASK::reset(void)
     pick_kfs_meiling_active_ = 0U;
     pick_kfs_second_forward_done_ = 0U;
     pick_kfs_path_stable_count_ = 0U;
+    pick_kfs_laser_align_active_ = 0U;
     kfs_place_stop_stable_count_ = 0U;
     kfs_place_index_ = 0U;
     kfs_place_arrived_ = 0U;
@@ -344,14 +346,14 @@ void CONBAT_TASK::runOnce(void)
     case CONBAT_RAMP_UP:
         /* 上坡状态：加载并执行上坡路径。 */
         action_result = runRampUp();
-        update_state_by_action_result(action_result, CONBAT_PICK_KFS, &state);
+        update_state_by_action_result(action_result, CONBAT_IDLE, &state);
         break;
 
     case CONBAT_PICK_KFS: // 三层车略
         /* 捡 KFS 状态：生成到捡取点的路径并开始跟随。 */
         action_result = runPickKfs();
 
-        update_state_by_action_result(action_result, CONBAT_COMBINE, &state);
+        update_state_by_action_result(action_result, CONBAT_IDLE, &state);
         break;
     case CONBAT_RELOAD_COMBINE: // 合体重试车略
         /* 合体重试状态：先用 B 样条回到合体终点，再用二维 P 精调。 */
@@ -391,12 +393,17 @@ void CONBAT_TASK::runOnce(void)
         {
             conbat_start = 0U;
             state = CONBAT_PLACE_KFS_NEW;
-            osDelay(1000);
+            osDelay(500);
         }
         if (conbat_start == 3U)
         {
             conbat_start = 0U;
             state = CONBAT_RELOAD_COMBINE;
+        }
+        if (conbat_start == 4U)
+        {
+            conbat_start = 0U;
+            state = CONBAT_PICK_KFS;
         }
         clearPathOutput();
         break;
@@ -529,6 +536,7 @@ void CONBAT_TASK::handleStateChanged(void)
     pick_kfs_meiling_active_ = 0U;
     pick_kfs_second_forward_done_ = 0U;
     pick_kfs_path_stable_count_ = 0U;
+    pick_kfs_laser_align_active_ = 0U;
     kfs_place_stop_stable_count_ = 0U;
     kfs_place_arrived_ = 0U;
     kfs_place_approach_step_ = KFS_PLACE_PATH_TO_ENTRY;
@@ -613,16 +621,78 @@ uint8_t CONBAT_TASK::runRampUp(void)
 // 捡 KFS 流程参数。
 float CONBAT_PICK_KFS_PATH_MAX_VEL_M_S = 1.5f;                   // 捡 KFS 跑点的最大线速度，单位 m/s。
 float CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2 = 0.8f;                  // 捡 KFS 跑点的最大加速度，单位 m/s2。
-float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2 = 0.8f;        // KFS 等待阶段车体前进加速度，单位 m/s2。
-float CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS = 0.6f;         // KFS 等待阶段车体前进最大速度，单位 m/s。
 float CONBAT_PICK_KFS_FIRST_BACK_DISTANCE_M = 0.06f;             // KFS 吸取成功后沿 X 轴后退距离，单位 m。
 float CONBAT_PICK_KFS_FIRST_BACK_SPEED_MPS = 0.4f;               // KFS 吸取成功后沿 X 轴后退速度，单位 m/s。
 float CONBAT_PICK_GO_TO_COMBINE_KP = 1.6f;                       // 去合体目标点的二维位置 P 闭环系数。
 float CONBAT_PICK_GO_TO_COMBINE_TOL_M = 0.05f;                   // 去合体目标点的到位误差，单位 m。
 static const float CONBAT_PICK_GO_TO_COMBINE_YAW_TOL_DEG = 3.0f; // 去合体目标点的角度容差，单位度。
-float CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM = 455.0f;        // 第一个 KFS 边吸边前进的 DT35 目标距离。
-float CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM = 455.0f;       // 第二个 KFS 边吸边前进的 DT35 目标距离。
-static const float CONBAT_PICK_KFS_ZERO_YAW_TOL_DEG = 3.0f;      // 捡 KFS 前锁 0 度的角度容差，单位度。
+float CONBAT_PICK_KFS_LASER_TARGET_MM[2][2] = {
+    {2312.0f, 1604.0f}, // 蓝方：第一个、第二个 KFS 位置。
+    {2291.0f, 1575.0f}, // 红方：第一个、第二个 KFS 位置。
+};
+static const float CONBAT_PICK_KFS_LASER_Y_TOL_MM = 30.0f;  // KFS 侧向激光 Y 定位容差，单位 mm。
+static const float CONBAT_PICK_KFS_ZERO_YAW_TOL_DEG = 3.0f; // 捡 KFS 前锁 0 度的角度容差，单位度。-
+
+uint8_t CONBAT_TASK::runPickKfsLaserAlign(uint8_t field_side_index,
+                                          uint8_t goal_index,
+                                          uint8_t stable_target_count)
+{
+    /* KFS 流程中蓝方使用右激光，红方使用左激光。 */
+    const LaserDistance &laser = (field_side_index == 0U) ? laser_right : laser_left;
+    const float target_mm = CONBAT_PICK_KFS_LASER_TARGET_MM[field_side_index][goal_index];
+
+    if (target_mm <= 0.0f || laser.data.valid == 0U)
+    {
+        clearPathOutput();
+        pick_kfs_path_stable_count_ = 0U;
+        return 0U;
+    }
+
+    const float measured_mm = static_cast<float>(laser.data.distance_mm);
+    /* 左右激光朝向相反，这里统一换算成世界系 Y 方向的位置误差。 */
+    const float laser_y_err_mm = (field_side_index == 0U)
+                                     ? (target_mm - measured_mm)
+                                     : (measured_mm - target_mm);
+
+    if (conbat_stable_confirm((fabsf(laser_y_err_mm) < CONBAT_PICK_KFS_LASER_Y_TOL_MM) ? 1U : 0U,
+                              &pick_kfs_path_stable_count_,
+                              stable_target_count) != 0U)
+    {
+        clearPathOutput();
+        pick_kfs_path_stable_count_ = 0U;
+        pick_kfs_laser_align_active_ = 0U;
+        return 1U;
+    }
+
+    const float yaw_rad = vision.angle_x * CONBAT_DEG_TO_RAD;
+    const float cos_yaw = cosf(yaw_rad);
+    const float sin_yaw = sinf(yaw_rad);
+    const float last_world_vx = cos_yaw * path_vx_target_ - sin_yaw * path_vy_target_;
+    const float last_world_vy = sin_yaw * path_vx_target_ + cos_yaw * path_vy_target_;
+    float world_vx = 0.0f;
+    float world_vy = 0.0f;
+
+    /* 激光精定位阶段锁住世界系 X，只修正世界系 Y。 */
+    conbat_position_p_speed(0.0f,
+                            laser_y_err_mm * 0.001f,
+                            CONBAT_PICK_GO_TO_COMBINE_KP,
+                            CONBAT_PICK_KFS_PATH_MAX_VEL_M_S,
+                            CONBAT_PICK_KFS_PATH_MAX_ACC_M_S2,
+                            0.001f,
+                            last_world_vx,
+                            last_world_vy,
+                            &world_vx,
+                            &world_vy);
+
+    PathFollower::worldToBody(world_vx,
+                              world_vy,
+                              yaw_rad,
+                              &path_vx_target_,
+                              &path_vy_target_);
+    path_wz_target_ = 0.0f;
+    path_active_ = 1U;
+    return 0U;
+}
 
 uint8_t CONBAT_TASK::runPickKfs(void)
 {
@@ -656,6 +726,7 @@ uint8_t CONBAT_TASK::runPickKfs(void)
             arm_comm.send();
         }
 
+        pick_kfs_laser_align_active_ = 0U;
         pick_kfs_step_ = PICK_KFS_PATH_TO_AREA;
         pick_kfs_path_stable_count_ = 0U;
 
@@ -677,6 +748,15 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         path_loaded_ = 0U;
         path_follower_.reset();
 
+        if (pick_kfs_laser_align_active_ != 0U)
+        {
+            if (runPickKfsLaserAlign(field_side_index, 0U, 50U) != 0U)
+            {
+                pick_kfs_step_ = PICK_KFS_FIRST_WAIT_READY;
+            }
+            return 0U;
+        }
+
         const float x_err = pick_kfs_goals[0].x_m - vision.x_diff;
         const float y_err = pick_kfs_goals[0].y_m - vision.y_diff;
         if (conbat_stable_confirm((fabsf(x_err) < 0.08f && fabsf(y_err) < 0.03f) ? 1U : 0U,
@@ -684,10 +764,8 @@ uint8_t CONBAT_TASK::runPickKfs(void)
                                   50U) != 0U)
         {
             clearPathOutput();
-
             pick_kfs_path_stable_count_ = 0U;
-            pick_kfs_step_ = PICK_KFS_FIRST_WAIT_READY;
-
+            pick_kfs_laser_align_active_ = 1U;
             return 0U;
         }
 
@@ -752,16 +830,10 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         }
 
         clearPathOutput();
-        if (CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM > 0.0f && dt35.ch2.valid != 0U)
-        {
-            const float laser_mm = dt35.ch2.distance_filtered;
-            path_active_ = 1U;
-            path_vx_target_ = conbat_trapezoid_speed((laser_mm - CONBAT_PICK_KFS_FIRST_WAIT_DT35_TARGET_MM) * 0.001f,
-                                                     CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2,
-                                                     CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS);
-            path_vy_target_ = 0.0f;
-            path_wz_target_ = 0.0f;
-        }
+        path_active_ = 1U;
+        path_vx_target_ = 0.3f;
+        path_vy_target_ = 0.0f;
+        path_wz_target_ = 0.0f;
         return 0U;
 
     case PICK_KFS_FIRST_BACKWARD:
@@ -799,6 +871,7 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         {
             arm_comm.send();
         }
+        pick_kfs_laser_align_active_ = 0U;
         pick_kfs_second_forward_done_ = 0U;
         pick_kfs_path_stable_count_ = 0U;
         pick_kfs_step_ = PICK_KFS_PATH_TO_SECOND_AREA;
@@ -811,6 +884,15 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         path_loaded_ = 0U;
         path_follower_.reset();
 
+        if (pick_kfs_laser_align_active_ != 0U)
+        {
+            if (runPickKfsLaserAlign(field_side_index, 1U, 10U) != 0U)
+            {
+                pick_kfs_step_ = PICK_KFS_SECOND_WAIT_READY;
+            }
+            return 0U;
+        }
+
         const float x_err = pick_kfs_goals[1].x_m - vision.x_diff;
         const float y_err = pick_kfs_goals[1].y_m - vision.y_diff;
         if (conbat_stable_confirm((fabsf(x_err) < 0.08f && fabsf(y_err) < 0.03f) ? 1U : 0U,
@@ -819,7 +901,7 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         {
             clearPathOutput();
             pick_kfs_path_stable_count_ = 0U;
-            pick_kfs_step_ = PICK_KFS_SECOND_WAIT_READY;
+            pick_kfs_laser_align_active_ = 1U;
             return 0U;
         }
 
@@ -856,7 +938,7 @@ uint8_t CONBAT_TASK::runPickKfs(void)
     }
 
     case PICK_KFS_SECOND_WAIT_READY:
-        /* 第七步：等待 event=5 后，按前向 DT35 距离边走边吸取。 */
+        /* 第七步：等待 event=5 后，以固定速度向前边走边吸取。 */
         if (pick_kfs_second_forward_done_ == 0U)
         {
             clearPathOutput();
@@ -878,16 +960,10 @@ uint8_t CONBAT_TASK::runPickKfs(void)
         }
 
         clearPathOutput();
-        if (CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM > 0.0f && dt35.ch2.valid != 0U)
-        {
-            const float laser_mm = dt35.ch2.distance_filtered;
-            path_active_ = 1U;
-            path_vx_target_ = conbat_trapezoid_speed((laser_mm - CONBAT_PICK_KFS_SECOND_WAIT_DT35_TARGET_MM) * 0.001f,
-                                                     CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_ACC_MPS2,
-                                                     CONBAT_PICK_KFS_FIRST_WAIT_FORWARD_MAX_MPS);
-            path_vy_target_ = 0.0f;
-            path_wz_target_ = 0.0f;
-        }
+        path_active_ = 1U;
+        path_vx_target_ = 0.3f;
+        path_vy_target_ = 0.0f;
+        path_wz_target_ = 0.0f;
         return 0U;
 
     case PICK_KFS_SECOND_BACKWARD:
@@ -1062,7 +1138,7 @@ uint8_t CONBAT_TASK::runReloadCombine(void)
 static const float CONBAT_KFS_PLACE_STOP_SPEED_LIMIT = 0.01f;
 static const uint16_t CONBAT_KFS_PLACE_STOP_STABLE_COUNT = 100U;
 float CONBAT_PLACE_KFS_NEW_FORWARD_SPEED_MPS = 0.4f;   // 新版放置 KFS 后沿车头方向前进速度，单位 m/s。
-float CONBAT_PLACE_KFS_NEW_FORWARD_DISTANCE_M = 0.06f; // 新版放置 KFS 后沿车头方向前进距离，单位 m。
+float CONBAT_PLACE_KFS_NEW_FORWARD_DISTANCE_M = 0.04f; // 新版放置 KFS 后沿车头方向前进距离，单位 m。
 
 uint8_t CONBAT_TASK::runPlaceKfsNew(void)
 {
